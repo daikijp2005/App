@@ -7,10 +7,15 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>📚 課題管理アプリ</h1>
+  <div class="page">
+    <header class="app-header">
+      <p class="eyebrow">Assignment Tracker</p>
+      <h1>課題管理アプリ</h1>
+    </header>
 
-    <form id="task-form">
+    <div class="stats" id="stats"></div>
+
+    <form id="task-form" class="task-form">
       <div class="form-row">
         <input type="text" id="subject" placeholder="科目名（例: 経済学）" required>
         <input type="text" id="content" placeholder="課題内容（例: レポート提出）" required>
@@ -19,13 +24,13 @@
       </div>
     </form>
 
-    <div class="filters">
+    <div class="filters" role="tablist">
       <button class="filter-btn active" data-filter="all">すべて</button>
       <button class="filter-btn" data-filter="active">未完了</button>
       <button class="filter-btn" data-filter="done">完了</button>
     </div>
 
-    <ul id="task-list"></ul>
+    <ul id="task-list" class="task-list"></ul>
 
     <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
   </div>

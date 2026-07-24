@@ -12,6 +12,7 @@ const dueDateInput = document.getElementById("due-date");
 const taskList = document.getElementById("task-list");
 const emptyMessage = document.getElementById("empty-message");
 const filterButtons = document.querySelectorAll(".filter-btn");
+const statsBox = document.getElementById("stats");
 
 function loadTasks() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -36,7 +37,30 @@ function getUrgency(dueDateStr) {
   return { level: "safe", label: `あと${diffDays}日` };
 }
 
+// 今日/今週締切の件数をまとめて、一目で状況がわかるようにする
+function renderStats() {
+  const open = tasks.filter((t) => !t.done);
+  const dueToday = open.filter((t) => getUrgency(t.dueDate).level === "urgent").length;
+  const dueThisWeek = open.filter((t) => getUrgency(t.dueDate).level === "soon").length;
+
+  statsBox.innerHTML = `
+    <div class="stat stat--danger">
+      <span class="stat-num">${dueToday}</span>
+      <span class="stat-label">今日・明日締切</span>
+    </div>
+    <div class="stat stat--warning">
+      <span class="stat-num">${dueThisWeek}</span>
+      <span class="stat-label">数日以内</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">${open.length}</span>
+      <span class="stat-label">未完了合計</span>
+    </div>
+  `;
+}
+
 function render() {
+  renderStats();
   taskList.innerHTML = "";
 
   const visibleTasks = tasks.filter((task) => {
