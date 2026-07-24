@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>課題管理アプリ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>📚 課題管理アプリ</h1>
+
+    <form id="task-form">
+      <div class="form-row">
+        <input type="text" id="subject" placeholder="科目名（例: 経済学）" required>
+        <input type="text" id="content" placeholder="課題内容（例: レポート提出）" required>
+        <input type="date" id="due-date" required>
+        <button type="submit">追加</button>
+      </div>
+    </form>
+
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">すべて</button>
+      <button class="filter-btn" data-filter="active">未完了</button>
+      <button class="filter-btn" data-filter="done">完了</button>
+    </div>
+
+    <ul id="task-list"></ul>
+
+    <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
