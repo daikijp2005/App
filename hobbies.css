@@ -1,0 +1,56 @@
+:root {
+  --accent: #c1652f;
+  --accent-soft: #fbe9df;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #e0955f;
+    --accent-soft: #3a2a1f;
+  }
+}
+
+.hobby-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.4rem;
+}
+
+.chart-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chart-label {
+  flex: 0 0 auto;
+  width: 6.5rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-bar-track {
+  flex: 1;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.chart-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.chart-count {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  min-width: 1.2rem;
+  text-align: right;
+}

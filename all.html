@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>すべて | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="all.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <span class="top-nav-label">すべて</span>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">Everything</p>
+      <h1>すべてまとめて</h1>
+      <p class="tagline">6つの項目を、ひとつのカレンダーとリストで。</p>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="calendar" id="calendar"></div>
+    <div class="calendar-legend">
+      <span><span class="legend-dot" style="background:var(--cat-study)"></span>学業</span>
+      <span><span class="legend-dot" style="background:var(--cat-job)"></span>就職活動</span>
+      <span><span class="legend-dot" style="background:var(--cat-arbeit)"></span>アルバイト</span>
+      <span><span class="legend-dot" style="background:var(--cat-extracurricular)"></span>課外活動</span>
+      <span><span class="legend-dot" style="background:var(--cat-people)"></span>人（誕生日）</span>
+    </div>
+
+    <div class="section-heading">
+      <h2>近日中の予定</h2>
+      <span class="section-sub">すべての項目から日付順</span>
+    </div>
+
+    <ul id="entry-list" class="entry-list"></ul>
+    <p id="empty-message" class="empty-message" hidden>近日中の予定はありません。</p>
+  </div>
+
+  <script src="calendar.js"></script>
+  <script src="all.js"></script>
+</body>
+</html>

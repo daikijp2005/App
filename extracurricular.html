@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>課外活動 | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="extracurricular.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <div class="top-nav-links">
+        <a class="all-nav-link" href="all.html">🗂️ すべて</a>
+        <span class="top-nav-label">課外活動</span>
+      </div>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">Extracurricular</p>
+      <h1>課外活動</h1>
+      <p class="tagline">サークル・ボランティア・大会などの記録。</p>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="calendar" id="calendar"></div>
+
+    <form id="entry-form" class="entry-form">
+      <div class="form-row">
+        <input type="text" id="name-input" placeholder="活動名（例: 軽音サークル）" required>
+        <select id="category-input">
+          <option value="サークル">🎸 サークル</option>
+          <option value="ボランティア">🤝 ボランティア</option>
+          <option value="大会・イベント">🏆 大会・イベント</option>
+          <option value="その他">✨ その他</option>
+        </select>
+        <button type="submit" class="submit-btn">追加</button>
+      </div>
+      <div class="form-row">
+        <input type="text" id="note-input" placeholder="メモ（任意）">
+        <input type="date" id="date-input" title="活動日・予定日（任意）">
+      </div>
+    </form>
+
+    <ul id="entry-list" class="entry-list"></ul>
+    <p id="empty-message" class="empty-message" hidden>まだ何も登録されていません。上のフォームから追加してください。</p>
+  </div>
+
+  <script src="calendar.js"></script>
+  <script src="extracurricular.js"></script>
+</body>
+</html>

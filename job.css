@@ -1,0 +1,21 @@
+:root {
+  --accent: #5b4b9e;
+  --accent-soft: #ebe7f7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #b0a3e6;
+    --accent-soft: #2a2440;
+  }
+}
+
+.entry-item.stage-offer {
+  border-left-color: var(--success);
+  background: var(--success-soft);
+}
+
+.entry-item.stage-declined {
+  opacity: 0.55;
+  border-left-color: var(--line);
+}

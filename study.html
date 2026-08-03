@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学業 | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="study.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <div class="top-nav-links">
+        <a class="all-nav-link" href="all.html">🗂️ すべて</a>
+        <span class="top-nav-label">学業</span>
+      </div>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">Study</p>
+      <h1>学業</h1>
+      <p class="tagline">課題とテスト、締切から逆算して。</p>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="calendar" id="calendar"></div>
+
+    <form id="entry-form" class="entry-form">
+      <div class="form-row">
+        <input type="text" id="subject-input" placeholder="科目名（例: 経済学）" required>
+        <input type="text" id="content-input" placeholder="課題内容（例: レポート提出）" required>
+        <input type="date" id="due-date-input" required>
+        <button type="submit" class="submit-btn">追加</button>
+      </div>
+    </form>
+
+    <div class="filters" role="tablist">
+      <button class="filter-btn active" data-filter="all">すべて</button>
+      <button class="filter-btn" data-filter="active">未完了</button>
+      <button class="filter-btn" data-filter="done">完了</button>
+    </div>
+
+    <ul id="entry-list" class="entry-list"></ul>
+    <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
+  </div>
+
+  <script src="calendar.js"></script>
+  <script src="study.js"></script>
+</body>
+</html>

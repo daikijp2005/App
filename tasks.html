@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>やるべき事 | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="tasks.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <div class="top-nav-links">
+        <a class="all-nav-link" href="all.html">🗂️ すべて</a>
+        <span class="top-nav-label">やるべき事</span>
+      </div>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">Daily Focus</p>
+      <h1>デイリーフォーカス</h1>
+      <p class="tagline">今日やることが、今すぐわかる。</p>
+    </header>
+
+    <section class="now-card" id="now-card">
+      <div class="now-clock" id="now-clock">--:--</div>
+      <p class="now-status" id="now-status-label">いまやること</p>
+      <p class="now-task" id="now-task-name">読み込み中...</p>
+      <p class="now-meta" id="now-task-meta"></p>
+      <button type="button" class="now-complete-btn" id="now-complete-btn" hidden>これ、やった ✓</button>
+      <p class="now-next" id="now-next"></p>
+    </section>
+
+    <div class="stats" id="stats"></div>
+
+    <section class="heatmap-section">
+      <div class="section-heading">
+        <h2>継続の記録</h2>
+        <span class="section-sub">直近9週間の達成率</span>
+      </div>
+      <div class="heatmap" id="heatmap"></div>
+      <div class="heatmap-legend">
+        <span>少ない</span>
+        <span class="legend-cell level-0"></span>
+        <span class="legend-cell level-1"></span>
+        <span class="legend-cell level-2"></span>
+        <span class="legend-cell level-3"></span>
+        <span class="legend-cell level-4"></span>
+        <span>多い</span>
+      </div>
+    </section>
+
+    <section class="manage-section">
+      <div class="section-heading">
+        <h2>ルーティン一覧</h2>
+        <span class="section-sub">追加・削除はここから</span>
+      </div>
+
+      <form id="routine-form" class="entry-form">
+        <div class="form-row">
+          <input type="text" id="icon-input" class="icon-input" placeholder="絵文字" maxlength="2">
+          <input type="text" id="name-input" placeholder="やること（例: 水を飲む）" required>
+          <input type="time" id="time-input" title="時刻を指定しない場合は「いつでも」になります">
+          <button type="submit" class="submit-btn">追加</button>
+        </div>
+        <div class="days-row" id="days-row"></div>
+      </form>
+
+      <ul id="routine-list" class="entry-list"></ul>
+      <p id="empty-message" class="empty-message" hidden>ルーティンはまだ登録されていません。上のフォームから追加してください。</p>
+    </section>
+  </div>
+
+  <script src="tasks.js"></script>
+</body>
+</html>

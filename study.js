@@ -1,26 +1,33 @@
 // 課題データは配列として持ち、ブラウザの localStorage に保存する
-// (サーバーを用意しなくても、次回開いたときにデータが残る)
 const STORAGE_KEY = "assignments";
 
-let tasks = loadTasks();
+let tasks = load();
 let currentFilter = "all";
 
-const form = document.getElementById("task-form");
-const subjectInput = document.getElementById("subject");
-const contentInput = document.getElementById("content");
-const dueDateInput = document.getElementById("due-date");
-const taskList = document.getElementById("task-list");
+const form = document.getElementById("entry-form");
+const subjectInput = document.getElementById("subject-input");
+const contentInput = document.getElementById("content-input");
+const dueDateInput = document.getElementById("due-date-input");
+const list = document.getElementById("entry-list");
 const emptyMessage = document.getElementById("empty-message");
 const filterButtons = document.querySelectorAll(".filter-btn");
 const statsBox = document.getElementById("stats");
+const calendarEl = document.getElementById("calendar");
 
-function loadTasks() {
+function load() {
   const raw = localStorage.getItem(STORAGE_KEY);
   return raw ? JSON.parse(raw) : [];
 }
 
-function saveTasks() {
+function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
+
+// XSS対策: ユーザー入力をそのままHTMLに埋め込まないようエスケープする
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 // 今日からの残り日数を計算し、緊急度クラスを決める
@@ -37,7 +44,6 @@ function getUrgency(dueDateStr) {
   return { level: "safe", label: `あと${diffDays}日` };
 }
 
-// 今日/今週締切の件数をまとめて、一目で状況がわかるようにする
 function renderStats() {
   const open = tasks.filter((t) => !t.done);
   const dueToday = open.filter((t) => getUrgency(t.dueDate).level === "urgent").length;
@@ -52,37 +58,55 @@ function renderStats() {
       <span class="stat-num">${dueThisWeek}</span>
       <span class="stat-label">数日以内</span>
     </div>
-    <div class="stat">
+    <div class="stat stat--accent">
       <span class="stat-num">${open.length}</span>
       <span class="stat-label">未完了合計</span>
     </div>
   `;
 }
 
+function renderCal() {
+  renderCalendar(
+    calendarEl,
+    tasks.map((t) => {
+      const level = getUrgency(t.dueDate).level;
+      const color = t.done
+        ? "var(--ink-soft)"
+        : level === "urgent"
+        ? "var(--danger)"
+        : level === "soon"
+        ? "var(--warning)"
+        : "var(--accent)";
+      return { date: t.dueDate, label: `${t.subject}: ${t.content}${t.done ? "（完了）" : ""}`, color };
+    })
+  );
+}
+
 function render() {
   renderStats();
-  taskList.innerHTML = "";
+  renderCal();
+  list.innerHTML = "";
 
-  const visibleTasks = tasks.filter((task) => {
+  const visible = tasks.filter((task) => {
     if (currentFilter === "active") return !task.done;
     if (currentFilter === "done") return task.done;
     return true;
   });
 
   // 締切が近い順に並べる
-  visibleTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  visible.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   emptyMessage.hidden = tasks.length > 0;
 
-  visibleTasks.forEach((task) => {
+  visible.forEach((task) => {
     const urgency = getUrgency(task.dueDate);
 
     const li = document.createElement("li");
-    li.className = `task-item ${task.done ? "done" : urgency.level}`;
+    li.className = `entry-item ${task.done ? "done" : urgency.level}`;
 
     li.innerHTML = `
       <input type="checkbox" ${task.done ? "checked" : ""} data-id="${task.id}" class="done-checkbox">
-      <div class="task-content">
+      <div class="entry-content">
         <strong>${escapeHtml(task.subject)}</strong>
         <span>${escapeHtml(task.content)}（${task.dueDate}）</span>
       </div>
@@ -90,15 +114,8 @@ function render() {
       <button class="delete-btn" data-id="${task.id}" title="削除">✕</button>
     `;
 
-    taskList.appendChild(li);
+    list.appendChild(li);
   });
-}
-
-// XSS対策: ユーザー入力をそのままHTMLに埋め込まないようエスケープする
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 form.addEventListener("submit", (e) => {
@@ -112,26 +129,26 @@ form.addEventListener("submit", (e) => {
     done: false,
   });
 
-  saveTasks();
+  save();
   render();
   form.reset();
   subjectInput.focus();
 });
 
-taskList.addEventListener("click", (e) => {
+list.addEventListener("click", (e) => {
   const id = e.target.dataset.id;
   if (!id) return;
 
   if (e.target.classList.contains("done-checkbox")) {
     const task = tasks.find((t) => t.id === id);
     task.done = e.target.checked;
-    saveTasks();
+    save();
     render();
   }
 
   if (e.target.classList.contains("delete-btn")) {
     tasks = tasks.filter((t) => t.id !== id);
-    saveTasks();
+    save();
     render();
   }
 });

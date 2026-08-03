@@ -3,38 +3,93 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課題管理アプリ</title>
-<link rel="stylesheet" href="style.css">
+<title>マイページ | 自分の脳内マップ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="hub.css">
 </head>
 <body>
-  <div class="page">
+  <div class="page hub-page">
     <header class="app-header">
-      <p class="eyebrow">Assignment Tracker</p>
-      <h1>課題管理アプリ</h1>
+      <p class="eyebrow">My Mind Map</p>
+      <h1 id="greeting">こんにちは</h1>
+      <p class="tagline" id="date-line"></p>
     </header>
 
-    <div class="stats" id="stats"></div>
+    <section class="now-strip" id="now-strip">
+      <span class="now-strip-label">いまやること</span>
+      <span class="now-strip-task" id="now-strip-task">読み込み中...</span>
+      <a href="tasks.html" class="now-strip-link">開く →</a>
+    </section>
 
-    <form id="task-form" class="task-form">
-      <div class="form-row">
-        <input type="text" id="subject" placeholder="科目名（例: 経済学）" required>
-        <input type="text" id="content" placeholder="課題内容（例: レポート提出）" required>
-        <input type="date" id="due-date" required>
-        <button type="submit">追加</button>
+    <div class="mind-map" id="mind-map">
+      <svg class="mind-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="50" y1="50" x2="50" y2="12"></line>
+        <line x1="50" y1="50" x2="82.9" y2="31"></line>
+        <line x1="50" y1="50" x2="82.9" y2="69"></line>
+        <line x1="50" y1="50" x2="50" y2="88"></line>
+        <line x1="50" y1="50" x2="17.1" y2="69"></line>
+        <line x1="50" y1="50" x2="17.1" y2="31"></line>
+      </svg>
+
+      <div class="mind-node mind-node--center">
+        <span class="mind-node-shape">
+          <span class="mind-node-icon">🧠</span>
+        </span>
+        <span class="mind-node-label">自分</span>
       </div>
-    </form>
 
-    <div class="filters" role="tablist">
-      <button class="filter-btn active" data-filter="all">すべて</button>
-      <button class="filter-btn" data-filter="active">未完了</button>
-      <button class="filter-btn" data-filter="done">完了</button>
+      <a class="mind-node" data-node="study" href="study.html" style="--node-x:0; --node-y:-1;">
+        <span class="mind-node-shape mind-node-shape--study">
+          <span class="mind-node-icon">📚</span>
+          <span class="mind-node-badge" data-badge="study" hidden></span>
+        </span>
+        <span class="mind-node-label">学業</span>
+      </a>
+
+      <a class="mind-node" data-node="extracurricular" href="extracurricular.html" style="--node-x:0.866; --node-y:-0.5;">
+        <span class="mind-node-shape mind-node-shape--extracurricular">
+          <span class="mind-node-icon">🎪</span>
+          <span class="mind-node-badge" data-badge="extracurricular" hidden></span>
+        </span>
+        <span class="mind-node-label">課外活動</span>
+      </a>
+
+      <a class="mind-node" data-node="arbeit" href="arbeit.html" style="--node-x:0.866; --node-y:0.5;">
+        <span class="mind-node-shape mind-node-shape--arbeit">
+          <span class="mind-node-icon">⏰</span>
+          <span class="mind-node-badge" data-badge="arbeit" hidden></span>
+        </span>
+        <span class="mind-node-label">アルバイト</span>
+      </a>
+
+      <a class="mind-node" data-node="job" href="job.html" style="--node-x:0; --node-y:1;">
+        <span class="mind-node-shape mind-node-shape--job">
+          <span class="mind-node-icon">💼</span>
+          <span class="mind-node-badge" data-badge="job" hidden></span>
+        </span>
+        <span class="mind-node-label">就職活動</span>
+      </a>
+
+      <a class="mind-node" data-node="people" href="people.html" style="--node-x:-0.866; --node-y:0.5;">
+        <span class="mind-node-shape mind-node-shape--people">
+          <span class="mind-node-icon">🧑‍🤝‍🧑</span>
+          <span class="mind-node-badge" data-badge="people" hidden></span>
+        </span>
+        <span class="mind-node-label">人</span>
+      </a>
+
+      <a class="mind-node" data-node="hobbies" href="hobbies.html" style="--node-x:-0.866; --node-y:-0.5;">
+        <span class="mind-node-shape mind-node-shape--hobbies">
+          <span class="mind-node-icon">🎨</span>
+          <span class="mind-node-badge" data-badge="hobbies" hidden></span>
+        </span>
+        <span class="mind-node-label">趣味</span>
+      </a>
     </div>
 
-    <ul id="task-list" class="task-list"></ul>
-
-    <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
+    <a class="all-link" href="all.html">🗂️ すべてまとめて見る →</a>
   </div>
 
-  <script src="script.js"></script>
+  <script src="hub.js"></script>
 </body>
 </html>

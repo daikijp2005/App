@@ -1,0 +1,16 @@
+:root {
+  --accent: #a8791f;
+  --accent-soft: #f4ecd8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #d9b25c;
+    --accent-soft: #362c17;
+  }
+}
+
+.entry-tag--pay {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
