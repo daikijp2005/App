@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>趣味・好きな事 | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="hobbies.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <span class="top-nav-label">趣味・好きな事</span>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">Hobbies &amp; Likes</p>
+      <h1>趣味・好きな事</h1>
+      <p class="tagline">好きなものを、忘れないうちに書き留めておく。</p>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <form id="entry-form" class="entry-form">
+      <div class="form-row">
+        <input type="text" id="name-input" placeholder="名前（例: 邦楽ロック）" required>
+        <select id="category-input">
+          <option value="音楽">🎵 音楽</option>
+          <option value="映画・アニメ">🎬 映画・アニメ</option>
+          <option value="ゲーム">🎮 ゲーム</option>
+          <option value="食べ物">🍜 食べ物</option>
+          <option value="スポーツ">⚽ スポーツ</option>
+          <option value="その他">✨ その他</option>
+        </select>
+        <button type="submit" class="submit-btn">追加</button>
+      </div>
+      <div class="form-row">
+        <input type="text" id="note-input" placeholder="メモ（任意）">
+        <select id="rating-input" title="お気に入り度">
+          <option value="3">★★★☆☆</option>
+          <option value="1">★☆☆☆☆</option>
+          <option value="2">★★☆☆☆</option>
+          <option value="4">★★★★☆</option>
+          <option value="5">★★★★★</option>
+        </select>
+      </div>
+    </form>
+
+    <ul id="entry-list" class="entry-list"></ul>
+    <p id="empty-message" class="empty-message" hidden>まだ何も登録されていません。上のフォームから追加してください。</p>
+  </div>
+
+  <script src="hobbies.js"></script>
+</body>
+</html>

@@ -3,66 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>デイリーフォーカス | 今やることが一目でわかる</title>
-<link rel="stylesheet" href="style.css">
+<title>マイページ | 自分の脳内マップ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="hub.css">
 </head>
 <body>
-  <div class="page">
+  <div class="page hub-page">
     <header class="app-header">
-      <p class="eyebrow">Daily Focus</p>
-      <h1>デイリーフォーカス</h1>
-      <p class="tagline">今日やることが、今すぐわかる。</p>
+      <p class="eyebrow">My Mind Map</p>
+      <h1 id="greeting">こんにちは</h1>
+      <p class="tagline" id="date-line"></p>
     </header>
 
-    <section class="now-card" id="now-card">
-      <div class="now-clock" id="now-clock">--:--</div>
-      <p class="now-status" id="now-status-label">いまやること</p>
-      <p class="now-task" id="now-task-name">読み込み中...</p>
-      <p class="now-meta" id="now-task-meta"></p>
-      <button type="button" class="now-complete-btn" id="now-complete-btn" hidden>これ、やった ✓</button>
-      <p class="now-next" id="now-next"></p>
+    <section class="now-strip" id="now-strip">
+      <span class="now-strip-label">いまやること</span>
+      <span class="now-strip-task" id="now-strip-task">読み込み中...</span>
+      <a href="tasks.html" class="now-strip-link">開く →</a>
     </section>
 
-    <div class="stats" id="stats"></div>
-
-    <section class="heatmap-section">
-      <div class="section-heading">
-        <h2>継続の記録</h2>
-        <span class="section-sub">直近9週間の達成率</span>
-      </div>
-      <div class="heatmap" id="heatmap"></div>
-      <div class="heatmap-legend">
-        <span>少ない</span>
-        <span class="legend-cell level-0"></span>
-        <span class="legend-cell level-1"></span>
-        <span class="legend-cell level-2"></span>
-        <span class="legend-cell level-3"></span>
-        <span class="legend-cell level-4"></span>
-        <span>多い</span>
-      </div>
-    </section>
-
-    <section class="manage-section">
-      <div class="section-heading">
-        <h2>ルーティン一覧</h2>
-        <span class="section-sub">追加・削除はここから</span>
-      </div>
-
-      <form id="routine-form" class="routine-form">
-        <div class="form-row">
-          <input type="text" id="icon-input" class="icon-input" placeholder="絵文字" maxlength="2">
-          <input type="text" id="name-input" placeholder="やること（例: 水を飲む）" required>
-          <input type="time" id="time-input" title="時刻を指定しない場合は「いつでも」になります">
-          <button type="submit">追加</button>
-        </div>
-        <div class="days-row" id="days-row"></div>
-      </form>
-
-      <ul id="routine-list" class="routine-list"></ul>
-      <p id="empty-message" class="empty-message" hidden>ルーティンはまだ登録されていません。上のフォームから追加してください。</p>
-    </section>
+    <div class="hub-grid">
+      <a class="hub-card" data-card="hobbies" href="hobbies.html">
+        <span class="hub-icon">🎨</span>
+        <span class="hub-title">趣味・好きな事</span>
+        <span class="hub-summary" id="summary-hobbies">読み込み中...</span>
+      </a>
+      <a class="hub-card" data-card="people" href="people.html">
+        <span class="hub-icon">🧑‍🤝‍🧑</span>
+        <span class="hub-title">人</span>
+        <span class="hub-summary" id="summary-people">読み込み中...</span>
+      </a>
+      <a class="hub-card" data-card="tasks" href="tasks.html">
+        <span class="hub-icon">🎯</span>
+        <span class="hub-title">やるべき事</span>
+        <span class="hub-summary" id="summary-tasks">読み込み中...</span>
+      </a>
+      <a class="hub-card" data-card="study" href="study.html">
+        <span class="hub-icon">📚</span>
+        <span class="hub-title">学業</span>
+        <span class="hub-summary" id="summary-study">読み込み中...</span>
+      </a>
+      <a class="hub-card" data-card="job" href="job.html">
+        <span class="hub-icon">💼</span>
+        <span class="hub-title">就活</span>
+        <span class="hub-summary" id="summary-job">読み込み中...</span>
+      </a>
+    </div>
   </div>
 
-  <script src="script.js"></script>
+  <script src="hub.js"></script>
 </body>
 </html>

@@ -287,7 +287,7 @@ function renderRoutineList() {
     const streak = calcStreak(routine);
 
     const li = document.createElement("li");
-    li.className = `routine-item ${scheduledToday ? "" : "off-today"} ${doneToday ? "done" : ""}`;
+    li.className = `entry-item routine-item ${scheduledToday ? "" : "off-today"} ${doneToday ? "done" : ""}`;
 
     const checkboxHtml = scheduledToday
       ? `<input type="checkbox" ${doneToday ? "checked" : ""} data-id="${routine.id}" class="done-checkbox">`
@@ -295,7 +295,7 @@ function renderRoutineList() {
 
     li.innerHTML = `
       ${checkboxHtml}
-      <div class="routine-content">
+      <div class="entry-content">
         <strong>${routineIcon(routine)} ${escapeHtml(routine.name)}</strong>
         <span>${routine.time ? routine.time : "いつでも"} ・ ${dayLabel(routine.days)}</span>
       </div>

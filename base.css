@@ -1,0 +1,333 @@
+/* ============================================================
+   共通トークン・共通コンポーネント
+   各ページの◯◯.css はこのファイルの後に読み込み、
+   --accent / --accent-soft を上書きしてページごとの色を出す
+   ============================================================ */
+
+:root {
+  --paper: #f6f4ef;
+  --surface: #ffffff;
+  --ink: #232323;
+  --ink-soft: #6b6558;
+  --line: #e2ddd1;
+  --accent: #2f5d8a;
+  --accent-soft: #e4edf4;
+  --danger: #c6483e;
+  --danger-soft: #fbeae8;
+  --warning: #b9791f;
+  --warning-soft: #fbf0de;
+  --success: #3e7d53;
+  --success-soft: #e7f3eb;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(35, 35, 35, 0.06), 0 8px 24px -12px rgba(35, 35, 35, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1b1b18;
+    --surface: #242320;
+    --ink: #ede9e0;
+    --ink-soft: #a89f8d;
+    --line: #35332c;
+    --danger: #e1897e;
+    --danger-soft: #3b2523;
+    --warning: #e3b166;
+    --warning-soft: #3a2e1b;
+    --success: #82cb9c;
+    --success-soft: #1e3327;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+  background: var(--paper);
+  margin: 0;
+  padding: 2.5rem 1rem;
+  color: var(--ink);
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem 2rem;
+  box-shadow: var(--shadow);
+}
+
+a {
+  color: inherit;
+}
+
+/* ---------- 上部ナビ（サブページ共通） ---------- */
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.top-nav a.home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.top-nav a.home-link:hover {
+  color: var(--accent);
+}
+
+.top-nav .top-nav-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ---------- ページヘッダー共通 ---------- */
+
+.app-header {
+  margin-bottom: 1.4rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.tagline {
+  margin: 0.3rem 0 0;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+/* ---------- セクション見出し ---------- */
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.section-sub {
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+/* ---------- 統計ピル ---------- */
+
+.stats {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.6rem;
+}
+
+.stat {
+  flex: 1;
+  border-radius: var(--radius);
+  padding: 0.6rem 0.7rem;
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+}
+
+.stat--warning {
+  background: var(--warning-soft);
+}
+
+.stat--danger {
+  background: var(--danger-soft);
+}
+
+.stat--danger .stat-num {
+  color: var(--danger);
+}
+
+.stat-num {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.stat--accent .stat-num {
+  color: var(--accent);
+}
+
+.stat--warning .stat-num {
+  color: var(--warning);
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  margin-top: 0.15rem;
+}
+
+/* ---------- フォーム共通 ---------- */
+
+.entry-form {
+  margin-bottom: 1.1rem;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.form-row input,
+.form-row select {
+  flex: 1 1 140px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.92rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.form-row input:focus-visible,
+.form-row select:focus-visible,
+button:focus-visible,
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.form-row button.submit-btn {
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-row button.submit-btn:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- リスト（趣味/人/学業/就活 共通） ---------- */
+
+.entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.entry-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius);
+  border-left: 4px solid var(--accent);
+  background: var(--paper);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .entry-item {
+    animation: fade-in-up 0.22s ease both;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.entry-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.entry-content strong {
+  font-size: 0.95rem;
+}
+
+.entry-content span {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.entry-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.delete-btn {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.2rem;
+  flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  color: var(--danger);
+}
+
+.empty-message {
+  text-align: center;
+  color: var(--ink-soft);
+  margin-top: 1.5rem;
+  font-size: 0.88rem;
+}

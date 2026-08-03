@@ -1,0 +1,79 @@
+:root {
+  --accent: #1f7a6c;
+  --accent-soft: #e1f2ee;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #7ecdbd;
+    --accent-soft: #17332e;
+  }
+}
+
+.filters {
+  display: flex;
+  gap: 0.45rem;
+  margin-bottom: 1.1rem;
+}
+
+.filter-btn {
+  padding: 0.32rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+
+.filter-btn.active {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+
+.entry-item.urgent {
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.entry-item.soon {
+  border-left-color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.entry-item.safe {
+  border-left-color: var(--success);
+  background: var(--success-soft);
+}
+
+.entry-item.done {
+  opacity: 0.55;
+  border-left-color: var(--line);
+  background: var(--surface);
+}
+
+.entry-item.done .entry-content strong,
+.entry-item.done .entry-content span {
+  text-decoration: line-through;
+}
+
+.done-checkbox {
+  accent-color: var(--accent);
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}
+
+.due-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-item.urgent .due-label { color: var(--danger); }
+.entry-item.soon .due-label { color: var(--warning); }
+.entry-item.safe .due-label { color: var(--success); }
+.entry-item.done .due-label { color: var(--ink-soft); }

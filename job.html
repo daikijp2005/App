@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>就活 | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="job.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <span class="top-nav-label">就活</span>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">Job Hunting</p>
+      <h1>就活</h1>
+      <p class="tagline">選考の状況を、まとめて見渡す。</p>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <form id="entry-form" class="entry-form">
+      <div class="form-row">
+        <input type="text" id="company-input" placeholder="企業名" required>
+        <select id="stage-input">
+          <option value="エントリー">エントリー</option>
+          <option value="書類選考">書類選考</option>
+          <option value="一次面接">一次面接</option>
+          <option value="二次面接">二次面接</option>
+          <option value="最終面接">最終面接</option>
+          <option value="内定">内定</option>
+          <option value="見送り">見送り</option>
+        </select>
+        <button type="submit" class="submit-btn">追加</button>
+      </div>
+      <div class="form-row">
+        <input type="text" id="note-input" placeholder="メモ（任意）">
+        <input type="date" id="next-date-input" title="次の予定・締切（任意）">
+      </div>
+    </form>
+
+    <ul id="entry-list" class="entry-list"></ul>
+    <p id="empty-message" class="empty-message" hidden>まだ何も登録されていません。上のフォームから追加してください。</p>
+  </div>
+
+  <script src="job.js"></script>
+</body>
+</html>

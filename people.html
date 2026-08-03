@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人 | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="people.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <span class="top-nav-label">人</span>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">People</p>
+      <h1>人</h1>
+      <p class="tagline">大切な人のことを、忘れないために。</p>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <form id="entry-form" class="entry-form">
+      <div class="form-row">
+        <input type="text" id="name-input" placeholder="名前" required>
+        <select id="relation-input">
+          <option value="家族">👨‍👩‍👧 家族</option>
+          <option value="友人">🧑‍🤝‍🧑 友人</option>
+          <option value="恋人">💗 恋人</option>
+          <option value="先輩・後輩">🎓 先輩・後輩</option>
+          <option value="職場">💼 職場</option>
+          <option value="その他">🌱 その他</option>
+        </select>
+        <button type="submit" class="submit-btn">追加</button>
+      </div>
+      <div class="form-row">
+        <input type="text" id="note-input" placeholder="メモ（任意）">
+        <input type="date" id="date-input" title="誕生日（任意）">
+      </div>
+    </form>
+
+    <ul id="entry-list" class="entry-list"></ul>
+    <p id="empty-message" class="empty-message" hidden>まだ何も登録されていません。上のフォームから追加してください。</p>
+  </div>
+
+  <script src="people.js"></script>
+</body>
+</html>
