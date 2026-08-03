@@ -22,7 +22,7 @@
   border-radius: 999px;
   background: var(--accent-soft);
   border: 1px solid var(--line);
-  margin-bottom: 1.3rem;
+  margin-bottom: 1.5rem;
   font-size: 0.85rem;
 }
 
@@ -56,84 +56,221 @@
   text-decoration: underline;
 }
 
-.hub-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.85rem;
+/* ---------- マインドマップ ---------- */
+
+.mind-map {
+  position: relative;
+  width: min(100%, 520px);
+  aspect-ratio: 1;
+  margin: 0.5rem auto 1rem;
+  overflow: visible;
 }
 
-.hub-card {
+.mind-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mind-lines line {
+  stroke: var(--line);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 4;
+}
+
+.mind-node {
+  position: absolute;
+  left: calc(50% + var(--node-x, 0) * 38%);
+  top: calc(50% + var(--node-y, 0) * 38%);
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 1.1rem 1.1rem 1.2rem;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  border-left: 5px solid var(--card-accent, var(--accent));
-  background: var(--paper);
+  align-items: center;
+  gap: 0.4rem;
+  width: clamp(88px, 17vw, 118px);
   text-decoration: none;
   color: var(--ink);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .hub-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow);
-  }
+.mind-node:focus-visible {
+  outline: 2px solid var(--ink-soft);
+  outline-offset: 6px;
+  border-radius: 16px;
 }
 
-.hub-card:focus-visible {
-  outline: 2px solid var(--card-accent, var(--accent));
-  outline-offset: 2px;
+.mind-node--center {
+  pointer-events: none;
+  gap: 0.15rem;
 }
 
-.hub-icon {
-  width: 2.4rem;
-  height: 2.4rem;
+.mind-node-shape {
+  position: relative;
+  width: clamp(64px, 13vw, 92px);
+  height: clamp(64px, 13vw, 92px);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  transition: transform 0.18s ease;
+}
+
+.mind-node--center .mind-node-shape {
+  width: clamp(66px, 14vw, 96px);
+  height: clamp(66px, 14vw, 96px);
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+}
+
+.mind-node-shape::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: var(--shadow);
+  background: linear-gradient(155deg, var(--node-color), var(--node-color));
+}
+
+.mind-node--center .mind-node-shape::before {
   border-radius: 50%;
-  background: var(--card-accent-soft, var(--accent-soft));
-  font-size: 1.25rem;
+  background: linear-gradient(155deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--ink)));
 }
 
-.hub-title {
-  font-size: 1rem;
-  font-weight: 700;
+.mind-node:hover .mind-node-shape,
+.mind-node:focus-visible .mind-node-shape {
+  transform: scale(1.08);
 }
 
-.hub-summary {
+.mind-node-label {
   font-size: 0.78rem;
-  color: var(--ink-soft);
-  line-height: 1.4;
+  font-weight: 700;
+  text-align: center;
 }
 
-.hub-card[data-card="hobbies"] { --card-accent: #c1652f; --card-accent-soft: #fbe9df; }
-.hub-card[data-card="people"] { --card-accent: #a13d6b; --card-accent-soft: #f7e6ee; }
-.hub-card[data-card="tasks"] { --card-accent: #2f5d8a; --card-accent-soft: #e4edf4; }
-.hub-card[data-card="study"] { --card-accent: #1f7a6c; --card-accent-soft: #e1f2ee; }
-.hub-card[data-card="job"] { --card-accent: #5b4b9e; --card-accent-soft: #ebe7f7; }
+.mind-node--center .mind-node-label {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.mind-node-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--warning);
+  border: 2px solid var(--surface);
+}
+
+.mind-node-badge[data-level="urgent"] {
+  background: var(--danger);
+}
+
+.mind-node-badge[data-level="info"] {
+  background: var(--accent);
+}
+
+/* 各項目を表現するシェイプ */
+
+.mind-node-shape--hobbies { --node-color: #c1652f; }
+.mind-node-shape--hobbies::before { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+
+.mind-node-shape--people { --node-color: #a13d6b; }
+.mind-node-shape--people::before { border-radius: 50%; }
+.mind-node-shape--people::after {
+  content: "";
+  position: absolute;
+  top: 10%;
+  right: -20%;
+  width: 52%;
+  height: 52%;
+  border-radius: 50%;
+  background: #c76a95;
+  opacity: 0.8;
+}
+
+.mind-node-shape--study { --node-color: #1f7a6c; }
+.mind-node-shape--study::before { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
+
+.mind-node-shape--arbeit { --node-color: #a8791f; }
+.mind-node-shape--arbeit::before { border-radius: 50%; }
+
+.mind-node-shape--extracurricular { --node-color: #3f8a4c; }
+.mind-node-shape--extracurricular::before {
+  border-radius: 22%;
+  transform: rotate(45deg);
+}
+
+.mind-node-shape--job { --node-color: #5b4b9e; }
+.mind-node-shape--job::before { border-radius: 24%; }
 
 @media (prefers-color-scheme: dark) {
-  .hub-card[data-card="hobbies"] { --card-accent: #e0955f; --card-accent-soft: #3a2a1f; }
-  .hub-card[data-card="people"] { --card-accent: #dd8fb5; --card-accent-soft: #3a2430; }
-  .hub-card[data-card="tasks"] { --card-accent: #8ab4dc; --card-accent-soft: #223a4c; }
-  .hub-card[data-card="study"] { --card-accent: #7ecdbd; --card-accent-soft: #17332e; }
-  .hub-card[data-card="job"] { --card-accent: #b0a3e6; --card-accent-soft: #2a2440; }
+  .mind-node-shape--hobbies { --node-color: #e0955f; }
+  .mind-node-shape--people { --node-color: #dd8fb5; }
+  .mind-node-shape--people::after { background: #f0b8d3; }
+  .mind-node-shape--study { --node-color: #7ecdbd; }
+  .mind-node-shape--arbeit { --node-color: #d9b25c; }
+  .mind-node-shape--extracurricular { --node-color: #7ecb8a; }
+  .mind-node-shape--job { --node-color: #b0a3e6; }
 }
 
-.hub-card:last-child {
-  grid-column: 1 / -1;
-}
+/* 浮遊アニメーション */
 
-@media (max-width: 480px) {
-  .hub-grid {
-    grid-template-columns: 1fr;
+@media (prefers-reduced-motion: no-preference) {
+  .mind-node:not(.mind-node--center) .mind-node-shape {
+    animation: node-float 5.5s ease-in-out infinite;
   }
+  a.mind-node:nth-of-type(2) .mind-node-shape { animation-delay: -0.9s; }
+  a.mind-node:nth-of-type(3) .mind-node-shape { animation-delay: -1.8s; }
+  a.mind-node:nth-of-type(4) .mind-node-shape { animation-delay: -2.7s; }
+  a.mind-node:nth-of-type(5) .mind-node-shape { animation-delay: -3.6s; }
+  a.mind-node:nth-of-type(6) .mind-node-shape { animation-delay: -4.5s; }
+}
 
-  .hub-card:last-child {
-    grid-column: auto;
+@keyframes node-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* 「その世界に入る」クリック時のモーション */
+
+.mind-map.entering .mind-node:not(.entering-target) {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  opacity: 0.12;
+  transform: translate(-50%, -50%) scale(0.85);
+}
+
+.mind-map.entering .mind-node--center {
+  transition: opacity 0.3s ease;
+  opacity: 0.12;
+}
+
+.mind-node.entering-target .mind-node-shape {
+  transition: transform 0.38s cubic-bezier(0.3, 0.7, 0.4, 1);
+  transform: scale(7);
+}
+
+.mind-node.entering-target .mind-node-label {
+  transition: opacity 0.18s ease;
+  opacity: 0;
+}
+
+.all-link {
+  display: block;
+  text-align: center;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.all-link:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 380px) {
+  .mind-map {
+    width: min(100%, 400px);
   }
 }

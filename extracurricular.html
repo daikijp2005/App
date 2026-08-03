@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>人 | マイページ</title>
+<title>課外活動 | マイページ</title>
 <link rel="stylesheet" href="base.css">
-<link rel="stylesheet" href="people.css">
+<link rel="stylesheet" href="extracurricular.css">
 </head>
 <body>
   <div class="page">
@@ -13,14 +13,14 @@
       <a class="home-link" href="index.html">← マイページ</a>
       <div class="top-nav-links">
         <a class="all-nav-link" href="all.html">🗂️ すべて</a>
-        <span class="top-nav-label">人</span>
+        <span class="top-nav-label">課外活動</span>
       </div>
     </nav>
 
     <header class="app-header">
-      <p class="eyebrow">People</p>
-      <h1>人</h1>
-      <p class="tagline">大切な人のことを、忘れないために。</p>
+      <p class="eyebrow">Extracurricular</p>
+      <h1>課外活動</h1>
+      <p class="tagline">サークル・ボランティア・大会などの記録。</p>
     </header>
 
     <div class="stats" id="stats"></div>
@@ -29,20 +29,18 @@
 
     <form id="entry-form" class="entry-form">
       <div class="form-row">
-        <input type="text" id="name-input" placeholder="名前" required>
-        <select id="relation-input">
-          <option value="家族">👨‍👩‍👧 家族</option>
-          <option value="友人">🧑‍🤝‍🧑 友人</option>
-          <option value="恋人">💗 恋人</option>
-          <option value="先輩・後輩">🎓 先輩・後輩</option>
-          <option value="職場">💼 職場</option>
-          <option value="その他">🌱 その他</option>
+        <input type="text" id="name-input" placeholder="活動名（例: 軽音サークル）" required>
+        <select id="category-input">
+          <option value="サークル">🎸 サークル</option>
+          <option value="ボランティア">🤝 ボランティア</option>
+          <option value="大会・イベント">🏆 大会・イベント</option>
+          <option value="その他">✨ その他</option>
         </select>
         <button type="submit" class="submit-btn">追加</button>
       </div>
       <div class="form-row">
         <input type="text" id="note-input" placeholder="メモ（任意）">
-        <input type="date" id="date-input" title="誕生日（任意）">
+        <input type="date" id="date-input" title="活動日・予定日（任意）">
       </div>
     </form>
 
@@ -51,6 +49,6 @@
   </div>
 
   <script src="calendar.js"></script>
-  <script src="people.js"></script>
+  <script src="extracurricular.js"></script>
 </body>
 </html>

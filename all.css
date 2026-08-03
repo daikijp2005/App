@@ -1,0 +1,67 @@
+:root {
+  --accent: #6a5f8a;
+  --accent-soft: #ebe7f5;
+  --cat-hobbies: #c1652f;
+  --cat-people: #a13d6b;
+  --cat-study: #1f7a6c;
+  --cat-arbeit: #a8791f;
+  --cat-extracurricular: #3f8a4c;
+  --cat-job: #5b4b9e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #bcb2dd;
+    --accent-soft: #2b2740;
+    --cat-hobbies: #e0955f;
+    --cat-people: #dd8fb5;
+    --cat-study: #7ecdbd;
+    --cat-arbeit: #d9b25c;
+    --cat-extracurricular: #7ecb8a;
+    --cat-job: #b0a3e6;
+  }
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: -0.6rem 0 1.4rem;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.calendar-legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.entry-tag {
+  text-decoration: none;
+  font-weight: 700;
+  background: transparent !important;
+  border: 1px solid currentColor;
+}
+
+.cat-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.done-checkbox {
+  accent-color: var(--cat-study);
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}

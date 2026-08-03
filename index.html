@@ -21,33 +21,73 @@
       <a href="tasks.html" class="now-strip-link">開く →</a>
     </section>
 
-    <div class="hub-grid">
-      <a class="hub-card" data-card="hobbies" href="hobbies.html">
-        <span class="hub-icon">🎨</span>
-        <span class="hub-title">趣味・好きな事</span>
-        <span class="hub-summary" id="summary-hobbies">読み込み中...</span>
+    <div class="mind-map" id="mind-map">
+      <svg class="mind-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="50" y1="50" x2="50" y2="12"></line>
+        <line x1="50" y1="50" x2="82.9" y2="31"></line>
+        <line x1="50" y1="50" x2="82.9" y2="69"></line>
+        <line x1="50" y1="50" x2="50" y2="88"></line>
+        <line x1="50" y1="50" x2="17.1" y2="69"></line>
+        <line x1="50" y1="50" x2="17.1" y2="31"></line>
+      </svg>
+
+      <div class="mind-node mind-node--center">
+        <span class="mind-node-shape">
+          <span class="mind-node-icon">🧠</span>
+        </span>
+        <span class="mind-node-label">自分</span>
+      </div>
+
+      <a class="mind-node" data-node="study" href="study.html" style="--node-x:0; --node-y:-1;">
+        <span class="mind-node-shape mind-node-shape--study">
+          <span class="mind-node-icon">📚</span>
+          <span class="mind-node-badge" data-badge="study" hidden></span>
+        </span>
+        <span class="mind-node-label">学業</span>
       </a>
-      <a class="hub-card" data-card="people" href="people.html">
-        <span class="hub-icon">🧑‍🤝‍🧑</span>
-        <span class="hub-title">人</span>
-        <span class="hub-summary" id="summary-people">読み込み中...</span>
+
+      <a class="mind-node" data-node="extracurricular" href="extracurricular.html" style="--node-x:0.866; --node-y:-0.5;">
+        <span class="mind-node-shape mind-node-shape--extracurricular">
+          <span class="mind-node-icon">🎪</span>
+          <span class="mind-node-badge" data-badge="extracurricular" hidden></span>
+        </span>
+        <span class="mind-node-label">課外活動</span>
       </a>
-      <a class="hub-card" data-card="tasks" href="tasks.html">
-        <span class="hub-icon">🎯</span>
-        <span class="hub-title">やるべき事</span>
-        <span class="hub-summary" id="summary-tasks">読み込み中...</span>
+
+      <a class="mind-node" data-node="arbeit" href="arbeit.html" style="--node-x:0.866; --node-y:0.5;">
+        <span class="mind-node-shape mind-node-shape--arbeit">
+          <span class="mind-node-icon">⏰</span>
+          <span class="mind-node-badge" data-badge="arbeit" hidden></span>
+        </span>
+        <span class="mind-node-label">アルバイト</span>
       </a>
-      <a class="hub-card" data-card="study" href="study.html">
-        <span class="hub-icon">📚</span>
-        <span class="hub-title">学業</span>
-        <span class="hub-summary" id="summary-study">読み込み中...</span>
+
+      <a class="mind-node" data-node="job" href="job.html" style="--node-x:0; --node-y:1;">
+        <span class="mind-node-shape mind-node-shape--job">
+          <span class="mind-node-icon">💼</span>
+          <span class="mind-node-badge" data-badge="job" hidden></span>
+        </span>
+        <span class="mind-node-label">就職活動</span>
       </a>
-      <a class="hub-card" data-card="job" href="job.html">
-        <span class="hub-icon">💼</span>
-        <span class="hub-title">就活</span>
-        <span class="hub-summary" id="summary-job">読み込み中...</span>
+
+      <a class="mind-node" data-node="people" href="people.html" style="--node-x:-0.866; --node-y:0.5;">
+        <span class="mind-node-shape mind-node-shape--people">
+          <span class="mind-node-icon">🧑‍🤝‍🧑</span>
+          <span class="mind-node-badge" data-badge="people" hidden></span>
+        </span>
+        <span class="mind-node-label">人</span>
+      </a>
+
+      <a class="mind-node" data-node="hobbies" href="hobbies.html" style="--node-x:-0.866; --node-y:-0.5;">
+        <span class="mind-node-shape mind-node-shape--hobbies">
+          <span class="mind-node-icon">🎨</span>
+          <span class="mind-node-badge" data-badge="hobbies" hidden></span>
+        </span>
+        <span class="mind-node-label">趣味</span>
       </a>
     </div>
+
+    <a class="all-link" href="all.html">🗂️ すべてまとめて見る →</a>
   </div>
 
   <script src="hub.js"></script>

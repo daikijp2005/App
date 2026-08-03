@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>アルバイト | マイページ</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="arbeit.css">
+</head>
+<body>
+  <div class="page">
+    <nav class="top-nav">
+      <a class="home-link" href="index.html">← マイページ</a>
+      <div class="top-nav-links">
+        <a class="all-nav-link" href="all.html">🗂️ すべて</a>
+        <span class="top-nav-label">アルバイト</span>
+      </div>
+    </nav>
+
+    <header class="app-header">
+      <p class="eyebrow">Part-time Job</p>
+      <h1>アルバイト</h1>
+      <p class="tagline">シフトと収入を、まとめて把握する。</p>
+    </header>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="calendar" id="calendar"></div>
+
+    <form id="entry-form" class="entry-form">
+      <div class="form-row">
+        <input type="date" id="date-input" required>
+        <input type="time" id="start-input" required>
+        <input type="time" id="end-input" required>
+        <button type="submit" class="submit-btn">追加</button>
+      </div>
+      <div class="form-row">
+        <input type="number" id="wage-input" placeholder="時給（円）" min="0" step="10" required>
+        <input type="text" id="note-input" placeholder="メモ（任意）">
+      </div>
+    </form>
+
+    <ul id="entry-list" class="entry-list"></ul>
+    <p id="empty-message" class="empty-message" hidden>シフトはまだ登録されていません。上のフォームから追加してください。</p>
+  </div>
+
+  <script src="calendar.js"></script>
+  <script src="arbeit.js"></script>
+</body>
+</html>

@@ -19,6 +19,7 @@ const dateInput = document.getElementById("date-input");
 const list = document.getElementById("entry-list");
 const emptyMessage = document.getElementById("empty-message");
 const statsBox = document.getElementById("stats");
+const calendarEl = document.getElementById("calendar");
 
 function load() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -66,8 +67,22 @@ function renderStats() {
   `;
 }
 
+// 誕生日は年をまたいで毎年繰り返すので、今年と来年の日付としてカレンダーに載せる
+function renderCal() {
+  const now = new Date();
+  const years = [now.getFullYear(), now.getFullYear() + 1];
+  const entries = [];
+  people.forEach((p) => {
+    if (!p.specialDate) return;
+    const [, mm, dd] = p.specialDate.split("-");
+    years.forEach((y) => entries.push({ date: `${y}-${mm}-${dd}`, label: `🎂 ${p.name}` }));
+  });
+  renderCalendar(calendarEl, entries);
+}
+
 function render() {
   renderStats();
+  renderCal();
   list.innerHTML = "";
   emptyMessage.hidden = people.length > 0;
 

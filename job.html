@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>就活 | マイページ</title>
+<title>就職活動 | マイページ</title>
 <link rel="stylesheet" href="base.css">
 <link rel="stylesheet" href="job.css">
 </head>
@@ -11,16 +11,21 @@
   <div class="page">
     <nav class="top-nav">
       <a class="home-link" href="index.html">← マイページ</a>
-      <span class="top-nav-label">就活</span>
+      <div class="top-nav-links">
+        <a class="all-nav-link" href="all.html">🗂️ すべて</a>
+        <span class="top-nav-label">就職活動</span>
+      </div>
     </nav>
 
     <header class="app-header">
       <p class="eyebrow">Job Hunting</p>
-      <h1>就活</h1>
+      <h1>就職活動</h1>
       <p class="tagline">選考の状況を、まとめて見渡す。</p>
     </header>
 
     <div class="stats" id="stats"></div>
+
+    <div class="calendar" id="calendar"></div>
 
     <form id="entry-form" class="entry-form">
       <div class="form-row">
@@ -46,6 +51,7 @@
     <p id="empty-message" class="empty-message" hidden>まだ何も登録されていません。上のフォームから追加してください。</p>
   </div>
 
+  <script src="calendar.js"></script>
   <script src="job.js"></script>
 </body>
 </html>

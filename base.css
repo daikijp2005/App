@@ -331,3 +331,168 @@ input[type="checkbox"]:focus-visible {
   margin-top: 1.5rem;
   font-size: 0.88rem;
 }
+
+/* ---------- ページ入場モーション ---------- */
+
+.page {
+  animation: page-enter 0.32s ease both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+}
+
+/* ---------- 上部ナビの副リンク（すべて）---------- */
+
+.top-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.top-nav a.all-nav-link {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.top-nav a.all-nav-link:hover {
+  color: var(--accent);
+}
+
+/* ---------- 共通カレンダー（人/学業/アルバイト/課外活動/就職活動/すべて で使用） ---------- */
+
+.calendar {
+  margin: 0.9rem 0 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem 0.9rem;
+  background: var(--paper);
+}
+
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.cal-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-nav {
+  border: none;
+  background: var(--accent-soft);
+  color: var(--accent);
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  font-family: inherit;
+}
+
+.cal-nav:hover {
+  filter: brightness(0.96);
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cal-dow {
+  text-align: center;
+  font-size: 0.66rem;
+  color: var(--ink-soft);
+  padding: 0.15rem 0 0.35rem;
+}
+
+.cal-cell {
+  aspect-ratio: 1;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: default;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-family: inherit;
+  padding: 0;
+}
+
+.cal-cell--empty {
+  visibility: hidden;
+}
+
+.cal-cell--today .cal-day-num {
+  color: var(--surface);
+  background: var(--accent);
+  border-radius: 50%;
+  width: 1.35em;
+  height: 1.35em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-cell.has-entry {
+  cursor: pointer;
+}
+
+.cal-cell.has-entry:hover {
+  background: var(--accent-soft);
+}
+
+.cal-dots {
+  display: flex;
+  gap: 1px;
+  height: 4px;
+}
+
+.cal-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.cal-detail {
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.cal-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}

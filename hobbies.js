@@ -62,8 +62,36 @@ function renderStats() {
   `;
 }
 
+function renderChart() {
+  const chartEl = document.getElementById("hobby-chart");
+  if (hobbies.length === 0) {
+    chartEl.innerHTML = "";
+    return;
+  }
+
+  const counts = {};
+  hobbies.forEach((h) => {
+    counts[h.category] = (counts[h.category] || 0) + 1;
+  });
+  const max = Math.max(...Object.values(counts));
+
+  chartEl.innerHTML = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(
+      ([category, count]) => `
+        <div class="chart-row">
+          <span class="chart-label">${CATEGORY_ICONS[category] || "✨"} ${escapeHtml(category)}</span>
+          <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${(count / max) * 100}%"></div></div>
+          <span class="chart-count">${count}</span>
+        </div>
+      `
+    )
+    .join("");
+}
+
 function render() {
   renderStats();
+  renderChart();
   list.innerHTML = "";
   emptyMessage.hidden = hobbies.length > 0;
 

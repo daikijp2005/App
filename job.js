@@ -11,6 +11,7 @@ const nextDateInput = document.getElementById("next-date-input");
 const list = document.getElementById("entry-list");
 const emptyMessage = document.getElementById("empty-message");
 const statsBox = document.getElementById("stats");
+const calendarEl = document.getElementById("calendar");
 
 function load() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -57,8 +58,18 @@ function renderStats() {
   `;
 }
 
+function renderCal() {
+  renderCalendar(
+    calendarEl,
+    companies
+      .filter((c) => c.nextDate)
+      .map((c) => ({ date: c.nextDate, label: `${c.company}（${c.stage}）` }))
+  );
+}
+
 function render() {
   renderStats();
+  renderCal();
   list.innerHTML = "";
   emptyMessage.hidden = companies.length > 0;
 

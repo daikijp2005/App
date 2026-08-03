@@ -11,7 +11,10 @@
   <div class="page">
     <nav class="top-nav">
       <a class="home-link" href="index.html">← マイページ</a>
-      <span class="top-nav-label">学業</span>
+      <div class="top-nav-links">
+        <a class="all-nav-link" href="all.html">🗂️ すべて</a>
+        <span class="top-nav-label">学業</span>
+      </div>
     </nav>
 
     <header class="app-header">
@@ -21,6 +24,8 @@
     </header>
 
     <div class="stats" id="stats"></div>
+
+    <div class="calendar" id="calendar"></div>
 
     <form id="entry-form" class="entry-form">
       <div class="form-row">
@@ -41,6 +46,7 @@
     <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
   </div>
 
+  <script src="calendar.js"></script>
   <script src="study.js"></script>
 </body>
 </html>

@@ -12,6 +12,7 @@ const list = document.getElementById("entry-list");
 const emptyMessage = document.getElementById("empty-message");
 const filterButtons = document.querySelectorAll(".filter-btn");
 const statsBox = document.getElementById("stats");
+const calendarEl = document.getElementById("calendar");
 
 function load() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -64,8 +65,26 @@ function renderStats() {
   `;
 }
 
+function renderCal() {
+  renderCalendar(
+    calendarEl,
+    tasks.map((t) => {
+      const level = getUrgency(t.dueDate).level;
+      const color = t.done
+        ? "var(--ink-soft)"
+        : level === "urgent"
+        ? "var(--danger)"
+        : level === "soon"
+        ? "var(--warning)"
+        : "var(--accent)";
+      return { date: t.dueDate, label: `${t.subject}: ${t.content}${t.done ? "（完了）" : ""}`, color };
+    })
+  );
+}
+
 function render() {
   renderStats();
+  renderCal();
   list.innerHTML = "";
 
   const visible = tasks.filter((task) => {
