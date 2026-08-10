@@ -11,22 +11,43 @@
     <header class="app-header">
       <p class="eyebrow">Job Hunting Profile</p>
       <h1>就活情報管理アプリ</h1>
-      <p class="app-desc">希望条件・経歴・スキル・自己PR・応募企業をひとまとめに管理できます。データはこの端末（ブラウザ）に自動保存されます。</p>
+      <p class="app-desc">希望条件・経歴・スキル・自己PR・応募企業・カレンダー・Gmail連携をひとまとめに管理できます。データはこの端末（ブラウザ）に自動保存されます。</p>
     </header>
 
     <nav class="tabs" role="tablist">
-      <button class="tab-btn active" data-tab="profile">基本情報</button>
+      <button class="tab-btn active" data-tab="home">ホーム</button>
+      <button class="tab-btn" data-tab="profile">基本情報</button>
       <button class="tab-btn" data-tab="preferences">希望条件</button>
       <button class="tab-btn" data-tab="history">経歴</button>
       <button class="tab-btn" data-tab="skills">スキル・資格</button>
       <button class="tab-btn" data-tab="selfpr">自己PR</button>
       <button class="tab-btn" data-tab="companies">応募企業管理</button>
+      <button class="tab-btn" data-tab="calendar">カレンダー</button>
+      <button class="tab-btn" data-tab="gmail">メール連携</button>
       <button class="tab-btn" data-tab="summary">サマリー出力</button>
     </nav>
 
     <main>
+      <!-- ホーム -->
+      <section id="tab-home" class="tab-panel">
+        <h2>ホーム</h2>
+
+        <div class="stats" id="home-stats"></div>
+
+        <h3>直近の予定</h3>
+        <ul id="home-upcoming" class="entry-list"></ul>
+        <p id="home-upcoming-empty" class="empty-message" hidden>直近の予定はまだ登録されていません。</p>
+
+        <h3>就活準備チェックリスト</h3>
+        <ul id="checklist" class="checklist"></ul>
+        <form id="checklist-form" class="checklist-add">
+          <input type="text" id="checklist-input" placeholder="やることを追加（例: 業界地図を読む）">
+          <button type="submit" class="add-btn">追加</button>
+        </form>
+      </section>
+
       <!-- 基本情報 -->
-      <section id="tab-profile" class="tab-panel">
+      <section id="tab-profile" class="tab-panel" hidden>
         <h2>基本情報</h2>
         <form id="profile-form" class="field-grid">
           <label>氏名<input type="text" id="p-name" placeholder="例: 就活 太郎"></label>
@@ -145,6 +166,11 @@
 
         <div class="stats" id="company-stats"></div>
 
+        <div class="view-toggle">
+          <button type="button" class="view-btn active" data-view="list">リスト表示</button>
+          <button type="button" class="view-btn" data-view="board">ボード表示</button>
+        </div>
+
         <form id="company-form" class="field-grid">
           <label>企業名<input type="text" id="c-name" placeholder="例: 〇〇株式会社" required></label>
           <label>業界<input type="text" id="c-industry" placeholder="例: IT"></label>
@@ -164,8 +190,85 @@
           <button type="submit" class="add-btn">企業を追加</button>
         </form>
 
-        <ul id="company-list" class="entry-list"></ul>
-        <p id="company-empty" class="empty-message" hidden>応募企業はまだ登録されていません。</p>
+        <div id="company-list-view">
+          <ul id="company-list" class="entry-list"></ul>
+          <p id="company-empty" class="empty-message" hidden>応募企業はまだ登録されていません。</p>
+        </div>
+
+        <div id="company-board-view" class="board-wrap" hidden>
+          <div class="board" id="company-board"></div>
+        </div>
+      </section>
+
+      <!-- カレンダー -->
+      <section id="tab-calendar" class="tab-panel" hidden>
+        <h2>カレンダー</h2>
+
+        <div class="calendar-header">
+          <button type="button" class="calendar-nav-btn" id="cal-prev" aria-label="前の月">‹</button>
+          <span class="calendar-title" id="cal-title"></span>
+          <button type="button" class="calendar-nav-btn" id="cal-next" aria-label="次の月">›</button>
+        </div>
+
+        <div class="calendar-grid" id="calendar-grid"></div>
+
+        <div id="calendar-day-detail" hidden>
+          <h3 id="calendar-day-title"></h3>
+          <ul id="calendar-day-list" class="entry-list"></ul>
+          <p id="calendar-day-empty" class="empty-message" hidden>この日の予定はありません。</p>
+        </div>
+
+        <form id="event-form" class="field-grid">
+          <label>予定名<input type="text" id="ev-title" placeholder="例: 〇〇社 一次面接" required></label>
+          <label>種別<select id="ev-type">
+              <option value="deadline">締切（ES・書類など）</option>
+              <option value="interview">面接・選考</option>
+              <option value="seminar">説明会・OB訪問</option>
+              <option value="other">その他</option>
+            </select></label>
+          <label>日付<input type="date" id="ev-date" required></label>
+          <label>時刻（任意）<input type="time" id="ev-time"></label>
+          <label class="span-2">メモ<textarea id="ev-note" rows="2" placeholder="持ち物や注意点など"></textarea></label>
+          <button type="submit" class="add-btn">予定を追加</button>
+        </form>
+
+        <h3>今後の予定一覧</h3>
+        <ul id="agenda-list" class="entry-list"></ul>
+        <p id="agenda-empty" class="empty-message" hidden>今後の予定はまだ登録されていません。</p>
+      </section>
+
+      <!-- メール連携（Gmail） -->
+      <section id="tab-gmail" class="tab-panel" hidden>
+        <h2>メール連携（Gmail）</h2>
+
+        <div class="gmail-help">
+          Gmail内の就活関連メール（選考・面接・説明会など）を検索して一覧表示します。実際に接続するには、自分のGoogle CloudプロジェクトでOAuthクライアントIDを作成する必要があります。
+          <ol>
+            <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>でプロジェクトを作成し、Gmail APIを有効化する</li>
+            <li>OAuth同意画面を「テスト」で設定し、自分のGoogleアカウントをテストユーザーに追加する</li>
+            <li>OAuthクライアントID（種類: ウェブアプリケーション）を作成し、このページのURLを「承認済みのJavaScript生成元」に追加する</li>
+            <li>発行された<code>クライアントID</code>を下の欄に貼り付けて保存する</li>
+          </ol>
+          ※サンドボックス化されたプレビュー環境ではGoogleの認証スクリプトが読み込めません。実際に公開・ホスティングしたURLで開いてお試しください。
+        </div>
+
+        <form id="gmail-settings-form" class="field-grid">
+          <label class="span-2">OAuthクライアントID<input type="text" id="gm-client-id" placeholder="xxxxxxxx.apps.googleusercontent.com"></label>
+          <label class="span-2">検索クエリ<textarea id="gm-query" rows="2"></textarea></label>
+        </form>
+        <button type="button" class="save-btn" id="gmail-save-settings">設定を保存</button>
+        <span class="save-indicator" data-indicator="gmail"></span>
+
+        <div class="gmail-toolbar">
+          <button type="button" id="gmail-connect" class="gmail-btn gmail-btn-primary">Gmailと連携する</button>
+          <button type="button" id="gmail-refresh" class="gmail-btn">メールを再取得</button>
+          <button type="button" id="gmail-disconnect" class="gmail-btn">切断</button>
+        </div>
+
+        <p id="gmail-status" class="status-banner"></p>
+
+        <ul id="gmail-list" class="entry-list"></ul>
+        <p id="gmail-empty" class="empty-message">まだメールを取得していません。「Gmailと連携する」から開始してください。</p>
       </section>
 
       <!-- サマリー -->
@@ -176,6 +279,17 @@
         <button type="button" id="copy-summary" class="add-btn">コピーする</button>
         <span class="save-indicator" data-indicator="summary"></span>
         <textarea id="summary-output" class="summary-output" rows="20" readonly placeholder="「サマリーを生成」を押すとここに表示されます"></textarea>
+
+        <h3>データのバックアップ</h3>
+        <p class="app-desc">全データをJSONファイルとして保存・復元できます。定期的なバックアップをおすすめします。</p>
+        <div class="backup-actions">
+          <button type="button" id="export-data" class="save-btn">JSONをエクスポート</button>
+          <label class="import-label">
+            JSONをインポート
+            <input type="file" id="import-data" accept="application/json" hidden>
+          </label>
+        </div>
+        <p id="backup-status" class="status-banner"></p>
       </section>
     </main>
   </div>
