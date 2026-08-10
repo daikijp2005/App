@@ -3,36 +3,181 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課題管理アプリ</title>
+<title>就活情報管理アプリ</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="page">
     <header class="app-header">
-      <p class="eyebrow">Assignment Tracker</p>
-      <h1>課題管理アプリ</h1>
+      <p class="eyebrow">Job Hunting Profile</p>
+      <h1>就活情報管理アプリ</h1>
+      <p class="app-desc">希望条件・経歴・スキル・自己PR・応募企業をひとまとめに管理できます。データはこの端末（ブラウザ）に自動保存されます。</p>
     </header>
 
-    <div class="stats" id="stats"></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="profile">基本情報</button>
+      <button class="tab-btn" data-tab="preferences">希望条件</button>
+      <button class="tab-btn" data-tab="history">経歴</button>
+      <button class="tab-btn" data-tab="skills">スキル・資格</button>
+      <button class="tab-btn" data-tab="selfpr">自己PR</button>
+      <button class="tab-btn" data-tab="companies">応募企業管理</button>
+      <button class="tab-btn" data-tab="summary">サマリー出力</button>
+    </nav>
 
-    <form id="task-form" class="task-form">
-      <div class="form-row">
-        <input type="text" id="subject" placeholder="科目名（例: 経済学）" required>
-        <input type="text" id="content" placeholder="課題内容（例: レポート提出）" required>
-        <input type="date" id="due-date" required>
-        <button type="submit">追加</button>
-      </div>
-    </form>
+    <main>
+      <!-- 基本情報 -->
+      <section id="tab-profile" class="tab-panel">
+        <h2>基本情報</h2>
+        <form id="profile-form" class="field-grid">
+          <label>氏名<input type="text" id="p-name" placeholder="例: 就活 太郎"></label>
+          <label>ふりがな<input type="text" id="p-furigana" placeholder="例: しゅうかつ たろう"></label>
+          <label>メールアドレス<input type="email" id="p-email" placeholder="example@mail.com"></label>
+          <label>電話番号<input type="tel" id="p-phone" placeholder="090-0000-0000"></label>
+          <label>住所<input type="text" id="p-address" placeholder="都道府県から番地まで"></label>
+          <label>生年月日<input type="date" id="p-birthdate"></label>
+          <label>学校名<input type="text" id="p-school" placeholder="例: 〇〇大学"></label>
+          <label>学部・学科<input type="text" id="p-faculty" placeholder="例: 経済学部 経済学科"></label>
+          <label>卒業予定年月<input type="month" id="p-graduation"></label>
+        </form>
+        <button type="button" class="save-btn" data-save="profile">保存</button>
+        <span class="save-indicator" data-indicator="profile"></span>
+      </section>
 
-    <div class="filters" role="tablist">
-      <button class="filter-btn active" data-filter="all">すべて</button>
-      <button class="filter-btn" data-filter="active">未完了</button>
-      <button class="filter-btn" data-filter="done">完了</button>
-    </div>
+      <!-- 希望条件 -->
+      <section id="tab-preferences" class="tab-panel" hidden>
+        <h2>希望条件</h2>
+        <form id="preferences-form" class="field-grid">
+          <label>希望業界<input type="text" id="pr-industries" placeholder="例: IT、金融、メーカー"></label>
+          <label>希望職種<input type="text" id="pr-jobtypes" placeholder="例: 営業、エンジニア、企画"></label>
+          <label>希望勤務地<input type="text" id="pr-locations" placeholder="例: 東京、大阪、地元"></label>
+          <label>働き方<select id="pr-workstyle">
+              <option value="">選択してください</option>
+              <option value="出社">出社</option>
+              <option value="リモート可">リモート可</option>
+              <option value="フルリモート">フルリモート</option>
+              <option value="ハイブリッド">ハイブリッド</option>
+            </select></label>
+          <label>希望年収（下限）<input type="number" id="pr-salary-min" placeholder="例: 350" inputmode="numeric"></label>
+          <label>希望年収（上限）<input type="number" id="pr-salary-max" placeholder="例: 500" inputmode="numeric"></label>
+          <label>希望企業規模<select id="pr-company-size">
+              <option value="">選択してください</option>
+              <option value="ベンチャー・スタートアップ">ベンチャー・スタートアップ</option>
+              <option value="中小企業">中小企業</option>
+              <option value="中堅企業">中堅企業</option>
+              <option value="大手企業">大手企業</option>
+              <option value="こだわらない">こだわらない</option>
+            </select></label>
+          <label class="span-2">企業選びの軸<textarea id="pr-axis" rows="3" placeholder="例: 成長環境がある、裁量権がある、社会貢献性が高い"></textarea></label>
+          <label class="span-2">その他メモ<textarea id="pr-notes" rows="3" placeholder="その他、条件に関するメモ"></textarea></label>
+        </form>
+        <button type="button" class="save-btn" data-save="preferences">保存</button>
+        <span class="save-indicator" data-indicator="preferences"></span>
+      </section>
 
-    <ul id="task-list" class="task-list"></ul>
+      <!-- 経歴 -->
+      <section id="tab-history" class="tab-panel" hidden>
+        <h2>経歴（学歴・職歴・インターン）</h2>
+        <form id="history-form" class="field-grid">
+          <label>種別<select id="h-type">
+              <option value="edu">学歴</option>
+              <option value="work">職歴・インターン</option>
+            </select></label>
+          <label>学校名・会社名<input type="text" id="h-title" placeholder="例: 〇〇大学 / 〇〇株式会社" required></label>
+          <label>学部・役職・内容<input type="text" id="h-detail" placeholder="例: 経済学部 / 営業インターン"></label>
+          <label>開始年月<input type="month" id="h-start"></label>
+          <label>終了年月（在籍中は空欄）<input type="month" id="h-end"></label>
+          <label class="span-2">詳細・エピソード<textarea id="h-note" rows="2" placeholder="活動内容や成果など"></textarea></label>
+          <button type="submit" class="add-btn">経歴を追加</button>
+        </form>
+        <ul id="history-list" class="entry-list"></ul>
+        <p id="history-empty" class="empty-message" hidden>経歴はまだ登録されていません。</p>
+      </section>
 
-    <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
+      <!-- スキル・資格 -->
+      <section id="tab-skills" class="tab-panel" hidden>
+        <h2>スキル・資格・語学</h2>
+
+        <div class="tag-block">
+          <h3>スキル</h3>
+          <form class="tag-form" data-tag-type="skills">
+            <input type="text" placeholder="例: Excel、Python、簿記" required>
+            <button type="submit">追加</button>
+          </form>
+          <ul class="tag-list" id="skills-skills"></ul>
+        </div>
+
+        <div class="tag-block">
+          <h3>資格</h3>
+          <form class="tag-form" data-tag-type="certifications">
+            <input type="text" placeholder="例: TOEIC 800点、普通自動車免許" required>
+            <button type="submit">追加</button>
+          </form>
+          <ul class="tag-list" id="skills-certifications"></ul>
+        </div>
+
+        <div class="tag-block">
+          <h3>語学</h3>
+          <form class="tag-form" data-tag-type="languages">
+            <input type="text" placeholder="例: 英語（日常会話レベル）" required>
+            <button type="submit">追加</button>
+          </form>
+          <ul class="tag-list" id="skills-languages"></ul>
+        </div>
+      </section>
+
+      <!-- 自己PR -->
+      <section id="tab-selfpr" class="tab-panel" hidden>
+        <h2>自己PR・ガクチカ・志望動機</h2>
+        <form id="selfpr-form" class="field-grid">
+          <label class="span-2">強み<textarea id="sp-strengths" rows="3" placeholder="自分の強みを書き出しましょう"></textarea></label>
+          <label class="span-2">弱み<textarea id="sp-weaknesses" rows="3" placeholder="弱みと、それにどう向き合っているか"></textarea></label>
+          <label class="span-2">学生時代に力を入れたこと（ガクチカ）<textarea id="sp-gakuchika" rows="4" placeholder="取り組み・工夫・結果を具体的に"></textarea></label>
+          <label class="span-2">志望動機のベース<textarea id="sp-motivation" rows="4" placeholder="就活の軸や志望動機の共通テンプレート"></textarea></label>
+          <label class="span-2">自己PR文<textarea id="sp-selfpr" rows="4" placeholder="エントリーシート用の自己PR文"></textarea></label>
+        </form>
+        <button type="button" class="save-btn" data-save="selfpr">保存</button>
+        <span class="save-indicator" data-indicator="selfpr"></span>
+      </section>
+
+      <!-- 応募企業管理 -->
+      <section id="tab-companies" class="tab-panel" hidden>
+        <h2>応募企業管理</h2>
+
+        <div class="stats" id="company-stats"></div>
+
+        <form id="company-form" class="field-grid">
+          <label>企業名<input type="text" id="c-name" placeholder="例: 〇〇株式会社" required></label>
+          <label>業界<input type="text" id="c-industry" placeholder="例: IT"></label>
+          <label>選考状況<select id="c-status">
+              <option value="検討中">検討中</option>
+              <option value="ES提出">ES提出</option>
+              <option value="Webテスト">Webテスト</option>
+              <option value="一次面接">一次面接</option>
+              <option value="二次面接">二次面接</option>
+              <option value="最終面接">最終面接</option>
+              <option value="内定">内定</option>
+              <option value="内定辞退">内定辞退</option>
+              <option value="不採用">不採用</option>
+            </select></label>
+          <label>次の予定日<input type="date" id="c-next-date"></label>
+          <label class="span-2">メモ<textarea id="c-note" rows="2" placeholder="面接内容や連絡事項など"></textarea></label>
+          <button type="submit" class="add-btn">企業を追加</button>
+        </form>
+
+        <ul id="company-list" class="entry-list"></ul>
+        <p id="company-empty" class="empty-message" hidden>応募企業はまだ登録されていません。</p>
+      </section>
+
+      <!-- サマリー -->
+      <section id="tab-summary" class="tab-panel" hidden>
+        <h2>サマリー出力</h2>
+        <p class="app-desc">登録した情報をまとめてテキスト化します。エントリーシートの下書きや面接前の見直しに使えます。</p>
+        <button type="button" id="generate-summary" class="save-btn">サマリーを生成</button>
+        <button type="button" id="copy-summary" class="add-btn">コピーする</button>
+        <span class="save-indicator" data-indicator="summary"></span>
+        <textarea id="summary-output" class="summary-output" rows="20" readonly placeholder="「サマリーを生成」を押すとここに表示されます"></textarea>
+      </section>
+    </main>
   </div>
 
   <script src="script.js"></script>
