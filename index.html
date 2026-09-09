@@ -3,36 +3,88 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課題管理アプリ</title>
+<title>就活管理アプリ</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="page">
     <header class="app-header">
-      <p class="eyebrow">Assignment Tracker</p>
-      <h1>課題管理アプリ</h1>
+      <div class="header-text">
+        <p class="eyebrow">Job Hunting Tracker</p>
+        <h1>就活管理アプリ</h1>
+      </div>
+      <button id="add-btn" class="add-btn" type="button">＋ 企業を追加</button>
     </header>
 
     <div class="stats" id="stats"></div>
 
-    <form id="task-form" class="task-form">
-      <div class="form-row">
-        <input type="text" id="subject" placeholder="科目名（例: 経済学）" required>
-        <input type="text" id="content" placeholder="課題内容（例: レポート提出）" required>
-        <input type="date" id="due-date" required>
-        <button type="submit">追加</button>
-      </div>
-    </form>
+    <section class="upcoming" id="upcoming-section">
+      <h2>近日の予定</h2>
+      <ul id="upcoming-list" class="upcoming-list"></ul>
+      <p id="upcoming-empty" class="upcoming-empty" hidden>直近の予定はありません。</p>
+    </section>
 
-    <div class="filters" role="tablist">
-      <button class="filter-btn active" data-filter="all">すべて</button>
-      <button class="filter-btn" data-filter="active">未完了</button>
-      <button class="filter-btn" data-filter="done">完了</button>
+    <div class="controls">
+      <input type="search" id="search-input" class="search-input" placeholder="企業名・職種で検索">
+      <div class="view-toggle" role="tablist">
+        <button class="view-btn active" data-view="board" type="button">ボード</button>
+        <button class="view-btn" data-view="list" type="button">リスト</button>
+      </div>
     </div>
 
-    <ul id="task-list" class="task-list"></ul>
+    <div id="board-view" class="board"></div>
 
-    <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
+    <div id="list-view" class="list-wrap" hidden>
+      <ul id="list-view-list" class="entry-list"></ul>
+      <p id="list-empty" class="empty-message" hidden>該当する企業がありません。</p>
+    </div>
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h2 id="modal-title">企業を追加</h2>
+        <button id="modal-close" class="modal-close" type="button" aria-label="閉じる">✕</button>
+      </div>
+      <form id="entry-form" class="entry-form">
+        <input type="hidden" id="entry-id">
+        <label>
+          企業名 <span class="required">*</span>
+          <input type="text" id="company" placeholder="例: 株式会社サンプル" required>
+        </label>
+        <label>
+          職種
+          <input type="text" id="position" placeholder="例: 総合職 / エンジニア">
+        </label>
+        <label>
+          選考ステータス
+          <select id="status"></select>
+        </label>
+        <label>
+          次の予定日
+          <input type="date" id="next-date">
+        </label>
+        <label>
+          次にやること
+          <input type="text" id="next-action" placeholder="例: 二次面接 / ES提出">
+        </label>
+        <label>
+          企業サイト・マイページURL
+          <input type="url" id="url" placeholder="https://">
+        </label>
+        <label>
+          メモ
+          <textarea id="memo" rows="3" placeholder="面接の感触、聞かれたこと、志望動機のメモなど"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="delete-btn" class="delete-entry-btn" hidden>この企業を削除</button>
+          <div class="modal-actions-right">
+            <button type="button" id="cancel-btn" class="btn-secondary">キャンセル</button>
+            <button type="submit" class="btn-primary">保存</button>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="script.js"></script>
