@@ -13,7 +13,11 @@
         <p class="eyebrow">Job Hunting Tracker</p>
         <h1>就活管理アプリ</h1>
       </div>
-      <button id="add-btn" class="add-btn" type="button">＋ 企業を追加</button>
+      <div class="header-actions">
+        <button id="add-btn" class="add-btn" type="button">＋ 企業を追加</button>
+        <button id="add-event-btn" class="add-btn outline" type="button">＋ 予定を追加</button>
+        <button id="import-btn" class="add-btn outline" type="button">📋 貼り付けてインポート</button>
+      </div>
     </header>
 
     <div class="stats" id="stats"></div>
@@ -29,6 +33,7 @@
       <div class="view-toggle" role="tablist">
         <button class="view-btn active" data-view="board" type="button">ボード</button>
         <button class="view-btn" data-view="list" type="button">リスト</button>
+        <button class="view-btn" data-view="calendar" type="button">カレンダー</button>
       </div>
     </div>
 
@@ -37,6 +42,19 @@
     <div id="list-view" class="list-wrap" hidden>
       <ul id="list-view-list" class="entry-list"></ul>
       <p id="list-empty" class="empty-message" hidden>該当する企業がありません。</p>
+    </div>
+
+    <div id="calendar-view" class="calendar" hidden>
+      <div class="calendar-header">
+        <button id="cal-prev" type="button" class="cal-nav-btn" aria-label="前の月">‹</button>
+        <h2 id="cal-month-label"></h2>
+        <button id="cal-next" type="button" class="cal-nav-btn" aria-label="次の月">›</button>
+        <button id="cal-today" type="button" class="cal-today-btn">今日</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+      </div>
+      <div id="calendar-grid" class="calendar-grid"></div>
     </div>
   </div>
 
@@ -84,6 +102,71 @@
           </div>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="event-modal-overlay" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
+      <div class="modal-header">
+        <h2 id="event-modal-title">予定を追加</h2>
+        <button id="event-modal-close" class="modal-close" type="button" aria-label="閉じる">✕</button>
+      </div>
+      <form id="event-form" class="entry-form">
+        <input type="hidden" id="event-id">
+        <label>
+          日付 <span class="required">*</span>
+          <input type="date" id="event-date" required>
+        </label>
+        <label>
+          時刻
+          <input type="time" id="event-time">
+        </label>
+        <label>
+          種類
+          <select id="event-type"></select>
+        </label>
+        <label>
+          タイトル <span class="required">*</span>
+          <input type="text" id="event-title" placeholder="例: 会社説明会" required>
+        </label>
+        <label>
+          企業名
+          <input type="text" id="event-company" placeholder="例: 株式会社サンプル">
+        </label>
+        <label>
+          メモ
+          <textarea id="event-memo" rows="2" placeholder="会場、持ち物、URLなど"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="event-delete-btn" class="delete-entry-btn" hidden>この予定を削除</button>
+          <div class="modal-actions-right">
+            <button type="button" id="event-cancel-btn" class="btn-secondary">キャンセル</button>
+            <button type="submit" class="btn-primary">保存</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="import-modal-overlay" class="modal-overlay" hidden>
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+      <div class="modal-header">
+        <h2 id="import-modal-title">予定を貼り付けてインポート</h2>
+        <button id="import-modal-close" class="modal-close" type="button" aria-label="閉じる">✕</button>
+      </div>
+      <div class="import-body">
+        <p class="import-hint">マイナビ・リクナビなど就活サイトの、インターンや説明会の日程が書かれた部分をコピーして下に貼り付けてください。日付を含む行を自動で予定の候補として抽出します（内容は追加前に確認・修正できます）。</p>
+        <textarea id="import-textarea" rows="6" placeholder="例:&#10;9/16(水) 14:00〜 WEB会社説明会 株式会社サンプル&#10;9/25 ES提出締切&#10;10/2(木) インターンシップ 合同会社テスト"></textarea>
+        <div class="import-actions">
+          <button type="button" id="import-parse-btn" class="btn-primary">解析する</button>
+        </div>
+        <div id="import-preview" class="import-preview"></div>
+        <p id="import-empty" class="empty-message" hidden>日付を含む行が見つかりませんでした。「予定を追加」から手動で登録してください。</p>
+      </div>
+      <div class="modal-actions import-footer">
+        <button type="button" id="import-cancel-btn" class="btn-secondary">キャンセル</button>
+        <button type="button" id="import-confirm-btn" class="btn-primary" hidden>選択した予定を追加</button>
+      </div>
     </div>
   </div>
 

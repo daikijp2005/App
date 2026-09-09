@@ -1,6 +1,7 @@
 // 就活の進捗を企業ごとに管理し、ブラウザの localStorage に保存する
 // (サーバーを用意しなくても、次回開いたときにデータが残る)
 const STORAGE_KEY = "job-hunt-entries";
+const EVENTS_STORAGE_KEY = "job-hunt-events";
 
 const STAGES = [
   { id: "considering", label: "検討中", color: "gray" },
@@ -11,10 +12,31 @@ const STAGES = [
   { id: "closed", label: "見送り・辞退", color: "muted" },
 ];
 
+// 説明会・インターン・締切などの「予定」の種類
+const EVENT_TYPES = [
+  { id: "explanation", label: "説明会", color: "blue" },
+  { id: "internship", label: "インターン", color: "purple" },
+  { id: "interview", label: "面接", color: "warning" },
+  { id: "deadline", label: "締切", color: "danger" },
+  { id: "other", label: "その他", color: "gray" },
+];
+
 let entries = loadEntries();
+let events = loadEvents();
 let currentView = "board";
 let currentSearch = "";
 let editingId = null;
+let editingEventId = null;
+let importDrafts = [];
+let idCounter = 0;
+
+const calendarMonth = new Date();
+calendarMonth.setDate(1);
+
+function uid(prefix) {
+  idCounter += 1;
+  return `${prefix}-${Date.now()}-${idCounter}`;
+}
 
 const statsBox = document.getElementById("stats");
 const upcomingList = document.getElementById("upcoming-list");
@@ -23,6 +45,12 @@ const boardView = document.getElementById("board-view");
 const listView = document.getElementById("list-view");
 const listViewList = document.getElementById("list-view-list");
 const listEmpty = document.getElementById("list-empty");
+const calendarView = document.getElementById("calendar-view");
+const calendarGrid = document.getElementById("calendar-grid");
+const calMonthLabel = document.getElementById("cal-month-label");
+const calPrevBtn = document.getElementById("cal-prev");
+const calNextBtn = document.getElementById("cal-next");
+const calTodayBtn = document.getElementById("cal-today");
 const searchInput = document.getElementById("search-input");
 const viewButtons = document.querySelectorAll(".view-btn");
 
@@ -43,6 +71,32 @@ const nextActionInput = document.getElementById("next-action");
 const urlInput = document.getElementById("url");
 const memoInput = document.getElementById("memo");
 
+const addEventBtn = document.getElementById("add-event-btn");
+const eventModalOverlay = document.getElementById("event-modal-overlay");
+const eventModalTitle = document.getElementById("event-modal-title");
+const eventModalClose = document.getElementById("event-modal-close");
+const eventCancelBtn = document.getElementById("event-cancel-btn");
+const eventDeleteBtn = document.getElementById("event-delete-btn");
+const eventForm = document.getElementById("event-form");
+
+const eventIdInput = document.getElementById("event-id");
+const eventDateInput = document.getElementById("event-date");
+const eventTimeInput = document.getElementById("event-time");
+const eventTypeSelect = document.getElementById("event-type");
+const eventTitleInput = document.getElementById("event-title");
+const eventCompanyInput = document.getElementById("event-company");
+const eventMemoInput = document.getElementById("event-memo");
+
+const importBtn = document.getElementById("import-btn");
+const importModalOverlay = document.getElementById("import-modal-overlay");
+const importModalClose = document.getElementById("import-modal-close");
+const importCancelBtn = document.getElementById("import-cancel-btn");
+const importTextarea = document.getElementById("import-textarea");
+const importParseBtn = document.getElementById("import-parse-btn");
+const importPreview = document.getElementById("import-preview");
+const importEmpty = document.getElementById("import-empty");
+const importConfirmBtn = document.getElementById("import-confirm-btn");
+
 function loadEntries() {
   const raw = localStorage.getItem(STORAGE_KEY);
   return raw ? JSON.parse(raw) : [];
@@ -52,8 +106,28 @@ function saveEntries() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
+function loadEvents() {
+  const raw = localStorage.getItem(EVENTS_STORAGE_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+function saveEvents() {
+  localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+}
+
 function getStage(stageId) {
   return STAGES.find((s) => s.id === stageId) || STAGES[0];
+}
+
+function getEventType(typeId) {
+  return EVENT_TYPES.find((t) => t.id === typeId) || EVENT_TYPES[EVENT_TYPES.length - 1];
+}
+
+function formatDateInput(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 // 今日からの残り日数を計算し、緊急度クラスを決める
@@ -92,10 +166,12 @@ function matchesSearch(entry) {
 function renderStats() {
   const active = entries.filter((e) => e.status !== "offer" && e.status !== "closed");
   const offers = entries.filter((e) => e.status === "offer");
-  const soon = entries.filter((e) => {
-    const u = getUrgency(e.nextDate);
-    return u && (u.level === "urgent" || u.level === "soon");
-  });
+
+  const soonUrgencies = [
+    ...entries.filter((e) => e.status !== "closed").map((e) => getUrgency(e.nextDate)),
+    ...events.map((ev) => getUrgency(ev.date)),
+  ];
+  const soonCount = soonUrgencies.filter((u) => u && (u.level === "urgent" || u.level === "soon")).length;
 
   statsBox.innerHTML = `
     <div class="stat">
@@ -111,32 +187,53 @@ function renderStats() {
       <span class="stat-label">内定</span>
     </div>
     <div class="stat stat--danger">
-      <span class="stat-num">${soon.length}</span>
+      <span class="stat-num">${soonCount}</span>
       <span class="stat-label">直近の予定</span>
     </div>
   `;
 }
 
 function renderUpcoming() {
-  const withDates = entries
+  const items = [];
+
+  entries
     .filter((e) => e.nextDate && e.status !== "closed")
-    .map((e) => ({ entry: e, urgency: getUrgency(e.nextDate) }))
-    .sort((a, b) => a.urgency.diffDays - b.urgency.diffDays)
-    .slice(0, 5);
+    .forEach((e) => {
+      items.push({
+        date: e.nextDate,
+        urgency: getUrgency(e.nextDate),
+        company: e.company,
+        label: e.nextAction || getStage(e.status).label,
+        onClick: () => openModal(e.id),
+      });
+    });
+
+  events.forEach((ev) => {
+    items.push({
+      date: ev.date,
+      urgency: getUrgency(ev.date),
+      company: ev.company || "",
+      label: ev.title,
+      onClick: () => openEventModal(ev.id),
+    });
+  });
+
+  items.sort((a, b) => a.urgency.diffDays - b.urgency.diffDays);
+  const top = items.slice(0, 6);
 
   upcomingList.innerHTML = "";
-  upcomingEmpty.hidden = withDates.length > 0;
+  upcomingEmpty.hidden = top.length > 0;
 
-  withDates.forEach(({ entry, urgency }) => {
+  top.forEach((item) => {
     const li = document.createElement("li");
-    li.className = `upcoming-item urgency-${urgency.level}`;
+    li.className = `upcoming-item urgency-${item.urgency.level}`;
     li.innerHTML = `
-      <span class="upcoming-badge">${urgency.label}</span>
-      <span class="upcoming-company">${escapeHtml(entry.company)}</span>
-      <span class="upcoming-action">${escapeHtml(entry.nextAction || getStage(entry.status).label)}</span>
-      <span class="upcoming-date">${entry.nextDate}</span>
+      <span class="upcoming-badge">${item.urgency.label}</span>
+      ${item.company ? `<span class="upcoming-company">${escapeHtml(item.company)}</span>` : ""}
+      <span class="upcoming-action">${escapeHtml(item.label)}</span>
+      <span class="upcoming-date">${item.date}</span>
     `;
-    li.addEventListener("click", () => openModal(entry.id));
+    li.addEventListener("click", item.onClick);
     upcomingList.appendChild(li);
   });
 }
@@ -271,10 +368,105 @@ function render() {
   renderUpcoming();
   renderBoard();
   renderList();
+  renderCalendar();
 }
 
 function populateStatusSelect() {
   statusSelect.innerHTML = STAGES.map((s) => `<option value="${s.id}">${s.label}</option>`).join("");
+}
+
+function populateEventTypeSelect() {
+  eventTypeSelect.innerHTML = EVENT_TYPES.map((t) => `<option value="${t.id}">${t.label}</option>`).join("");
+}
+
+function renderCalendar() {
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  calMonthLabel.textContent = `${year}年${month + 1}月`;
+
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+  const todayStr = formatDateInput(new Date());
+
+  const dayItems = {};
+  const addItem = (dateStr, item) => {
+    if (!dayItems[dateStr]) dayItems[dateStr] = [];
+    dayItems[dateStr].push(item);
+  };
+
+  entries
+    .filter((e) => e.nextDate && e.status !== "closed")
+    .forEach((e) => {
+      addItem(e.nextDate, {
+        label: e.nextAction || getStage(e.status).label,
+        company: e.company,
+        color: "blue",
+        onClick: () => openModal(e.id),
+      });
+    });
+
+  events.forEach((ev) => {
+    addItem(ev.date, {
+      label: ev.title,
+      company: ev.company,
+      color: getEventType(ev.type).color,
+      onClick: () => openEventModal(ev.id),
+    });
+  });
+
+  const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+  calendarGrid.innerHTML = "";
+
+  for (let i = 0; i < totalCells; i++) {
+    const dayOffset = i - firstWeekday;
+    let cellDate;
+    let otherMonth = false;
+
+    if (dayOffset < 0) {
+      cellDate = new Date(year, month - 1, daysInPrevMonth + dayOffset + 1);
+      otherMonth = true;
+    } else if (dayOffset >= daysInMonth) {
+      cellDate = new Date(year, month + 1, dayOffset - daysInMonth + 1);
+      otherMonth = true;
+    } else {
+      cellDate = new Date(year, month, dayOffset + 1);
+    }
+
+    const dateStr = formatDateInput(cellDate);
+    const cell = document.createElement("div");
+    cell.className = "calendar-cell";
+    if (otherMonth) cell.classList.add("other-month");
+    if (dateStr === todayStr) cell.classList.add("is-today");
+
+    const dayNum = document.createElement("div");
+    dayNum.className = "calendar-day-num";
+    dayNum.textContent = cellDate.getDate();
+    cell.appendChild(dayNum);
+
+    const items = dayItems[dateStr] || [];
+    items.slice(0, 3).forEach((item) => {
+      const chip = document.createElement("div");
+      chip.className = `event-chip event-chip--${item.color}`;
+      chip.textContent = item.company ? `${item.company} ${item.label}` : item.label;
+      chip.title = chip.textContent;
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        item.onClick();
+      });
+      cell.appendChild(chip);
+    });
+
+    if (items.length > 3) {
+      const more = document.createElement("div");
+      more.className = "event-chip-more";
+      more.textContent = `+${items.length - 3}件`;
+      cell.appendChild(more);
+    }
+
+    cell.addEventListener("click", () => openEventModal(null, dateStr));
+    calendarGrid.appendChild(cell);
+  }
 }
 
 function openModal(id) {
@@ -316,7 +508,10 @@ modalOverlay.addEventListener("click", (e) => {
   if (e.target === modalOverlay) closeModal();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !modalOverlay.hidden) closeModal();
+  if (e.key !== "Escape") return;
+  if (!modalOverlay.hidden) closeModal();
+  if (!eventModalOverlay.hidden) closeEventModal();
+  if (!importModalOverlay.hidden) closeImportModal();
 });
 
 entryForm.addEventListener("submit", (e) => {
@@ -365,8 +560,302 @@ viewButtons.forEach((btn) => {
     currentView = btn.dataset.view;
     boardView.hidden = currentView !== "board";
     listView.hidden = currentView !== "list";
+    calendarView.hidden = currentView !== "calendar";
   });
 });
 
+calPrevBtn.addEventListener("click", () => {
+  calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+  renderCalendar();
+});
+
+calNextBtn.addEventListener("click", () => {
+  calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+  renderCalendar();
+});
+
+calTodayBtn.addEventListener("click", () => {
+  const today = new Date();
+  calendarMonth.setFullYear(today.getFullYear(), today.getMonth(), 1);
+  renderCalendar();
+});
+
+// --- 予定（説明会・インターン・締切など）の追加・編集・削除 ---
+
+function openEventModal(id, prefillDate) {
+  editingEventId = id || null;
+  eventForm.reset();
+
+  if (editingEventId) {
+    const ev = events.find((e) => e.id === editingEventId);
+    eventModalTitle.textContent = "予定を編集";
+    eventDeleteBtn.hidden = false;
+    eventIdInput.value = ev.id;
+    eventDateInput.value = ev.date;
+    eventTimeInput.value = ev.time || "";
+    eventTypeSelect.value = ev.type;
+    eventTitleInput.value = ev.title;
+    eventCompanyInput.value = ev.company || "";
+    eventMemoInput.value = ev.memo || "";
+  } else {
+    eventModalTitle.textContent = "予定を追加";
+    eventDeleteBtn.hidden = true;
+    eventIdInput.value = "";
+    eventTypeSelect.value = EVENT_TYPES[0].id;
+    if (prefillDate) eventDateInput.value = prefillDate;
+  }
+
+  eventModalOverlay.hidden = false;
+  eventTitleInput.focus();
+}
+
+function closeEventModal() {
+  eventModalOverlay.hidden = true;
+  editingEventId = null;
+}
+
+addEventBtn.addEventListener("click", () => openEventModal(null));
+eventModalClose.addEventListener("click", closeEventModal);
+eventCancelBtn.addEventListener("click", closeEventModal);
+eventModalOverlay.addEventListener("click", (e) => {
+  if (e.target === eventModalOverlay) closeEventModal();
+});
+
+eventForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const data = {
+    date: eventDateInput.value,
+    time: eventTimeInput.value,
+    type: eventTypeSelect.value,
+    title: eventTitleInput.value.trim(),
+    company: eventCompanyInput.value.trim(),
+    memo: eventMemoInput.value.trim(),
+  };
+
+  if (editingEventId) {
+    const ev = events.find((e2) => e2.id === editingEventId);
+    Object.assign(ev, data);
+  } else {
+    events.push({ id: uid("evt"), ...data });
+  }
+
+  saveEvents();
+  render();
+  closeEventModal();
+});
+
+eventDeleteBtn.addEventListener("click", () => {
+  if (!editingEventId) return;
+  events = events.filter((e) => e.id !== editingEventId);
+  saveEvents();
+  render();
+  closeEventModal();
+});
+
+// --- 就活サイトのテキストを貼り付けて予定をインポート ---
+
+const EVENT_KEYWORDS = [
+  { keywords: ["インターン"], type: "internship" },
+  { keywords: ["説明会", "セミナー"], type: "explanation" },
+  { keywords: ["面接"], type: "interview" },
+  { keywords: ["締切", "締め切り", "提出", "エントリー"], type: "deadline" },
+];
+
+const DATE_RE = /(?:(\d{4})[年/-])?(\d{1,2})[月/-](\d{1,2})日?/;
+const TIME_RE = /(\d{1,2}):(\d{2})/;
+const WEEKDAY_RE = /[（(][月火水木金土日][）)]/;
+const COMPANY_RE = /[\p{L}\p{N}Ａ-Ｚａ-ｚ]*(?:株式会社|合同会社|有限会社|㈱)[\p{L}\p{N}Ａ-Ｚａ-ｚ]*/u;
+
+function guessEventType(text) {
+  for (const { keywords, type } of EVENT_KEYWORDS) {
+    if (keywords.some((k) => text.includes(k))) return type;
+  }
+  return "other";
+}
+
+function guessCompany(text) {
+  const match = text.match(COMPANY_RE);
+  return match ? match[0] : "";
+}
+
+function parseScheduleText(text) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const drafts = [];
+
+  lines.forEach((line) => {
+    const dateMatch = line.match(DATE_RE);
+    if (!dateMatch) return;
+
+    const month = parseInt(dateMatch[2], 10);
+    const day = parseInt(dateMatch[3], 10);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return;
+
+    const year = dateMatch[1] ? parseInt(dateMatch[1], 10) : today.getFullYear();
+    let dateObj = new Date(year, month - 1, day);
+    if (isNaN(dateObj.getTime())) return;
+
+    // 年が書かれていない場合、すでに過ぎた日付なら来年の予定とみなす
+    if (!dateMatch[1] && dateObj < today) {
+      dateObj = new Date(year + 1, month - 1, day);
+    }
+
+    const timeMatch = line.match(TIME_RE);
+
+    let rest = line
+      .replace(dateMatch[0], "")
+      .replace(WEEKDAY_RE, "")
+      .replace(TIME_RE, "")
+      .replace(/[〜~～]/g, " ")
+      .trim();
+
+    const company = guessCompany(rest);
+    if (company) rest = rest.replace(company, "").trim();
+    rest = rest.replace(/\s{2,}/g, " ").trim();
+
+    drafts.push({
+      draftId: uid("draft"),
+      date: formatDateInput(dateObj),
+      time: timeMatch ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}` : "",
+      type: guessEventType(line),
+      title: rest || "予定",
+      company,
+      source: line,
+    });
+  });
+
+  return drafts;
+}
+
+function closeImportModal() {
+  importModalOverlay.hidden = true;
+}
+
+function renderImportPreview() {
+  importPreview.innerHTML = "";
+  importEmpty.hidden = importDrafts.length > 0 || importTextarea.value.trim() === "";
+  importConfirmBtn.hidden = importDrafts.length === 0;
+
+  importDrafts.forEach((draft) => {
+    const row = document.createElement("div");
+    row.className = "import-row";
+
+    const top = document.createElement("div");
+    top.className = "import-row-top";
+
+    const source = document.createElement("span");
+    source.className = "import-row-source";
+    source.textContent = draft.source;
+    source.title = draft.source;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "import-row-remove";
+    removeBtn.setAttribute("aria-label", "この候補を削除");
+    removeBtn.textContent = "✕";
+    removeBtn.addEventListener("click", () => {
+      importDrafts = importDrafts.filter((d) => d.draftId !== draft.draftId);
+      renderImportPreview();
+    });
+
+    top.appendChild(source);
+    top.appendChild(removeBtn);
+
+    const fields = document.createElement("div");
+    fields.className = "import-row-fields";
+
+    const typeSelect = document.createElement("select");
+    typeSelect.innerHTML = EVENT_TYPES.map((t) => `<option value="${t.id}">${t.label}</option>`).join("");
+    typeSelect.value = draft.type;
+    typeSelect.addEventListener("change", (e) => {
+      draft.type = e.target.value;
+    });
+
+    const dateInput = document.createElement("input");
+    dateInput.type = "date";
+    dateInput.value = draft.date;
+    dateInput.addEventListener("input", (e) => {
+      draft.date = e.target.value;
+    });
+
+    const timeInput = document.createElement("input");
+    timeInput.type = "time";
+    timeInput.value = draft.time;
+    timeInput.addEventListener("input", (e) => {
+      draft.time = e.target.value;
+    });
+
+    const companyInput = document.createElement("input");
+    companyInput.type = "text";
+    companyInput.placeholder = "企業名";
+    companyInput.value = draft.company;
+    companyInput.addEventListener("input", (e) => {
+      draft.company = e.target.value;
+    });
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.placeholder = "タイトル";
+    titleInput.className = "span-2";
+    titleInput.value = draft.title;
+    titleInput.addEventListener("input", (e) => {
+      draft.title = e.target.value;
+    });
+
+    fields.append(typeSelect, dateInput, timeInput, companyInput, titleInput);
+
+    row.appendChild(top);
+    row.appendChild(fields);
+    importPreview.appendChild(row);
+  });
+}
+
+importBtn.addEventListener("click", () => {
+  importTextarea.value = "";
+  importDrafts = [];
+  renderImportPreview();
+  importModalOverlay.hidden = false;
+  importTextarea.focus();
+});
+
+importModalClose.addEventListener("click", closeImportModal);
+importCancelBtn.addEventListener("click", closeImportModal);
+importModalOverlay.addEventListener("click", (e) => {
+  if (e.target === importModalOverlay) closeImportModal();
+});
+
+importParseBtn.addEventListener("click", () => {
+  importDrafts = parseScheduleText(importTextarea.value);
+  renderImportPreview();
+});
+
+importConfirmBtn.addEventListener("click", () => {
+  importDrafts.forEach((draft) => {
+    if (!draft.date || !draft.title) return;
+    events.push({
+      id: uid("evt"),
+      date: draft.date,
+      time: draft.time,
+      type: draft.type,
+      title: draft.title,
+      company: draft.company,
+      memo: "",
+    });
+  });
+
+  saveEvents();
+  render();
+  importDrafts = [];
+  closeImportModal();
+});
+
 populateStatusSelect();
+populateEventTypeSelect();
 render();
