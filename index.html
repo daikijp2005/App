@@ -20,6 +20,29 @@
       </nav>
     </header>
 
+    <section class="quick card" aria-label="クイック入力">
+      <form id="quick-form" class="quick-form" autocomplete="off">
+        <svg class="quick-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M11.5 2 4 11h5l-1 7 7.5-9h-5z" fill="currentColor"/></svg>
+        <input type="text" id="quick-input" placeholder="ランチ 800 / 昨日 電車 320 / +給与 200000" aria-label="クイック入力" aria-describedby="quick-preview" enterkeyhint="done">
+        <kbd class="quick-kbd" title="どこからでも / キーでここに移動">/</kbd>
+        <button type="submit" class="quick-btn">追加</button>
+      </form>
+      <div id="quick-preview" class="quick-preview" aria-live="polite"></div>
+      <details class="quick-help">
+        <summary>書き方の例</summary>
+        <table>
+          <tr><td><code>ランチ 800</code></td><td>今日の食費 ¥800（メモ: ランチ）</td></tr>
+          <tr><td><code>昨日 電車 320</code></td><td>昨日の交通費。<code>一昨日</code> <code>3日前</code> <code>9/25</code> <code>25日</code> も可</td></tr>
+          <tr><td><code>+給与 200000</code></td><td>先頭の <code>+</code> で収入として記録</td></tr>
+          <tr><td><code>家賃 4.2万</code></td><td><code>万</code> <code>千</code> <code>k</code> <code>円</code> を使った金額</td></tr>
+          <tr><td><code>コンビニ 450、本 1200</code></td><td>「、」や改行で区切ると複数件まとめて追加</td></tr>
+        </table>
+        <p>カテゴリ名（食費・日用品など）のほか、「コンビニ」「電車」「バイト」などの言葉からも自動で判定します。判定できないときは「その他」になります。</p>
+      </details>
+    </section>
+
+    <section class="checkin card" id="checkin" aria-label="記録チェック"></section>
+
     <section class="summary card" id="summary" aria-live="polite"></section>
 
     <form id="entry-form" class="entry-form card">
@@ -72,6 +95,49 @@
         <p>この月の記録はまだありません。<br>上のフォームから追加してみましょう。</p>
       </div>
     </section>
+
+    <details class="settings card" id="settings">
+      <summary><span>固定費・リマインダーの設定</span></summary>
+
+      <section class="settings-section" aria-labelledby="recurring-title">
+        <h3 id="recurring-title" class="settings-title">毎月の固定費（自動記録）</h3>
+        <p class="settings-note">家賃やサブスクなど毎月決まった支出・収入を登録しておくと、毎月その日に自動で記録されます。</p>
+        <ul id="recurring-list" class="recurring-list"></ul>
+        <form id="recurring-form" class="recurring-form">
+          <select id="rec-type" aria-label="種類">
+            <option value="expense">支出</option>
+            <option value="income">収入</option>
+          </select>
+          <select id="rec-category" aria-label="カテゴリ"></select>
+          <input type="number" id="rec-amount" placeholder="金額" min="1" step="1" inputmode="numeric" required aria-label="金額">
+          <label class="rec-day">毎月<input type="number" id="rec-day" min="1" max="31" value="1" required aria-label="日">日</label>
+          <input type="text" id="rec-memo" placeholder="メモ（例: 家賃）" maxlength="60" aria-label="メモ">
+          <label class="rec-now"><input type="checkbox" id="rec-now">今月分がすでに過ぎていれば今すぐ記録する</label>
+          <button type="submit" class="secondary-btn">固定費を追加</button>
+        </form>
+      </section>
+
+      <section class="settings-section" aria-labelledby="reminder-title">
+        <h3 id="reminder-title" class="settings-title">毎日のリマインダー</h3>
+        <div class="reminder-row">
+          <label class="reminder-time">通知時刻 <input type="time" id="reminder-time" value="21:00"></label>
+          <button type="button" id="notify-btn" class="secondary-btn">ブラウザ通知をオンにする</button>
+          <button type="button" id="ics-btn" class="secondary-btn">カレンダーに登録（.ics）</button>
+        </div>
+        <p id="notify-status" class="settings-note"></p>
+        <p class="settings-note">ブラウザ通知はこのページを開いている間だけ届きます。アプリを閉じていても毎日知らせてほしい場合は「カレンダーに登録」で、スマホやPCのカレンダーに毎日のアラームを追加してください。</p>
+      </section>
+
+      <section class="settings-section" aria-labelledby="shortcut-title">
+        <h3 id="shortcut-title" class="settings-title">ショートカットから入力</h3>
+        <p class="settings-note">このページのURLの末尾に <code>?add=</code> とコマンドを付けて開くと、その内容がすぐ記録されます。iPhoneの「ショートカット」アプリやブックマークに登録しておくと、1タップで入力画面を開けます。</p>
+        <div class="copy-row">
+          <code id="shortcut-url" class="shortcut-url"></code>
+          <button type="button" id="copy-url-btn" class="secondary-btn">コピー</button>
+        </div>
+        <p class="settings-note">PCではどの画面からでも <kbd>/</kbd> キー（または <kbd>Ctrl</kbd>+<kbd>K</kbd>）でクイック入力に移動できます。</p>
+      </section>
+    </details>
   </main>
 
   <div id="toast" class="toast" role="status" hidden>
@@ -79,6 +145,7 @@
     <button type="button" id="undo-btn" class="toast-btn">元に戻す</button>
   </div>
 
+  <script src="parser.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
