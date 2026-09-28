@@ -7,49 +7,76 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="page">
+  <main class="page">
     <header class="app-header">
-      <p class="eyebrow">Household Budget</p>
-      <h1>家計簿アプリ</h1>
+      <div>
+        <p class="eyebrow">Household Budget</p>
+        <h1>家計簿</h1>
+      </div>
+      <nav class="month-nav" aria-label="表示する月">
+        <button type="button" class="icon-btn" id="prev-month" aria-label="前の月">‹</button>
+        <button type="button" class="month-label" id="month-label" title="今月に戻る"></button>
+        <button type="button" class="icon-btn" id="next-month" aria-label="次の月">›</button>
+      </nav>
     </header>
 
-    <nav class="month-nav" aria-label="表示する月">
-      <button type="button" class="month-btn" id="prev-month" aria-label="前の月">‹</button>
-      <h2 id="month-label" class="month-label"></h2>
-      <button type="button" class="month-btn" id="next-month" aria-label="次の月">›</button>
-    </nav>
+    <section class="summary card" id="summary" aria-live="polite"></section>
 
-    <div class="stats" id="stats"></div>
-
-    <form id="entry-form" class="entry-form">
+    <form id="entry-form" class="entry-form card">
       <div class="type-toggle" role="radiogroup" aria-label="種類">
         <label><input type="radio" name="type" value="expense" checked><span>支出</span></label>
         <label><input type="radio" name="type" value="income"><span>収入</span></label>
       </div>
-      <div class="form-row">
-        <input type="date" id="date" required aria-label="日付">
-        <select id="category" required aria-label="カテゴリ"></select>
-        <input type="number" id="amount" placeholder="金額（円）" min="1" step="1" inputmode="numeric" required aria-label="金額">
-        <input type="text" id="memo" placeholder="メモ（任意）" maxlength="60" aria-label="メモ">
-        <button type="submit">追加</button>
+
+      <label class="amount-field">
+        <span class="amount-prefix" aria-hidden="true">¥</span>
+        <input type="number" id="amount" placeholder="0" min="1" step="1" inputmode="numeric" required aria-label="金額">
+      </label>
+
+      <div class="field-grid">
+        <label class="field">
+          <span class="field-label">日付</span>
+          <input type="date" id="date" required>
+        </label>
+        <label class="field">
+          <span class="field-label">カテゴリ</span>
+          <select id="category" required></select>
+        </label>
+        <label class="field field--wide">
+          <span class="field-label">メモ</span>
+          <input type="text" id="memo" placeholder="任意" maxlength="60">
+        </label>
       </div>
+
+      <button type="submit" class="submit-btn" id="submit-btn">支出を追加</button>
     </form>
 
-    <section class="breakdown" aria-labelledby="breakdown-title">
-      <h3 id="breakdown-title" class="section-title">支出の内訳</h3>
+    <section class="breakdown card" aria-labelledby="breakdown-title">
+      <h2 id="breakdown-title" class="section-title">支出の内訳</h2>
       <ul id="breakdown-list" class="breakdown-list"></ul>
       <p id="breakdown-empty" class="muted" hidden>この月の支出はまだありません。</p>
     </section>
 
-    <div class="filters" role="tablist">
-      <button class="filter-btn active" data-filter="all">すべて</button>
-      <button class="filter-btn" data-filter="expense">支出</button>
-      <button class="filter-btn" data-filter="income">収入</button>
-    </div>
+    <section aria-labelledby="history-title">
+      <div class="history-head">
+        <h2 id="history-title" class="section-title">履歴</h2>
+        <div class="filters" role="tablist" aria-label="絞り込み">
+          <button class="filter-btn active" data-filter="all" role="tab" aria-selected="true">すべて</button>
+          <button class="filter-btn" data-filter="expense" role="tab" aria-selected="false">支出</button>
+          <button class="filter-btn" data-filter="income" role="tab" aria-selected="false">収入</button>
+        </div>
+      </div>
+      <div id="entry-groups"></div>
+      <div id="empty-message" class="empty-state" hidden>
+        <span class="empty-icon" aria-hidden="true">📒</span>
+        <p>この月の記録はまだありません。<br>上のフォームから追加してみましょう。</p>
+      </div>
+    </section>
+  </main>
 
-    <ul id="entry-list" class="entry-list"></ul>
-
-    <p id="empty-message" class="empty-message" hidden>この月の記録はまだありません。上のフォームから追加してください。</p>
+  <div id="toast" class="toast" role="status" hidden>
+    <span id="toast-text"></span>
+    <button type="button" id="undo-btn" class="toast-btn">元に戻す</button>
   </div>
 
   <script src="script.js"></script>
