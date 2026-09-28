@@ -1,97 +1,73 @@
-// 課題データは配列として持ち、ブラウザの localStorage に保存する
+// 収支データは配列として持ち、ブラウザの localStorage に保存する
 // (サーバーを用意しなくても、次回開いたときにデータが残る)
-const STORAGE_KEY = "assignments";
+const STORAGE_KEY = "household-budget";
 
-let tasks = loadTasks();
+const CATEGORIES = {
+  expense: ["食費", "日用品", "交通費", "住居費", "水道光熱費", "通信費", "交際費", "趣味・娯楽", "医療費", "その他"],
+  income: ["給与", "アルバイト", "仕送り", "臨時収入", "その他"],
+};
+
+let entries = loadEntries();
 let currentFilter = "all";
+let viewMonth = startOfMonth(new Date());
 
-const form = document.getElementById("task-form");
-const subjectInput = document.getElementById("subject");
-const contentInput = document.getElementById("content");
-const dueDateInput = document.getElementById("due-date");
-const taskList = document.getElementById("task-list");
+const form = document.getElementById("entry-form");
+const dateInput = document.getElementById("date");
+const categorySelect = document.getElementById("category");
+const amountInput = document.getElementById("amount");
+const memoInput = document.getElementById("memo");
+const typeRadios = form.querySelectorAll('input[name="type"]');
+const entryList = document.getElementById("entry-list");
 const emptyMessage = document.getElementById("empty-message");
 const filterButtons = document.querySelectorAll(".filter-btn");
 const statsBox = document.getElementById("stats");
+const monthLabel = document.getElementById("month-label");
+const breakdownList = document.getElementById("breakdown-list");
+const breakdownEmpty = document.getElementById("breakdown-empty");
 
-function loadTasks() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : [];
+const yen = new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" });
+
+function loadEntries() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
-function saveTasks() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+function saveEntries() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // 保存できない環境(プライベートモード等)でも画面上の操作は続けられるようにする
+  }
 }
 
-// 今日からの残り日数を計算し、緊急度クラスを決める
-function getUrgency(dueDateStr) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDateStr);
-  due.setHours(0, 0, 0, 0);
-
-  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
-
-  if (diffDays <= 1) return { level: "urgent", label: diffDays < 0 ? "期限切れ" : diffDays === 0 ? "今日締切" : "明日締切" };
-  if (diffDays <= 3) return { level: "soon", label: `あと${diffDays}日` };
-  return { level: "safe", label: `あと${diffDays}日` };
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-// 今日/今週締切の件数をまとめて、一目で状況がわかるようにする
-function renderStats() {
-  const open = tasks.filter((t) => !t.done);
-  const dueToday = open.filter((t) => getUrgency(t.dueDate).level === "urgent").length;
-  const dueThisWeek = open.filter((t) => getUrgency(t.dueDate).level === "soon").length;
-
-  statsBox.innerHTML = `
-    <div class="stat stat--danger">
-      <span class="stat-num">${dueToday}</span>
-      <span class="stat-label">今日・明日締切</span>
-    </div>
-    <div class="stat stat--warning">
-      <span class="stat-num">${dueThisWeek}</span>
-      <span class="stat-label">数日以内</span>
-    </div>
-    <div class="stat">
-      <span class="stat-num">${open.length}</span>
-      <span class="stat-label">未完了合計</span>
-    </div>
-  `;
+// "YYYY-MM-DD" 形式の文字列を作る (toISOString は UTC になるため使わない)
+function toDateStr(d) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
-function render() {
-  renderStats();
-  taskList.innerHTML = "";
+function monthKey(d) {
+  return toDateStr(d).slice(0, 7);
+}
 
-  const visibleTasks = tasks.filter((task) => {
-    if (currentFilter === "active") return !task.done;
-    if (currentFilter === "done") return task.done;
-    return true;
-  });
+function getSelectedType() {
+  return form.querySelector('input[name="type"]:checked').value;
+}
 
-  // 締切が近い順に並べる
-  visibleTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-  emptyMessage.hidden = tasks.length > 0;
-
-  visibleTasks.forEach((task) => {
-    const urgency = getUrgency(task.dueDate);
-
-    const li = document.createElement("li");
-    li.className = `task-item ${task.done ? "done" : urgency.level}`;
-
-    li.innerHTML = `
-      <input type="checkbox" ${task.done ? "checked" : ""} data-id="${task.id}" class="done-checkbox">
-      <div class="task-content">
-        <strong>${escapeHtml(task.subject)}</strong>
-        <span>${escapeHtml(task.content)}（${task.dueDate}）</span>
-      </div>
-      <span class="due-label">${task.done ? "完了" : urgency.label}</span>
-      <button class="delete-btn" data-id="${task.id}" title="削除">✕</button>
-    `;
-
-    taskList.appendChild(li);
-  });
+function fillCategories() {
+  const type = getSelectedType();
+  categorySelect.innerHTML = CATEGORIES[type]
+    .map((c) => `<option value="${c}">${c}</option>`)
+    .join("");
 }
 
 // XSS対策: ユーザー入力をそのままHTMLに埋め込まないようエスケープする
@@ -101,39 +77,138 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function entriesInViewMonth() {
+  const key = monthKey(viewMonth);
+  return entries.filter((e) => e.date.startsWith(key));
+}
+
+function renderStats(monthEntries) {
+  const income = monthEntries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+  const expense = monthEntries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+  const balance = income - expense;
+
+  statsBox.innerHTML = `
+    <div class="stat stat--income">
+      <span class="stat-num">${yen.format(income)}</span>
+      <span class="stat-label">収入</span>
+    </div>
+    <div class="stat stat--expense">
+      <span class="stat-num">${yen.format(expense)}</span>
+      <span class="stat-label">支出</span>
+    </div>
+    <div class="stat ${balance < 0 ? "stat--negative" : ""}">
+      <span class="stat-num">${yen.format(balance)}</span>
+      <span class="stat-label">収支</span>
+    </div>
+  `;
+}
+
+// カテゴリ別の支出を多い順に並べ、割合を横棒で表示する
+function renderBreakdown(monthEntries) {
+  const totals = {};
+  monthEntries
+    .filter((e) => e.type === "expense")
+    .forEach((e) => {
+      totals[e.category] = (totals[e.category] || 0) + e.amount;
+    });
+
+  const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const sum = rows.reduce((s, [, v]) => s + v, 0);
+
+  breakdownEmpty.hidden = rows.length > 0;
+  breakdownList.innerHTML = rows
+    .map(([cat, value]) => {
+      const pct = Math.round((value / sum) * 100);
+      return `
+        <li class="breakdown-row">
+          <span class="breakdown-cat">${escapeHtml(cat)}</span>
+          <span class="breakdown-bar"><span style="width:${(value / sum) * 100}%"></span></span>
+          <span class="breakdown-val">${yen.format(value)}<small>${pct}%</small></span>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function renderList(monthEntries) {
+  entryList.innerHTML = "";
+
+  const visible = monthEntries
+    .filter((e) => currentFilter === "all" || e.type === currentFilter)
+    // 新しい日付順、同じ日なら後から登録したものを上に
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+
+  emptyMessage.hidden = monthEntries.length > 0;
+
+  visible.forEach((entry) => {
+    const [, m, d] = entry.date.split("-");
+    const li = document.createElement("li");
+    li.className = `entry-item ${entry.type}`;
+    li.innerHTML = `
+      <span class="entry-date">${Number(m)}/${Number(d)}</span>
+      <div class="entry-content">
+        <strong>${escapeHtml(entry.category)}</strong>
+        ${entry.memo ? `<span>${escapeHtml(entry.memo)}</span>` : ""}
+      </div>
+      <span class="entry-amount">${entry.type === "income" ? "+" : "−"}${yen.format(entry.amount)}</span>
+      <button class="delete-btn" data-id="${entry.id}" title="削除" aria-label="削除">✕</button>
+    `;
+    entryList.appendChild(li);
+  });
+}
+
+function render() {
+  monthLabel.textContent = `${viewMonth.getFullYear()}年${viewMonth.getMonth() + 1}月`;
+  const monthEntries = entriesInViewMonth();
+  renderStats(monthEntries);
+  renderBreakdown(monthEntries);
+  renderList(monthEntries);
+}
+
+// 表示中の月が今月なら今日、それ以外はその月の1日を初期値にする
+function resetDateInput() {
+  const today = new Date();
+  dateInput.value = monthKey(today) === monthKey(viewMonth) ? toDateStr(today) : toDateStr(viewMonth);
+}
+
+function changeMonth(delta) {
+  viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + delta, 1);
+  resetDateInput();
+  render();
+}
+
+typeRadios.forEach((r) => r.addEventListener("change", fillCategories));
+
 form.addEventListener("submit", (e) => {
   e.preventDefault();
 
-  tasks.push({
-    id: Date.now().toString(),
-    subject: subjectInput.value.trim(),
-    content: contentInput.value.trim(),
-    dueDate: dueDateInput.value,
-    done: false,
-  });
+  const amount = Math.round(Number(amountInput.value));
+  if (!amount || amount <= 0) return;
 
-  saveTasks();
+  entries.push({
+    id: Date.now().toString(),
+    type: getSelectedType(),
+    date: dateInput.value,
+    category: categorySelect.value,
+    amount,
+    memo: memoInput.value.trim(),
+  });
+  saveEntries();
+
+  // 登録した日付の月へ移動して、追加結果がすぐ見えるようにする
+  viewMonth = startOfMonth(new Date(`${dateInput.value}T00:00:00`));
+  amountInput.value = "";
+  memoInput.value = "";
   render();
-  form.reset();
-  subjectInput.focus();
+  amountInput.focus();
 });
 
-taskList.addEventListener("click", (e) => {
+entryList.addEventListener("click", (e) => {
+  if (!e.target.classList.contains("delete-btn")) return;
   const id = e.target.dataset.id;
-  if (!id) return;
-
-  if (e.target.classList.contains("done-checkbox")) {
-    const task = tasks.find((t) => t.id === id);
-    task.done = e.target.checked;
-    saveTasks();
-    render();
-  }
-
-  if (e.target.classList.contains("delete-btn")) {
-    tasks = tasks.filter((t) => t.id !== id);
-    saveTasks();
-    render();
-  }
+  entries = entries.filter((en) => en.id !== id);
+  saveEntries();
+  render();
 });
 
 filterButtons.forEach((btn) => {
@@ -145,4 +220,9 @@ filterButtons.forEach((btn) => {
   });
 });
 
+document.getElementById("prev-month").addEventListener("click", () => changeMonth(-1));
+document.getElementById("next-month").addEventListener("click", () => changeMonth(1));
+
+fillCategories();
+resetDateInput();
 render();
