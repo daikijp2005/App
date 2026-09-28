@@ -1,40 +1,34 @@
-// 収支データは配列として持ち、ブラウザの localStorage に保存する
+// 支出データは配列として持ち、ブラウザの localStorage に保存する
 // (サーバーを用意しなくても、次回開いたときにデータが残る)
 const STORAGE_KEY = "household-budget";
-// 記録チェック・固定費・リマインダーなどの設定
+// 記録チェック・固定費・予算・リマインダーなどの設定
 const META_KEY = "household-budget-meta";
 
 // 記録漏れをさかのぼって確認する日数
 const CHECK_DAYS = 14;
 
-// カテゴリ名とアイコン。「その他」は収入・支出の両方にあるため種類ごとに分けて持つ
+// カテゴリ名とアイコン
 const CATEGORIES = {
-  expense: {
-    食費: "🍙",
-    日用品: "🧴",
-    交通費: "🚃",
-    住居費: "🏠",
-    水道光熱費: "💡",
-    通信費: "📱",
-    交際費: "🍻",
-    "趣味・娯楽": "🎮",
-    医療費: "💊",
-    その他: "📦",
-  },
-  income: {
-    給与: "💼",
-    アルバイト: "🕒",
-    仕送り: "✉️",
-    臨時収入: "🎁",
-    その他: "💰",
-  },
+  食費: "🍙",
+  日用品: "🧴",
+  交通費: "🚃",
+  住居費: "🏠",
+  水道光熱費: "💡",
+  通信費: "📱",
+  交際費: "🍻",
+  "趣味・娯楽": "🎮",
+  医療費: "💊",
+  その他: "📦",
 };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
-let entries = loadJson(STORAGE_KEY, []);
+// 以前のバージョンで記録した収入データは、画面には出さずにそのまま保存し続ける
+// (消してしまわないよう、保存時に元に戻す)
+const stored = loadJson(STORAGE_KEY, []);
+const legacyIncome = stored.filter((e) => e.type === "income");
+let entries = stored.filter((e) => e.type !== "income");
 let meta = loadMeta();
-let currentFilter = "all";
 let viewMonth = startOfMonth(new Date());
 let undoSnapshot = null;
 let toastTimer = null;
@@ -48,11 +42,9 @@ const dateInput = $("date");
 const categorySelect = $("category");
 const amountInput = $("amount");
 const memoInput = $("memo");
-const submitBtn = $("submit-btn");
-const typeRadios = form.querySelectorAll('input[name="type"]');
 const entryGroups = $("entry-groups");
 const emptyMessage = $("empty-message");
-const filterButtons = document.querySelectorAll(".filter-btn");
+const historyCount = $("history-count");
 const summaryBox = $("summary");
 const monthLabel = $("month-label");
 const breakdownList = $("breakdown-list");
@@ -64,21 +56,17 @@ const quickForm = $("quick-form");
 const quickInput = $("quick-input");
 const quickPreview = $("quick-preview");
 const checkinBox = $("checkin");
+const settings = $("settings");
+const budgetForm = $("budget-form");
+const budgetInput = $("budget-input");
 const recurringForm = $("recurring-form");
 const recurringList = $("recurring-list");
-const recType = $("rec-type");
 const recCategory = $("rec-category");
 const reminderTimeInput = $("reminder-time");
 const notifyBtn = $("notify-btn");
 const notifyStatus = $("notify-status");
 
 const yen = new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" });
-
-// 符号付きで表示する (ハイフンではなくマイナス記号を使い、表記をそろえる)
-function signedYen(value) {
-  if (value === 0) return yen.format(0);
-  return `${value > 0 ? "+" : "−"}${yen.format(Math.abs(value))}`;
-}
 
 /* ---------- 保存と読み込み ---------- */
 
@@ -103,17 +91,21 @@ function loadMeta() {
   const saved = loadJson(META_KEY, null);
   // 初回は、既存の記録のうち最も古い日(なければ今日)から記録チェックを始める
   const earliest = entries.reduce((min, e) => (e.date < min ? e.date : min), toDateStr(new Date()));
-  return {
+  const m = {
     trackingStart: earliest,
     noSpendDays: [],
     recurring: [],
+    budget: 0,
     reminder: { time: "21:00", notify: false },
     ...saved,
   };
+  // 収入の固定費は以前のバージョンの名残なので、自動記録の対象から外す
+  m.recurring = m.recurring.filter((r) => r.type !== "income");
+  return m;
 }
 
 function save() {
-  saveJson(STORAGE_KEY, entries);
+  saveJson(STORAGE_KEY, [...legacyIncome, ...entries]);
   saveJson(META_KEY, meta);
 }
 
@@ -148,6 +140,10 @@ function monthKey(d) {
   return toDateStr(d).slice(0, 7);
 }
 
+function daysInMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+
 function shortDate(s) {
   const d = fromDateStr(s);
   return `${d.getMonth() + 1}/${d.getDate()}（${WEEKDAYS[d.getDay()]}）`;
@@ -155,12 +151,12 @@ function shortDate(s) {
 
 /* ---------- 表示用ヘルパー ---------- */
 
-function iconFor(entry) {
-  return CATEGORIES[entry.type]?.[entry.category] ?? "•";
+function iconFor(category) {
+  return CATEGORIES[category] ?? "•";
 }
 
-function fillCategorySelect(select, type) {
-  select.innerHTML = Object.entries(CATEGORIES[type])
+function fillCategorySelect(select) {
+  select.innerHTML = Object.entries(CATEGORIES)
     .map(([name, icon]) => `<option value="${name}">${icon} ${name}</option>`)
     .join("");
 }
@@ -172,14 +168,23 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function sumOf(list, type) {
-  return list.filter((e) => e.type === type).reduce((s, e) => s + e.amount, 0);
+function total(list) {
+  return list.reduce((s, e) => s + e.amount, 0);
+}
+
+function entriesOfMonth(d) {
+  const key = monthKey(d);
+  return entries.filter((e) => e.date.startsWith(key));
+}
+
+function closeIcon() {
+  return `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 }
 
 /* ---------- 記録を追加する共通処理 ---------- */
 
 function addEntries(list) {
-  list.forEach((e) => entries.push({ id: newId(), ...e }));
+  list.forEach((e) => entries.push({ id: newId(), type: "expense", ...e }));
 }
 
 /* ---------- 記録チェック (入れ忘れ防止) ---------- */
@@ -294,6 +299,17 @@ checkinBox.addEventListener("click", (e) => {
   }
 });
 
+/* ---------- 月の予算 ---------- */
+
+budgetForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  snapshot();
+  meta.budget = Math.max(0, Math.round(Number(budgetInput.value) || 0));
+  save();
+  render();
+  showToast(meta.budget ? `月の予算を ${yen.format(meta.budget)} にしました` : "予算を解除しました");
+});
+
 /* ---------- 固定費の自動記録 ---------- */
 
 // 各ルールの「次に記録する月」から今月まで、日付が来ている分を記録する
@@ -310,7 +326,7 @@ function applyRecurring() {
       const lastDay = new Date(y, m, 0).getDate();
       const date = `${cursor}-${String(Math.min(rule.day, lastDay)).padStart(2, "0")}`;
       if (date > todayStr) break;
-      added.push({ type: rule.type, date, category: rule.category, amount: rule.amount, memo: rule.memo, recurringId: rule.id });
+      added.push({ date, category: rule.category, amount: rule.amount, memo: rule.memo, recurringId: rule.id });
       cursor = monthKey(new Date(y, m, 1));
     }
     rule.nextMonth = cursor;
@@ -328,21 +344,19 @@ function renderRecurring() {
     ? meta.recurring
         .map(
           (r) => `
-      <li class="recurring-item ${r.type}">
-        <span class="cat-icon" aria-hidden="true">${CATEGORIES[r.type][r.category] ?? "•"}</span>
+      <li class="recurring-item">
+        <span class="cat-icon" aria-hidden="true">${iconFor(r.category)}</span>
         <div class="entry-content">
           <strong>${escapeHtml(r.memo || r.category)}</strong>
           <span>毎月${r.day}日・${escapeHtml(r.category)}</span>
         </div>
-        <span class="entry-amount">${signedYen(r.type === "income" ? r.amount : -r.amount)}</span>
+        <span class="entry-amount">${yen.format(r.amount)}</span>
         <button type="button" class="delete-btn is-visible" data-rule="${r.id}" aria-label="${escapeHtml(r.memo || r.category)} の固定費設定を削除">${closeIcon()}</button>
       </li>`
         )
         .join("")
     : `<li class="muted">まだ登録されていません。</li>`;
 }
-
-recType.addEventListener("change", () => fillCategorySelect(recCategory, recType.value));
 
 recurringForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -358,7 +372,7 @@ recurringForm.addEventListener("submit", (e) => {
   snapshot();
   meta.recurring.push({
     id: newId(),
-    type: recType.value,
+    type: "expense",
     category: recCategory.value,
     amount,
     day,
@@ -369,7 +383,6 @@ recurringForm.addEventListener("submit", (e) => {
   save();
   render();
   recurringForm.reset();
-  fillCategorySelect(recCategory, recType.value);
   showToast(added.length ? "固定費を登録し、今月分を記録しました" : "固定費を登録しました");
 });
 
@@ -497,7 +510,7 @@ $("ics-btn").addEventListener("click", downloadIcs);
 /* ---------- クイック入力 ---------- */
 
 function describeEntry(entry) {
-  return `${iconFor(entry)} ${entry.category} ${signedYen(entry.type === "income" ? entry.amount : -entry.amount)}`;
+  return `${iconFor(entry.category)} ${entry.category} ${yen.format(entry.amount)}`;
 }
 
 function updateQuickPreview() {
@@ -505,7 +518,7 @@ function updateQuickPreview() {
   quickPreview.innerHTML = results
     .map((r) =>
       r.ok
-        ? `<span class="preview-chip ${r.entry.type}">
+        ? `<span class="preview-chip">
             <span>${escapeHtml(describeEntry(r.entry))}</span>
             <span class="preview-meta">${shortDate(r.entry.date)}${r.entry.memo ? ` · ${escapeHtml(r.entry.memo)}` : ""}</span>
           </span>`
@@ -595,24 +608,11 @@ $("copy-url-btn").addEventListener("click", async (e) => {
 
 /* ---------- 詳細フォーム ---------- */
 
-function getSelectedType() {
-  return form.querySelector('input[name="type"]:checked').value;
-}
-
-function onTypeChange() {
-  const type = getSelectedType();
-  fillCategorySelect(categorySelect, type);
-  form.dataset.type = type;
-  submitBtn.textContent = type === "income" ? "収入を追加" : "支出を追加";
-}
-
 // 表示中の月が今月なら今日、それ以外はその月の1日を初期値にする
 function resetDateInput() {
   const today = new Date();
   dateInput.value = monthKey(today) === monthKey(viewMonth) ? toDateStr(today) : toDateStr(viewMonth);
 }
-
-typeRadios.forEach((r) => r.addEventListener("change", onTypeChange));
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -621,15 +621,7 @@ form.addEventListener("submit", (e) => {
   if (!amount || amount <= 0) return;
 
   snapshot();
-  addEntries([
-    {
-      type: getSelectedType(),
-      date: dateInput.value,
-      category: categorySelect.value,
-      amount,
-      memo: memoInput.value.trim(),
-    },
-  ]);
+  addEntries([{ date: dateInput.value, category: categorySelect.value, amount, memo: memoInput.value.trim() }]);
   save();
 
   // 登録した日付の月へ移動して、追加結果がすぐ見えるようにする
@@ -642,43 +634,69 @@ form.addEventListener("submit", (e) => {
 
 /* ---------- 月の表示 ---------- */
 
-function renderSummary(monthEntries, label) {
-  const income = sumOf(monthEntries, "income");
-  const expense = sumOf(monthEntries, "expense");
-  const balance = income - expense;
-  // 収入に対して支出がどれだけあるかを 0〜100% のメーターで示す
-  const usedPct = income > 0 ? Math.min(100, Math.round((expense / income) * 100)) : expense > 0 ? 100 : 0;
-  const meterNote =
-    income > 0 ? `収入の ${Math.round((expense / income) * 100)}% を使用` : expense > 0 ? "収入の記録がありません" : "まだ記録がありません";
+// 月の合計に加え、予算があれば残り金額を、なければ前月との比較を出す
+function renderSummary(monthEntries) {
+  const today = new Date();
+  const isCurrent = monthKey(viewMonth) === monthKey(today);
+  const isFuture = viewMonth > today;
+  const spent = total(monthEntries);
+  const prevSpent = total(entriesOfMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)));
+  const elapsedDays = isCurrent ? today.getDate() : isFuture ? 0 : daysInMonth(viewMonth);
+  const dailyAvg = elapsedDays ? Math.round(spent / elapsedDays) : 0;
+
+  let budgetBlock;
+  if (meta.budget > 0) {
+    const pct = Math.round((spent / meta.budget) * 100);
+    const remaining = meta.budget - spent;
+    const daysLeft = isCurrent ? daysInMonth(today) - today.getDate() + 1 : 0;
+    let note;
+    if (remaining < 0) note = `予算を <strong class="is-over">${yen.format(-remaining)}</strong> 超えています`;
+    else if (isCurrent) note = `残り <strong>${yen.format(remaining)}</strong>・1日あたり ${yen.format(Math.floor(remaining / daysLeft))} まで`;
+    else note = `残り <strong>${yen.format(remaining)}</strong>`;
+
+    budgetBlock = `
+      <div class="meter ${pct >= 100 ? "is-over" : pct >= 80 ? "is-warn" : ""}" role="img" aria-label="予算の${pct}%を使用">
+        <span style="width:${Math.min(100, pct)}%"></span>
+      </div>
+      <p class="meter-note"><span>${note}</span><span>予算 ${yen.format(meta.budget)} の ${pct}%</span></p>`;
+  } else {
+    budgetBlock = `<p class="meter-note"><button type="button" class="link-btn" id="set-budget-btn">月の予算を設定する</button></p>`;
+  }
+
+  let compare = "—";
+  if (prevSpent > 0) {
+    const diff = spent - prevSpent;
+    compare = `${diff > 0 ? "+" : diff < 0 ? "−" : "±"}${yen.format(Math.abs(diff))}`;
+  }
 
   summaryBox.innerHTML = `
-    <p class="summary-label">${label}</p>
-    <p class="summary-balance ${balance < 0 ? "is-negative" : ""}">${signedYen(balance)}</p>
-    <div class="meter ${usedPct >= 100 ? "is-over" : ""}" role="img" aria-label="${meterNote}">
-      <span style="width:${usedPct}%"></span>
-    </div>
-    <p class="meter-note">${meterNote}</p>
+    <p class="summary-label">${isCurrent ? "今月の支出" : `${viewMonth.getMonth() + 1}月の支出`}</p>
+    <p class="summary-balance">${yen.format(spent)}</p>
+    ${budgetBlock}
     <dl class="summary-split">
       <div>
-        <dt><span class="dot dot--income"></span>収入</dt>
-        <dd>${yen.format(income)}</dd>
+        <dt>1日平均</dt>
+        <dd>${yen.format(dailyAvg)}</dd>
       </div>
       <div>
-        <dt><span class="dot dot--expense"></span>支出</dt>
-        <dd>${yen.format(expense)}</dd>
+        <dt>前月との差</dt>
+        <dd class="${prevSpent > 0 && spent > prevSpent ? "is-up" : ""}">${compare}</dd>
       </div>
     </dl>
   `;
+  $("set-budget-btn")?.addEventListener("click", () => {
+    settings.open = true;
+    budgetInput.focus();
+    budgetInput.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
 }
 
 // カテゴリ別の支出を多い順に並べ、割合を横棒で表示する
 function renderBreakdown(monthEntries) {
   const totals = {};
-  monthEntries
-    .filter((e) => e.type === "expense")
-    .forEach((e) => {
-      totals[e.category] = (totals[e.category] || 0) + e.amount;
-    });
+  monthEntries.forEach((e) => {
+    totals[e.category] = (totals[e.category] || 0) + e.amount;
+  });
 
   const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
   const sum = rows.reduce((s, [, v]) => s + v, 0);
@@ -686,11 +704,10 @@ function renderBreakdown(monthEntries) {
 
   breakdownEmpty.hidden = rows.length > 0;
   breakdownList.innerHTML = rows
-    .map(([cat, value]) => {
-      const icon = CATEGORIES.expense[cat] ?? "•";
-      return `
+    .map(
+      ([cat, value]) => `
         <li class="breakdown-row">
-          <span class="cat-icon" aria-hidden="true">${icon}</span>
+          <span class="cat-icon" aria-hidden="true">${iconFor(cat)}</span>
           <div class="breakdown-main">
             <div class="breakdown-top">
               <span class="breakdown-cat">${escapeHtml(cat)}</span>
@@ -699,41 +716,34 @@ function renderBreakdown(monthEntries) {
             <span class="breakdown-bar"><span style="width:${(value / max) * 100}%"></span></span>
           </div>
         </li>
-      `;
-    })
+      `
+    )
     .join("");
 }
 
 // 日付ごとにまとめ、見出しにその日の合計を出す
 function renderList(monthEntries) {
-  const visible = monthEntries
-    .filter((e) => currentFilter === "all" || e.type === currentFilter)
-    // 新しい日付順、同じ日なら後から登録したものを上に
-    .sort((a, b) => b.date.localeCompare(a.date) || Number(b.id) - Number(a.id));
+  // 新しい日付順、同じ日なら後から登録したものを上に
+  const sorted = [...monthEntries].sort((a, b) => b.date.localeCompare(a.date) || Number(b.id) - Number(a.id));
 
   const groups = new Map();
-  visible.forEach((e) => {
+  sorted.forEach((e) => {
     if (!groups.has(e.date)) groups.set(e.date, []);
     groups.get(e.date).push(e);
   });
 
-  emptyMessage.hidden = visible.length > 0;
-  if (monthEntries.length > 0 && visible.length === 0) {
-    emptyMessage.querySelector("p").textContent = "該当する記録はありません。";
-  } else {
-    emptyMessage.querySelector("p").innerHTML = "この月の記録はまだありません。<br>上の入力欄から追加してみましょう。";
-  }
+  historyCount.textContent = sorted.length ? `${sorted.length}件` : "";
+  emptyMessage.hidden = sorted.length > 0;
 
   const todayStr = toDateStr(new Date());
   entryGroups.innerHTML = [...groups]
     .map(([date, items]) => {
       const d = fromDateStr(date);
-      const net = sumOf(items, "income") - sumOf(items, "expense");
       return `
         <section class="day-group">
           <h3 class="day-head">
             <span>${d.getMonth() + 1}月${d.getDate()}日<span class="weekday wd-${d.getDay()}">（${WEEKDAYS[d.getDay()]}）</span>${date === todayStr ? '<span class="today-badge">今日</span>' : ""}</span>
-            <span class="day-total">${signedYen(net)}</span>
+            <span class="day-total">${yen.format(total(items))}</span>
           </h3>
           <ul class="entry-list">
             ${items.map(renderItem).join("")}
@@ -744,19 +754,15 @@ function renderList(monthEntries) {
     .join("");
 }
 
-function closeIcon() {
-  return `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
-}
-
 function renderItem(entry) {
   return `
-    <li class="entry-item ${entry.type}">
-      <span class="cat-icon" aria-hidden="true">${iconFor(entry)}</span>
+    <li class="entry-item">
+      <span class="cat-icon" aria-hidden="true">${iconFor(entry.category)}</span>
       <div class="entry-content">
         <strong>${escapeHtml(entry.category)}${entry.recurringId ? '<span class="tag">固定費</span>' : ""}</strong>
         ${entry.memo ? `<span>${escapeHtml(entry.memo)}</span>` : ""}
       </div>
-      <span class="entry-amount">${signedYen(entry.type === "income" ? entry.amount : -entry.amount)}</span>
+      <span class="entry-amount">${yen.format(entry.amount)}</span>
       <button class="delete-btn" data-id="${entry.id}" aria-label="${escapeHtml(entry.category)} ${yen.format(entry.amount)} を削除">${closeIcon()}</button>
     </li>
   `;
@@ -764,14 +770,14 @@ function renderItem(entry) {
 
 function render() {
   monthLabel.textContent = `${viewMonth.getFullYear()}年${viewMonth.getMonth() + 1}月`;
-  const isCurrent = monthKey(viewMonth) === monthKey(new Date());
-  const monthEntries = entries.filter((e) => e.date.startsWith(monthKey(viewMonth)));
+  const monthEntries = entriesOfMonth(viewMonth);
   renderCheckin();
-  renderSummary(monthEntries, isCurrent ? "今月の収支" : `${viewMonth.getMonth() + 1}月の収支`);
+  renderSummary(monthEntries);
   renderBreakdown(monthEntries);
   renderList(monthEntries);
   renderRecurring();
   renderReminder();
+  if (document.activeElement !== budgetInput) budgetInput.value = meta.budget || "";
 }
 
 function goToMonth(d) {
@@ -820,17 +826,6 @@ entryGroups.addEventListener("click", (e) => {
   showToast(`「${entry.category}」を削除しました`);
 });
 
-filterButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    filterButtons.forEach((b) => {
-      b.classList.toggle("active", b === btn);
-      b.setAttribute("aria-selected", b === btn);
-    });
-    currentFilter = btn.dataset.filter;
-    render();
-  });
-});
-
 $("prev-month").addEventListener("click", () => goToMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)));
 $("next-month").addEventListener("click", () => goToMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)));
 monthLabel.addEventListener("click", () => goToMonth(new Date()));
@@ -845,8 +840,8 @@ document.addEventListener("visibilitychange", () => {
 
 /* ---------- 起動 ---------- */
 
-onTypeChange();
-fillCategorySelect(recCategory, recType.value);
+fillCategorySelect(categorySelect);
+fillCategorySelect(recCategory);
 resetDateInput();
 save();
 const autoAdded = applyRecurring();

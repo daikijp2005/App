@@ -10,8 +10,8 @@
   --accent-soft: #e4edf4;
   --expense: #c6483e;
   --expense-soft: #fbeae8;
-  --income: #2f7a4b;
-  --income-soft: #e4f2e9;
+  --success: #2f7a4b;
+  --success-soft: #e4f2e9;
   --warn: #b9791f;
   --warn-soft: #fbf0de;
   --sun: #c6483e;
@@ -36,8 +36,8 @@
     --accent-soft: #223a4c;
     --expense: #e8897e;
     --expense-soft: #3a2422;
-    --income: #7fcb9a;
-    --income-soft: #1c3226;
+    --success: #7fcb9a;
+    --success-soft: #1c3226;
     --warn: #e3b166;
     --warn-soft: #3a2e1b;
     --sun: #e8897e;
@@ -59,8 +59,8 @@
   --accent-soft: #223a4c;
   --expense: #e8897e;
   --expense-soft: #3a2422;
-  --income: #7fcb9a;
-  --income-soft: #1c3226;
+  --success: #7fcb9a;
+  --success-soft: #1c3226;
   --warn: #e3b166;
   --warn-soft: #3a2e1b;
   --sun: #e8897e;
@@ -294,15 +294,12 @@ kbd {
   gap: 0.4rem;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  background: var(--expense-soft);
+  background: var(--accent-soft);
   font-size: 0.82rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.preview-chip.income {
-  background: var(--income-soft);
-}
 
 .preview-chip.is-error {
   background: none;
@@ -422,8 +419,8 @@ code {
 }
 
 .checkin-status.is-done .checkin-mark {
-  background: var(--income-soft);
-  color: var(--income);
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .checkin-status.is-alert .checkin-mark {
@@ -526,14 +523,11 @@ code {
   overflow-wrap: anywhere;
 }
 
-.summary-balance.is-negative {
-  color: var(--expense);
-}
 
 .meter {
   height: 0.5rem;
   border-radius: 999px;
-  background: var(--income-soft);
+  background: var(--sunken);
   overflow: hidden;
 }
 
@@ -541,8 +535,12 @@ code {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--income);
+  background: var(--accent);
   transition: width 0.4s ease;
+}
+
+.meter.is-warn span {
+  background: var(--warn);
 }
 
 .meter.is-over span {
@@ -550,9 +548,27 @@ code {
 }
 
 .meter-note {
-  margin: 0.4rem 0 1rem;
-  font-size: 0.76rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  margin: 0.45rem 0 1rem;
+  font-size: 0.78rem;
   color: var(--ink-soft);
+}
+
+.meter-note strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.meter-note strong.is-over,
+.summary-split dd.is-up {
+  color: var(--expense);
+}
+
+.meter-note .link-btn {
+  margin: 0;
 }
 
 .summary-split {
@@ -565,9 +581,6 @@ code {
 }
 
 .summary-split dt {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
   font-size: 0.78rem;
   color: var(--ink-soft);
 }
@@ -580,74 +593,25 @@ code {
   overflow-wrap: anywhere;
 }
 
-.dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 999px;
-}
 
-.dot--income {
-  background: var(--income);
-}
 
-.dot--expense {
-  background: var(--expense);
-}
 
 /* 入力フォーム */
 
 .entry-form {
-  --type-color: var(--expense);
-  --type-soft: var(--expense-soft);
+  --type-color: var(--accent);
+  --type-soft: var(--accent-soft);
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
 }
 
-.entry-form[data-type="income"] {
-  --type-color: var(--income);
-  --type-soft: var(--income-soft);
-}
 
-.type-toggle {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  padding: 0.2rem;
-  background: var(--sunken);
-  border-radius: 999px;
-}
 
-.type-toggle label {
-  position: relative;
-}
 
-.type-toggle input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
 
-.type-toggle span {
-  display: block;
-  padding: 0.4rem 1rem;
-  border-radius: 999px;
-  text-align: center;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
 
-.type-toggle input:checked + span {
-  background: var(--surface);
-  color: var(--type-color);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-}
 
-.type-toggle input:focus-visible + span {
-  box-shadow: var(--ring);
-}
 
 .amount-field {
   display: flex;
@@ -836,7 +800,7 @@ code {
 .breakdown-bar span {
   display: block;
   height: 100%;
-  background: var(--expense);
+  background: var(--accent);
   border-radius: 999px;
   transition: width 0.4s ease;
 }
@@ -872,34 +836,18 @@ code {
   margin: 0;
 }
 
-.filters {
-  display: flex;
-  gap: 0.15rem;
-  padding: 0.2rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-}
-
-.filter-btn {
-  padding: 0.25rem 0.8rem;
-  border: none;
-  border-radius: 999px;
-  background: none;
-  color: var(--ink-soft);
+.history-count {
   font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  color: var(--ink-soft);
 }
 
-.filter-btn:hover {
-  color: var(--ink);
+.entry-form .section-title {
+  margin: 0;
 }
 
-.filter-btn.active {
-  background: var(--ink);
-  color: var(--surface);
-}
+
+
+
 
 .day-group + .day-group {
   margin-top: 1rem;
@@ -956,13 +904,7 @@ code {
   border-top: 1px solid var(--line);
 }
 
-.entry-item.income .cat-icon {
-  background: var(--income-soft);
-}
 
-.entry-item.expense .cat-icon {
-  background: var(--expense-soft);
-}
 
 @media (prefers-reduced-motion: no-preference) {
   .entry-item {
@@ -1014,9 +956,6 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
-.entry-item.income .entry-amount {
-  color: var(--income);
-}
 
 .delete-btn {
   display: grid;
@@ -1154,9 +1093,6 @@ code {
   font-size: 0.95rem;
 }
 
-.recurring-item.income .entry-amount {
-  color: var(--income);
-}
 
 .recurring-form {
   display: grid;
@@ -1176,6 +1112,43 @@ code {
   border-radius: var(--radius-sm);
   background: var(--surface);
   font-size: 0.88rem;
+}
+
+.budget-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.budget-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 2.4rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.budget-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.budget-field input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-field input:focus-visible {
+  box-shadow: none;
 }
 
 .rec-day {
@@ -1204,7 +1177,6 @@ code {
   accent-color: var(--accent);
 }
 
-#rec-memo,
 .recurring-form .secondary-btn {
   grid-column: 1 / -1;
 }

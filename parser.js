@@ -1,25 +1,17 @@
 // クイック入力のコマンド文字列を解析して、登録用のデータに変換する
-// 例: "ランチ 800" / "昨日 電車 320" / "+給与 200000" / "9/25 家賃 42000"
+// 例: "ランチ 800" / "昨日 電車 320" / "9/25 家賃 42000" / "家賃 4.2万"
 // 「、」「;」または改行で区切ると、複数件をまとめて入力できる
 
 const CATEGORY_ALIASES = {
-  expense: {
-    食費: ["ランチ", "昼", "昼食", "昼ごはん", "朝食", "朝ごはん", "夕食", "晩ごはん", "夜ごはん", "ご飯", "ごはん", "飯", "コンビニ", "スーパー", "カフェ", "コーヒー", "外食", "弁当", "お弁当", "飲み物", "お菓子", "おやつ", "パン", "食材"],
-    日用品: ["ドラッグストア", "ドラスト", "洗剤", "ティッシュ", "トイレットペーパー", "シャンプー", "100均", "百均", "雑貨"],
-    交通費: ["電車", "バス", "タクシー", "定期", "suica", "pasmo", "icoca", "切符", "新幹線", "ガソリン", "駐車場", "駐輪場"],
-    住居費: ["家賃", "管理費", "更新料"],
-    水道光熱費: ["電気", "電気代", "ガス", "ガス代", "水道", "水道代", "光熱費"],
-    通信費: ["スマホ", "携帯", "wifi", "ネット", "回線", "sim"],
-    交際費: ["飲み会", "飲み", "プレゼント", "ギフト", "お祝い", "デート"],
-    "趣味・娯楽": ["本", "映画", "ゲーム", "漫画", "マンガ", "ライブ", "サブスク", "旅行", "カラオケ", "推し"],
-    医療費: ["病院", "薬", "歯医者", "通院", "処方"],
-  },
-  income: {
-    給与: ["給料", "月給", "賞与", "ボーナス"],
-    アルバイト: ["バイト", "バイト代"],
-    仕送り: [],
-    臨時収入: ["お小遣い", "お年玉", "臨時", "フリマ", "メルカリ"],
-  },
+  食費: ["ランチ", "昼", "昼食", "昼ごはん", "朝食", "朝ごはん", "夕食", "晩ごはん", "夜ごはん", "ご飯", "ごはん", "飯", "コンビニ", "スーパー", "カフェ", "コーヒー", "外食", "弁当", "お弁当", "飲み物", "お菓子", "おやつ", "パン", "食材"],
+  日用品: ["ドラッグストア", "ドラスト", "洗剤", "ティッシュ", "トイレットペーパー", "シャンプー", "100均", "百均", "雑貨"],
+  交通費: ["電車", "バス", "タクシー", "定期", "suica", "pasmo", "icoca", "切符", "新幹線", "ガソリン", "駐車場", "駐輪場"],
+  住居費: ["家賃", "管理費", "更新料"],
+  水道光熱費: ["電気", "電気代", "ガス", "ガス代", "水道", "水道代", "光熱費"],
+  通信費: ["スマホ", "携帯", "wifi", "ネット", "回線", "sim"],
+  交際費: ["飲み会", "飲み", "プレゼント", "ギフト", "お祝い", "デート"],
+  "趣味・娯楽": ["本", "映画", "ゲーム", "漫画", "マンガ", "ライブ", "サブスク", "旅行", "カラオケ", "推し"],
+  医療費: ["病院", "薬", "歯医者", "通院", "処方"],
 };
 
 // 全角英数字・記号を半角に、全角スペースを半角スペースにそろえる
@@ -64,40 +56,34 @@ function parseDateToken(token, today) {
   return null;
 }
 
-const AMOUNT_RE = /([+-])?¥?(\d[\d,]*(?:\.\d+)?)(万|千|k)?円?/i;
+const AMOUNT_RE = /¥?(\d[\d,]*(?:\.\d+)?)(万|千|k)?円?/i;
 
-function toAmount(match) {
-  const mult = { 万: 10000, 千: 1000, k: 1000, K: 1000 }[match[3]] || 1;
-  return { sign: match[1] || "", value: Math.round(parseFloat(match[2].replace(/,/g, "")) * mult) };
+function toAmount(number, unit) {
+  const mult = { 万: 10000, 千: 1000, k: 1000, K: 1000 }[unit] || 1;
+  return Math.round(parseFloat(number.replace(/,/g, "")) * mult);
 }
 
 // 金額だけのトークン、または「ランチ800」「800円ランチ」のように語とくっついたトークンを分解する
 function splitAmountToken(token) {
   let m = token.match(new RegExp(`^${AMOUNT_RE.source}$`, "i"));
-  if (m) return { amount: toAmount(m), rest: "" };
+  if (m) return { amount: toAmount(m[1], m[2]), rest: "" };
 
   m = token.match(new RegExp(`^(\\D+?)${AMOUNT_RE.source}$`, "i"));
-  if (m) return { amount: toAmount(m.slice(1)), rest: m[1] };
+  if (m) return { amount: toAmount(m[2], m[3]), rest: m[1] };
 
   m = token.match(/^¥?(\d[\d,]*(?:\.\d+)?)(万|千|k)?円(\D+)$/i);
-  if (m) return { amount: toAmount([null, "", m[1], m[2]]), rest: m[3] };
+  if (m) return { amount: toAmount(m[1], m[2]), rest: m[3] };
   return null;
 }
 
 // 語からカテゴリを探す。名前と一致(または名前の一部)なら exact、言い換え語なら alias
-function matchCategory(word, preferredType) {
+function matchCategory(word) {
   const lower = word.toLowerCase();
-  const types = preferredType ? [preferredType, preferredType === "income" ? "expense" : "income"] : ["expense", "income"];
-
-  for (const type of types) {
-    for (const name of Object.keys(CATEGORIES[type])) {
-      if (name === word || (word.length >= 2 && name.includes(word))) return { type, category: name, exact: true };
-    }
+  for (const name of Object.keys(CATEGORIES)) {
+    if (name === word || (word.length >= 2 && name.includes(word))) return { category: name, exact: true };
   }
-  for (const type of types) {
-    for (const [name, aliases] of Object.entries(CATEGORY_ALIASES[type])) {
-      if (aliases.some((a) => a.toLowerCase() === lower)) return { type, category: name, exact: false };
-    }
+  for (const [name, aliases] of Object.entries(CATEGORY_ALIASES)) {
+    if (aliases.some((a) => a.toLowerCase() === lower)) return { category: name, exact: false };
   }
   return null;
 }
@@ -108,23 +94,9 @@ function parseCommand(input, today = new Date()) {
 
   let date = null;
   let amount = null;
-  let explicitType = null;
   const words = [];
 
-  for (let token of tokens) {
-    // 先頭の +/- は種類の指定として扱う (例: "+給与 200000")
-    if (/^[+-]\D/.test(token)) {
-      explicitType = token[0] === "+" ? "income" : "expense";
-      token = token.slice(1);
-    }
-    if (token === "+" || token === "-") {
-      explicitType = token === "+" ? "income" : "expense";
-      continue;
-    }
-    if (token === "収入" || token === "支出") {
-      explicitType = token === "収入" ? "income" : "expense";
-      continue;
-    }
+  for (const token of tokens) {
     if (!date) {
       const d = parseDateToken(token, today);
       if (d) {
@@ -132,7 +104,7 @@ function parseCommand(input, today = new Date()) {
         continue;
       }
     }
-    if (!amount) {
+    if (amount === null) {
       const split = splitAmountToken(token);
       if (split) {
         amount = split.amount;
@@ -143,12 +115,10 @@ function parseCommand(input, today = new Date()) {
     words.push(token);
   }
 
-  if (amount?.sign) explicitType = amount.sign === "+" ? "income" : "expense";
-
   let match = null;
   const memoWords = [];
   for (const w of words) {
-    const found = !match && matchCategory(w, explicitType);
+    const found = !match && matchCategory(w);
     if (found) {
       match = found;
       if (!found.exact) memoWords.push(w);
@@ -157,21 +127,18 @@ function parseCommand(input, today = new Date()) {
     }
   }
 
-  const type = explicitType || match?.type || "expense";
-  const category = match && match.type === type ? match.category : "その他";
-
   const errors = [];
-  if (!amount || amount.value <= 0) errors.push("金額が見つかりません");
+  if (!amount || amount <= 0) errors.push("金額が見つかりません");
 
   return {
     ok: errors.length === 0,
     errors,
     source: input.trim(),
     entry: {
-      type,
+      type: "expense",
       date: toDateStr(date || today),
-      category,
-      amount: amount ? amount.value : 0,
+      category: match ? match.category : "その他",
+      amount: amount || 0,
       memo: memoWords.join(" ").slice(0, 60),
     },
   };
