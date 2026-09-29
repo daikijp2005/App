@@ -20,6 +20,22 @@
       </nav>
     </header>
 
+    <section class="calendar card" aria-labelledby="calendar-title">
+      <div class="card-head">
+        <h2 id="calendar-title" class="section-title">カレンダー</h2>
+        <p id="cal-totals" class="cal-totals"></p>
+      </div>
+      <div class="cal-weekdays" aria-hidden="true">
+        <span class="wd-0">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="wd-6">土</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <ul class="cal-legend" aria-label="凡例">
+        <li><span class="legend-swatch is-spend" aria-hidden="true"></span>支出（多いほど濃い）</li>
+        <li><span class="legend-swatch is-plan" aria-hidden="true"></span>予定（固定費）</li>
+        <li><span class="legend-dot" aria-hidden="true"></span>未記録</li>
+      </ul>
+    </section>
+
     <section class="quick card" aria-label="クイック入力">
       <form id="quick-form" class="quick-form" autocomplete="off">
         <svg class="quick-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M11.5 2 4 11h5l-1 7 7.5-9h-5z" fill="currentColor"/></svg>
@@ -54,8 +70,33 @@
 
     <section class="summary card" id="summary" aria-live="polite"></section>
 
+    <section class="breakdown card" aria-labelledby="breakdown-title">
+      <div class="card-head">
+        <h2 id="breakdown-title" class="section-title">カテゴリ別</h2>
+      </div>
+      <ul id="breakdown-list" class="breakdown-list"></ul>
+      <p id="breakdown-empty" class="muted" hidden>この月の支出はまだありません。</p>
+    </section>
+
+    <section class="history card" aria-labelledby="history-title">
+      <div class="card-head">
+        <h2 id="history-title" class="section-title">履歴</h2>
+        <div class="head-tools">
+          <span id="history-count" class="history-count"></span>
+          <button type="button" id="sort-btn" class="sort-btn"></button>
+        </div>
+      </div>
+      <div id="entry-groups"></div>
+      <div id="empty-message" class="empty-state" hidden>
+        <span class="empty-icon" aria-hidden="true">📒</span>
+        <p>この月の記録はまだありません。<br>上の入力欄から追加してみましょう。</p>
+      </div>
+    </section>
+
     <form id="entry-form" class="entry-form card">
-      <h2 class="section-title">フォームで入力</h2>
+      <div class="card-head">
+        <h2 class="section-title">フォームで入力</h2>
+      </div>
       <label class="amount-field">
         <span class="amount-prefix" aria-hidden="true">¥</span>
         <input type="number" id="amount" placeholder="0" min="1" step="1" inputmode="numeric" required aria-label="金額">
@@ -78,24 +119,6 @@
 
       <button type="submit" class="submit-btn">支出を追加</button>
     </form>
-
-    <section class="breakdown card" aria-labelledby="breakdown-title">
-      <h2 id="breakdown-title" class="section-title">カテゴリ別</h2>
-      <ul id="breakdown-list" class="breakdown-list"></ul>
-      <p id="breakdown-empty" class="muted" hidden>この月の支出はまだありません。</p>
-    </section>
-
-    <section aria-labelledby="history-title">
-      <div class="history-head">
-        <h2 id="history-title" class="section-title">履歴</h2>
-        <span id="history-count" class="history-count"></span>
-      </div>
-      <div id="entry-groups"></div>
-      <div id="empty-message" class="empty-state" hidden>
-        <span class="empty-icon" aria-hidden="true">📒</span>
-        <p>この月の記録はまだありません。<br>上のフォームから追加してみましょう。</p>
-      </div>
-    </section>
 
     <details class="settings card" id="settings">
       <summary><span>予算・固定費・リマインダーの設定</span></summary>

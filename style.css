@@ -5,7 +5,7 @@
   --ink: #1f1e1b;
   --ink-soft: #6b6558;
   --ink-faint: #9a9384;
-  --line: #e6e1d6;
+  --line: #ddd6c8;
   --accent: #2f5d8a;
   --accent-soft: #e4edf4;
   --expense: #c6483e;
@@ -31,7 +31,7 @@
     --ink: #eeeae1;
     --ink-soft: #aaa190;
     --ink-faint: #7a7365;
-    --line: #34312b;
+    --line: #3e3a33;
     --accent: #8ab4dc;
     --accent-soft: #223a4c;
     --expense: #e8897e;
@@ -54,7 +54,7 @@
   --ink: #eeeae1;
   --ink-soft: #aaa190;
   --ink-faint: #7a7365;
-  --line: #34312b;
+  --line: #3e3a33;
   --accent: #8ab4dc;
   --accent-soft: #223a4c;
   --expense: #e8897e;
@@ -115,6 +115,22 @@ select:focus-visible {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1.25rem;
+}
+
+/* カードの見出し行。下に区切り線を引いて、中身と分ける */
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  margin: -0.25rem 0 1rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.card-head .section-title {
+  margin: 0;
 }
 
 /* ヘッダー */
@@ -613,26 +629,54 @@ code {
 
 
 .meter {
-  height: 0.5rem;
+  display: flex;
+  height: 0.6rem;
   border-radius: 999px;
   background: var(--sunken);
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
 .meter span {
   display: block;
   height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
   transition: width 0.4s ease;
 }
 
-.meter.is-warn span {
+.meter-used {
+  background: var(--accent);
+}
+
+.meter.is-warn .meter-used {
   background: var(--warn);
 }
 
-.meter.is-over span {
+.meter.is-over .meter-used {
   background: var(--expense);
+}
+
+/* これから引き落とされる固定費は斜線で示す */
+.meter-plan {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--accent) 55%, transparent) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.plan-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: -0.4rem 0 1rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.plan-line strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 .meter-note {
@@ -912,16 +956,10 @@ code {
 
 /* 履歴 */
 
-.history-head {
+.head-tools {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0.5rem 0.25rem 0.6rem;
-}
-
-.history-head .section-title {
-  margin: 0;
+  gap: 0.6rem;
 }
 
 .history-count {
@@ -929,27 +967,72 @@ code {
   color: var(--ink-soft);
 }
 
-.entry-form .section-title {
-  margin: 0;
+.sort-btn {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
 
+.sort-btn:hover {
+  background: var(--sunken);
+  border-color: var(--ink-faint);
+}
 
-
-
+/* 日ごとのまとまりは、見出しの帯と行の枠で区切る */
+.day-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  scroll-margin-top: 1rem;
+}
 
 .day-group + .day-group {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
+}
+
+.day-group.is-flash {
+  animation: flash 1.2s ease;
+}
+
+@keyframes flash {
+  0%,
+  40% {
+    border-color: var(--accent);
+    box-shadow: var(--ring);
+  }
 }
 
 .day-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 0 0.25rem 0.4rem;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.45rem 0.8rem;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--line);
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
+}
+
+.day-total {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.day-plan {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .weekday.wd-0 {
@@ -975,10 +1058,33 @@ code {
   margin: 0;
   padding: 0;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  overflow: hidden;
+}
+
+.entry-item.is-planned {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 8px,
+    color-mix(in srgb, var(--accent) 6%, transparent) 8px 16px
+  );
+}
+
+.entry-item.is-planned .cat-icon {
+  background: var(--surface);
+  border: 1px dashed var(--accent);
+}
+
+.entry-item.is-planned .entry-amount {
+  color: var(--accent);
+}
+
+.tag--plan {
+  background: none;
+  border: 1px dashed var(--accent);
+}
+
+.delete-spacer {
+  width: 2rem;
+  flex-shrink: 0;
 }
 
 .entry-item {
@@ -1076,6 +1182,215 @@ code {
   .delete-btn:focus-visible {
     opacity: 1;
   }
+}
+
+/* カレンダー */
+
+.cal-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.8rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.cal-totals strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-totals-plan strong {
+  color: var(--accent);
+}
+
+.cal-weekdays,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.cal-weekdays {
+  margin-bottom: 0.3rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.cal-weekdays .wd-0 {
+  color: var(--sun);
+}
+
+.cal-weekdays .wd-6 {
+  color: var(--sat);
+}
+
+.cal-cell {
+  --heat: 0%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.05rem;
+  min-width: 0;
+  min-height: 3.6rem;
+  padding: 0.3rem 0.3rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--expense) var(--heat), var(--surface));
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.cal-cell:hover {
+  border-color: var(--ink-faint);
+}
+
+.cal-cell:active {
+  transform: scale(0.97);
+}
+
+.cal-cell.is-blank {
+  border: none;
+  background: none;
+  cursor: default;
+}
+
+/* 支出が多い日ほど色を濃くする (4段階) */
+.cal-cell[data-level="1"] {
+  --heat: 10%;
+}
+
+.cal-cell[data-level="2"] {
+  --heat: 20%;
+}
+
+.cal-cell[data-level="3"] {
+  --heat: 32%;
+}
+
+.cal-cell[data-level="4"] {
+  --heat: 46%;
+}
+
+.cal-cell.is-future {
+  background: var(--sunken);
+}
+
+.cal-cell.has-plan {
+  border: 1.5px dashed var(--accent);
+}
+
+.cal-cell.is-today {
+  border: 2px solid var(--accent);
+}
+
+.cal-day {
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink-soft);
+}
+
+.cal-cell.wd-0 .cal-day {
+  color: var(--sun);
+}
+
+.cal-cell.wd-6 .cal-day {
+  color: var(--sat);
+}
+
+.cal-cell.is-today .cal-day {
+  color: var(--accent);
+}
+
+.cal-amt,
+.cal-plan,
+.cal-zero {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.cal-amt {
+  margin-top: auto;
+  color: var(--ink);
+}
+
+.cal-plan {
+  margin-top: auto;
+  color: var(--accent);
+}
+
+.cal-amt + .cal-plan {
+  margin-top: 0;
+}
+
+.cal-zero {
+  margin-top: auto;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+/* まだ記録していない過去の日には小さな点を付ける */
+.cal-cell.is-missing::after,
+.legend-dot {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--warn);
+}
+
+.cal-cell.is-missing::after {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+.cal-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend-dot {
+  display: inline-block;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+.legend-swatch.is-spend {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--expense) 10%, var(--surface)), color-mix(in srgb, var(--expense) 46%, var(--surface)));
+}
+
+.legend-swatch.is-plan {
+  border: 1.5px dashed var(--accent);
+  background: var(--sunken);
 }
 
 .empty-state {
@@ -1380,6 +1695,26 @@ code {
 
   .summary-balance {
     font-size: 2rem;
+  }
+
+  .calendar {
+    padding-inline: 0.75rem;
+  }
+
+  .cal-weekdays,
+  .cal-grid {
+    gap: 0.2rem;
+  }
+
+  .cal-cell {
+    min-height: 3.2rem;
+    padding: 0.25rem 0.2rem 0.3rem;
+  }
+
+  .cal-amt,
+  .cal-plan,
+  .cal-zero {
+    font-size: 0.64rem;
   }
 
   .quick-btn {

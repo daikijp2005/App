@@ -125,9 +125,28 @@ function save() {
   saveJson(META_KEY, meta);
 }
 
-// 取り消し用に、変更前の状態を丸ごと覚えておく
+// 取り消し用に、操作の直前の状態を覚えておく (直後の状態はトーストを出すときに記録する)
 function snapshot() {
-  undoSnapshot = JSON.stringify({ entries, meta });
+  undoSnapshot = { before: JSON.stringify({ entries, meta }), after: null };
+}
+
+// その操作で変わった分だけを元に戻す。操作のあとに別の端末や Claude が追加した記録は残す
+function undoLastAction() {
+  const before = JSON.parse(undoSnapshot.before);
+  const after = JSON.parse(undoSnapshot.after);
+  const beforeMap = new Map(before.entries.map((e) => [e.id, e]));
+  const afterMap = new Map(after.entries.map((e) => [e.id, e]));
+
+  let next = entries.filter((e) => !(afterMap.has(e.id) && !beforeMap.has(e.id)));
+  for (const [id, e] of beforeMap) {
+    if (!afterMap.has(id)) {
+      if (!next.some((x) => x.id === id)) next.push(e);
+    } else if (JSON.stringify(afterMap.get(id)) !== JSON.stringify(e)) {
+      next = next.map((x) => (x.id === id ? e : x));
+    }
+  }
+  entries = next;
+  if (JSON.stringify(before.meta) !== JSON.stringify(after.meta)) meta = before.meta;
 }
 
 function newId() {
@@ -318,15 +337,17 @@ checkinBox.addEventListener("click", (e) => {
   const { action, date } = btn.dataset;
   if (action === "nospend") markNoSpend([date]);
   if (action === "nospend-all") markNoSpend(unrecordedDays());
-  if (action === "input") {
-    // 日付を入れた状態でクイック入力に移動する (今日なら日付は省略)
-    const prefix = date === toDateStr(new Date()) ? "" : `${Number(date.slice(5, 7))}/${Number(date.slice(8))} `;
-    quickInput.value = prefix;
-    updateQuickPreview();
-    quickInput.focus();
-    quickInput.scrollIntoView({ block: "center", behavior: "smooth" });
-  }
+  if (action === "input") focusQuickInput(date);
 });
+
+// 日付を入れた状態でクイック入力に移動する (今日なら日付は省略)
+function focusQuickInput(date) {
+  const prefix = date === toDateStr(new Date()) ? "" : `${Number(date.slice(5, 7))}/${Number(date.slice(8))} `;
+  quickInput.value = prefix;
+  updateQuickPreview();
+  quickInput.focus();
+  quickInput.scrollIntoView({ block: "center", behavior: "smooth" });
+}
 
 /* ---------- 月の予算 ---------- */
 
@@ -370,9 +391,29 @@ function applyRecurring() {
   return fresh;
 }
 
+// 固定費のうち、その月にまだ記録されていない分 (これからの支出) を求める
+function plannedForMonth(d) {
+  const key = monthKey(d);
+  const lastDay = daysInMonth(d);
+  return meta.recurring
+    .filter((r) => r.nextMonth <= key)
+    .map((r) => ({
+      id: `rec-${r.id}-${key}`,
+      type: "expense",
+      date: `${key}-${String(Math.min(r.day, lastDay)).padStart(2, "0")}`,
+      category: r.category,
+      amount: r.amount,
+      memo: r.memo,
+      recurringId: r.id,
+      planned: true,
+    }))
+    .filter((p) => !entries.some((e) => e.id === p.id));
+}
+
 function renderRecurring() {
   recurringList.innerHTML = meta.recurring.length
-    ? meta.recurring
+    ? [...meta.recurring]
+        .sort((a, b) => a.day - b.day)
         .map(
           (r) => `
       <li class="recurring-item">
@@ -1063,11 +1104,12 @@ form.addEventListener("submit", (e) => {
 /* ---------- 月の表示 ---------- */
 
 // 月の合計に加え、予算があれば残り金額を、なければ前月との比較を出す
-function renderSummary(monthEntries) {
+function renderSummary(monthEntries, planned) {
   const today = new Date();
   const isCurrent = monthKey(viewMonth) === monthKey(today);
   const isFuture = viewMonth > today;
   const spent = total(monthEntries);
+  const plannedSum = total(planned);
   const prevSpent = total(entriesOfMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)));
   const elapsedDays = isCurrent ? today.getDate() : isFuture ? 0 : daysInMonth(viewMonth);
   const dailyAvg = elapsedDays ? Math.round(spent / elapsedDays) : 0;
@@ -1082,14 +1124,22 @@ function renderSummary(monthEntries) {
     else if (isCurrent) note = `残り <strong>${yen.format(remaining)}</strong>・1日あたり ${yen.format(Math.floor(remaining / daysLeft))} まで`;
     else note = `残り <strong>${yen.format(remaining)}</strong>`;
 
+    // 使った分に続けて、これから引き落とされる固定費を斜線で示す
+    const usedWidth = Math.min(100, (spent / meta.budget) * 100);
+    const planWidth = Math.min(100 - usedWidth, (plannedSum / meta.budget) * 100);
     budgetBlock = `
-      <div class="meter ${pct >= 100 ? "is-over" : pct >= 80 ? "is-warn" : ""}" role="img" aria-label="予算の${pct}%を使用">
-        <span style="width:${Math.min(100, pct)}%"></span>
+      <div class="meter ${pct >= 100 ? "is-over" : pct >= 80 ? "is-warn" : ""}" role="img" aria-label="予算の${pct}%を使用${plannedSum ? `、ほかに固定費の予定 ${yen.format(plannedSum)}` : ""}">
+        <span class="meter-used" style="width:${usedWidth}%"></span>
+        ${planWidth > 0 ? `<span class="meter-plan" style="width:${planWidth}%"></span>` : ""}
       </div>
       <p class="meter-note"><span>${note}</span><span>予算 ${yen.format(meta.budget)} の ${pct}%</span></p>`;
   } else {
     budgetBlock = `<p class="meter-note"><button type="button" class="link-btn" id="set-budget-btn">月の予算を設定する</button></p>`;
   }
+
+  const planLine = plannedSum
+    ? `<p class="plan-line"><span class="legend-swatch is-plan" aria-hidden="true"></span>固定費の予定 <strong>${yen.format(plannedSum)}</strong>（${planned.length}件）を含めると <strong>${yen.format(spent + plannedSum)}</strong></p>`
+    : "";
 
   let compare = "—";
   if (prevSpent > 0) {
@@ -1101,6 +1151,7 @@ function renderSummary(monthEntries) {
     <p class="summary-label">${isCurrent ? "今月の支出" : `${viewMonth.getMonth() + 1}月の支出`}</p>
     <p class="summary-balance">${yen.format(spent)}</p>
     ${budgetBlock}
+    ${planLine}
     <dl class="summary-split">
       <div>
         <dt>1日平均</dt>
@@ -1149,10 +1200,112 @@ function renderBreakdown(monthEntries) {
     .join("");
 }
 
-// 日付ごとにまとめ、見出しにその日の合計を出す
-function renderList(monthEntries) {
-  // 新しい日付順、同じ日なら後から登録したものを上に
-  const sorted = [...monthEntries].sort((a, b) => b.date.localeCompare(a.date) || orderKey(b) - orderKey(a));
+// カレンダーのマスに収まるよう、金額を短く表す (例: 3,400 / 1.2万)
+function compactYen(n) {
+  if (n >= 10000) return `${(n / 10000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "")}万`;
+  return n.toLocaleString("ja-JP");
+}
+
+function sumByDate(list) {
+  const map = {};
+  list.forEach((e) => {
+    map[e.date] = (map[e.date] || 0) + e.amount;
+  });
+  return map;
+}
+
+// 月のカレンダー。過去と今日は支出の合計を濃淡で、未来は固定費の予定を点線の枠で示す
+function renderCalendar(monthEntries, planned) {
+  const actual = sumByDate(monthEntries);
+  const plan = sumByDate(planned);
+  const max = Math.max(1, ...Object.values(actual));
+  const todayStr = toDateStr(new Date());
+  const missing = new Set(unrecordedDays());
+  const key = monthKey(viewMonth);
+  const days = daysInMonth(viewMonth);
+
+  const cells = [];
+  for (let i = 0; i < viewMonth.getDay(); i++) cells.push(`<span class="cal-cell is-blank" aria-hidden="true"></span>`);
+  for (let day = 1; day <= days; day++) {
+    const date = `${key}-${String(day).padStart(2, "0")}`;
+    const spent = actual[date] || 0;
+    const planAmt = plan[date] || 0;
+    const dow = (viewMonth.getDay() + day - 1) % 7;
+    // 支出額を 1〜4 の段階に分けて、マスの色の濃さにする
+    const level = spent ? Math.max(1, Math.ceil((spent / max) * 4)) : 0;
+    const classes = [
+      "cal-cell",
+      `wd-${dow}`,
+      date === todayStr && "is-today",
+      date > todayStr && "is-future",
+      planAmt && "has-plan",
+      missing.has(date) && "is-missing",
+      meta.noSpendDays.includes(date) && !spent && "is-nospend",
+    ].filter(Boolean);
+    const label = [
+      `${viewMonth.getMonth() + 1}月${day}日`,
+      spent ? `支出 ${yen.format(spent)}` : "",
+      planAmt ? `予定 ${yen.format(planAmt)}` : "",
+      missing.has(date) ? "未記録" : "",
+    ]
+      .filter(Boolean)
+      .join("、");
+    cells.push(`
+      <button type="button" class="${classes.join(" ")}" data-date="${date}" data-level="${level}" aria-label="${label}">
+        <span class="cal-day">${day}</span>
+        ${spent ? `<span class="cal-amt">${compactYen(spent)}</span>` : ""}
+        ${planAmt ? `<span class="cal-plan">${compactYen(planAmt)}</span>` : ""}
+        ${meta.noSpendDays.includes(date) && !spent ? `<span class="cal-zero">0</span>` : ""}
+      </button>`);
+  }
+  $("cal-grid").innerHTML = cells.join("");
+
+  const spentSum = total(monthEntries);
+  const planSum = total(planned);
+  $("cal-totals").innerHTML = `<span>支出 <strong>${yen.format(spentSum)}</strong></span>${
+    planSum ? `<span class="cal-totals-plan">予定 <strong>${yen.format(planSum)}</strong></span>` : ""
+  }`;
+}
+
+$("cal-grid").addEventListener("click", (e) => {
+  const cell = e.target.closest(".cal-cell[data-date]");
+  if (!cell) return;
+  const { date } = cell.dataset;
+  const group = document.getElementById(`day-${date}`);
+  if (group) {
+    group.scrollIntoView({ block: "start", behavior: "smooth" });
+    group.classList.remove("is-flash");
+    void group.offsetWidth;
+    group.classList.add("is-flash");
+  } else if (date <= toDateStr(new Date())) {
+    focusQuickInput(date);
+  } else {
+    showToast(`${shortDate(date)} の予定はありません`);
+  }
+});
+
+// 並び順 (古い順／新しい順) は、この端末だけの表示設定として覚えておく
+const SORT_KEY = "household-budget-sort";
+let sortAsc = loadJson(SORT_KEY, true) !== false;
+const sortBtn = $("sort-btn");
+
+function renderSortButton() {
+  sortBtn.textContent = sortAsc ? "日付：古い順 ↓" : "日付：新しい順 ↓";
+  sortBtn.setAttribute("aria-label", sortAsc ? "並び順：古い日付から。押すと新しい日付からに切り替え" : "並び順：新しい日付から。押すと古い日付からに切り替え");
+}
+
+sortBtn.addEventListener("click", () => {
+  sortAsc = !sortAsc;
+  saveJson(SORT_KEY, sortAsc);
+  render();
+});
+
+// 記録済みの支出と固定費の予定をまとめて日付順に並べ、日ごとの見出しに合計を出す
+function renderList(monthEntries, planned) {
+  const dir = sortAsc ? 1 : -1;
+  const sorted = [...monthEntries, ...planned].sort(
+    (a, b) => dir * a.date.localeCompare(b.date) || Number(Boolean(a.planned)) - Number(Boolean(b.planned)) || dir * (orderKey(a) - orderKey(b))
+  );
 
   const groups = new Map();
   sorted.forEach((e) => {
@@ -1160,18 +1313,23 @@ function renderList(monthEntries) {
     groups.get(e.date).push(e);
   });
 
-  historyCount.textContent = sorted.length ? `${sorted.length}件` : "";
+  historyCount.textContent = [monthEntries.length ? `${monthEntries.length}件` : "", planned.length ? `予定${planned.length}件` : ""]
+    .filter(Boolean)
+    .join("・");
   emptyMessage.hidden = sorted.length > 0;
+  renderSortButton();
 
   const todayStr = toDateStr(new Date());
   entryGroups.innerHTML = [...groups]
     .map(([date, items]) => {
       const d = fromDateStr(date);
+      const done = items.filter((e) => !e.planned);
+      const upcoming = items.filter((e) => e.planned);
       return `
-        <section class="day-group">
+        <section class="day-group ${done.length ? "" : "is-planned"}" id="day-${date}">
           <h3 class="day-head">
             <span>${d.getMonth() + 1}月${d.getDate()}日<span class="weekday wd-${d.getDay()}">（${WEEKDAYS[d.getDay()]}）</span>${date === todayStr ? '<span class="today-badge">今日</span>' : ""}</span>
-            <span class="day-total">${yen.format(total(items))}</span>
+            <span class="day-total">${done.length ? yen.format(total(done)) : ""}${upcoming.length ? `<span class="day-plan">予定 ${yen.format(total(upcoming))}</span>` : ""}</span>
           </h3>
           <ul class="entry-list">
             ${items.map(renderItem).join("")}
@@ -1183,6 +1341,18 @@ function renderList(monthEntries) {
 }
 
 function renderItem(entry) {
+  if (entry.planned) {
+    return `
+    <li class="entry-item is-planned">
+      <span class="cat-icon" aria-hidden="true">${iconFor(entry.category)}</span>
+      <div class="entry-content">
+        <strong>${escapeHtml(entry.memo || entry.category)}<span class="tag tag--plan">予定</span></strong>
+        <span>${escapeHtml(entry.category)}・固定費（この日に自動で記録）</span>
+      </div>
+      <span class="entry-amount">${yen.format(entry.amount)}</span>
+      <span class="delete-spacer" aria-hidden="true"></span>
+    </li>`;
+  }
   return `
     <li class="entry-item">
       <span class="cat-icon" aria-hidden="true">${iconFor(entry.category)}</span>
@@ -1199,10 +1369,12 @@ function renderItem(entry) {
 function render() {
   monthLabel.textContent = `${viewMonth.getFullYear()}年${viewMonth.getMonth() + 1}月`;
   const monthEntries = entriesOfMonth(viewMonth);
+  const planned = plannedForMonth(viewMonth);
+  renderCalendar(monthEntries, planned);
   renderCheckin();
-  renderSummary(monthEntries);
+  renderSummary(monthEntries, planned);
   renderBreakdown(monthEntries);
-  renderList(monthEntries);
+  renderList(monthEntries, planned);
   renderRecurring();
   renderReminder();
   if (document.activeElement !== budgetInput) budgetInput.value = meta.budget || "";
@@ -1216,7 +1388,10 @@ function goToMonth(d) {
 
 /* ---------- トーストと取り消し ---------- */
 
+// 直前に snapshot() した操作の結果を知らせるときだけ「元に戻す」を出す
 function showToast(message) {
+  if (undoSnapshot && undoSnapshot.after === null) undoSnapshot.after = JSON.stringify({ entries, meta });
+  else undoSnapshot = null;
   toastText.textContent = message;
   undoBtn.hidden = !undoSnapshot;
   toast.hidden = false;
@@ -1234,8 +1409,8 @@ function hideToast() {
 }
 
 undoBtn.addEventListener("click", () => {
-  if (!undoSnapshot) return;
-  ({ entries, meta } = JSON.parse(undoSnapshot));
+  if (!undoSnapshot?.after) return;
+  undoLastAction();
   save();
   render();
   scheduleReminder();
