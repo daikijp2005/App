@@ -31,6 +31,11 @@ let entries = stored.filter((e) => e.type !== "income");
 let meta = loadMeta();
 let viewMonth = startOfMonth(new Date());
 let undoSnapshot = null;
+// claude.ai で開いたときだけ使える機能 (データの同期と Claude への問い合わせ)
+const inViewer = Boolean(window.claude);
+let db = null;
+let sample = null;
+let maxImages = 1;
 let toastTimer = null;
 let reminderTimer = null;
 let idSeq = 0;
@@ -65,6 +70,13 @@ const recCategory = $("rec-category");
 const reminderTimeInput = $("reminder-time");
 const notifyBtn = $("notify-btn");
 const notifyStatus = $("notify-status");
+const receiptBtn = $("receipt-btn");
+const receiptInput = $("receipt-input");
+const quickBtn = $("quick-btn");
+const aiStatus = $("ai-status");
+const aiStatusText = $("ai-status-text");
+const aiCancel = $("ai-cancel");
+const syncStatus = $("sync-status");
 
 const yen = new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" });
 
@@ -105,6 +117,10 @@ function loadMeta() {
 }
 
 function save() {
+  if (db) {
+    queueSync();
+    return;
+  }
   saveJson(STORAGE_KEY, [...legacyIncome, ...entries]);
   saveJson(META_KEY, meta);
 }
@@ -183,8 +199,21 @@ function closeIcon() {
 
 /* ---------- 記録を追加する共通処理 ---------- */
 
+// 固定費のように id が決まっているものは、別の端末ですでに記録済みなら追加しない
 function addEntries(list) {
-  list.forEach((e) => entries.push({ id: newId(), type: "expense", ...e }));
+  const now = Date.now();
+  list.forEach((e) => {
+    if (e.id && entries.some((x) => x.id === e.id)) return;
+    entries.push({ id: newId(), type: "expense", createdAt: now, ...e });
+  });
+}
+
+// 同じ日の中で新しい順に並べるための値 (古いデータには createdAt がないので id から求める)
+function orderKey(e) {
+  if (e.createdAt) return e.createdAt;
+  const n = Number(e.id);
+  if (!n) return 0;
+  return String(e.id).length >= 16 ? n / 1000 : n;
 }
 
 /* ---------- 記録チェック (入れ忘れ防止) ---------- */
@@ -326,17 +355,19 @@ function applyRecurring() {
       const lastDay = new Date(y, m, 0).getDate();
       const date = `${cursor}-${String(Math.min(rule.day, lastDay)).padStart(2, "0")}`;
       if (date > todayStr) break;
-      added.push({ date, category: rule.category, amount: rule.amount, memo: rule.memo, recurringId: rule.id });
+      // 月ごとに決まった id にして、複数の端末で同時に開いても二重に記録されないようにする
+      added.push({ id: `rec-${rule.id}-${cursor}`, date, category: rule.category, amount: rule.amount, memo: rule.memo, recurringId: rule.id });
       cursor = monthKey(new Date(y, m, 1));
     }
     rule.nextMonth = cursor;
   });
 
+  const fresh = added.filter((a) => !entries.some((e) => e.id === a.id));
   if (added.length) {
-    addEntries(added);
+    addEntries(fresh);
     save();
   }
-  return added;
+  return fresh;
 }
 
 function renderRecurring() {
@@ -467,7 +498,7 @@ function appUrl() {
 
 // 毎日決まった時刻にアラームが鳴る予定を .ics ファイルとして書き出す
 // (スマホやPCのカレンダーに取り込めば、アプリを閉じていても通知が届く)
-function downloadIcs() {
+async function downloadIcs() {
   const [h, m] = meta.reminder.time.split(":");
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
@@ -497,7 +528,22 @@ function downloadIcs() {
     "END:VEVENT",
     "END:VCALENDAR",
   ];
-  const blob = new Blob([lines.join("\r\n")], { type: "text/calendar" });
+  const data = lines.join("\r\n");
+  // claude.ai 上ではページから直接ダウンロードできないため、downloads 機能で保存してもらう
+  if (inViewer) {
+    const downloads = await claude.use("downloads");
+    if (!downloads) {
+      showToast("この表示ではファイルを保存できません");
+      return;
+    }
+    try {
+      await downloads.save({ filename: "家計簿リマインダー.ics", data });
+    } catch (e) {
+      if (e?.code !== "cancelled" && e?.code !== "declined") showToast("カレンダー用ファイルを保存できませんでした");
+    }
+    return;
+  }
+  const blob = new Blob([data], { type: "text/calendar" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "家計簿リマインダー.ics";
@@ -517,14 +563,30 @@ function updateQuickPreview() {
   const results = parseCommands(quickInput.value);
   quickPreview.innerHTML = results
     .map((r) =>
-      r.ok
+      r.ok && (!sample || r.matched)
         ? `<span class="preview-chip">
             <span>${escapeHtml(describeEntry(r.entry))}</span>
             <span class="preview-meta">${shortDate(r.entry.date)}${r.entry.memo ? ` · ${escapeHtml(r.entry.memo)}` : ""}</span>
           </span>`
-        : `<span class="preview-chip is-error">「${escapeHtml(r.source)}」: ${r.errors.join("、")}</span>`
+        : sample
+          ? `<span class="preview-chip is-ai">「${escapeHtml(r.source)}」は Claude が読み取ります</span>`
+          : `<span class="preview-chip is-error">「${escapeHtml(r.source)}」: ${r.errors.join("、")}</span>`
     )
     .join("");
+}
+
+function commitEntries(list, prefix = "") {
+  snapshot();
+  addEntries(list);
+  save();
+  viewMonth = startOfMonth(fromDateStr(list[0].date));
+  resetDateInput();
+  render();
+  showToast(
+    list.length === 1
+      ? `${prefix}${describeEntry(list[0])}（${shortDate(list[0].date)}）を追加しました`
+      : `${prefix}${list.length}件（合計 ${yen.format(total(list))}）を追加しました`
+  );
 }
 
 // コマンド文字列を解析して登録する。1件でも解析できないものがあれば何も登録しない
@@ -532,15 +594,7 @@ function runCommand(text) {
   const results = parseCommands(text);
   if (!results.length) return null;
   if (results.some((r) => !r.ok)) return { ok: false, results };
-
-  snapshot();
-  const list = results.map((r) => r.entry);
-  addEntries(list);
-  save();
-  viewMonth = startOfMonth(fromDateStr(list[0].date));
-  resetDateInput();
-  render();
-  showToast(list.length === 1 ? `${describeEntry(list[0])}（${shortDate(list[0].date)}）を追加しました` : `${list.length}件を追加しました`);
+  commitEntries(results.map((r) => r.entry));
   return { ok: true, results };
 }
 
@@ -554,18 +608,31 @@ quickInput.addEventListener("keydown", (e) => {
   }
 });
 
-quickForm.addEventListener("submit", (e) => {
+quickForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const result = runCommand(quickInput.value);
-  if (!result) return;
-  if (result.ok) {
+  const text = quickInput.value.trim();
+  if (!text) return;
+  // Claude が使えるときは、カテゴリまで確実に読めた入力だけをその場で記録する
+  const parsed = parseCommands(text);
+  const confident = parsed.length && parsed.every((r) => r.ok && r.matched);
+  const result = !sample || confident ? runCommand(text) : null;
+  if (result?.ok) {
     quickInput.value = "";
     updateQuickPreview();
-  } else {
-    quickForm.classList.remove("shake");
-    void quickForm.offsetWidth;
-    quickForm.classList.add("shake");
+    return;
   }
+  // 決まった書き方で読めない文章は、Claude に読み取ってもらう
+  if (sample) {
+    const list = await askClaudeText(text);
+    if (list && quickInput.value.trim() === text) {
+      quickInput.value = "";
+      updateQuickPreview();
+    }
+    return;
+  }
+  quickForm.classList.remove("shake");
+  void quickForm.offsetWidth;
+  quickForm.classList.add("shake");
 });
 
 // どこからでも "/" または Ctrl/Cmd+K でクイック入力へ移動する
@@ -605,6 +672,367 @@ $("copy-url-btn").addEventListener("click", async (e) => {
   }
   setTimeout(() => (e.target.textContent = "コピー"), 2000);
 });
+
+/* ---------- Claude による読み取り (claude.ai 上のみ) ---------- */
+
+let aiCtl = null;
+
+function todayLine() {
+  const t = new Date();
+  return `${toDateStr(t)}（${WEEKDAYS[t.getDay()]}曜日）`;
+}
+
+const CATEGORY_LIST = Object.keys(CATEGORIES).join("、");
+
+// Claude の答えは信用しきらず、形をそろえてから記録する
+function sanitizeAiEntries(list, source) {
+  if (!Array.isArray(list)) return [];
+  const today = new Date();
+  const todayStr = toDateStr(today);
+  const oldest = toDateStr(new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()));
+  return list
+    .map((raw) => {
+      const amount = Math.round(Number(String(raw?.amount ?? "").replace(/[^\d.]/g, "")));
+      if (!amount || amount <= 0 || amount > 10000000) return null;
+      let date = String(raw?.date ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(fromDateStr(date).getTime()) || date > todayStr || date < oldest) date = todayStr;
+      const category = CATEGORIES[raw?.category] ? raw.category : "その他";
+      const memo = String(raw?.memo ?? "").trim().slice(0, 60);
+      return { date, category, amount, memo, ...(source ? { source } : {}) };
+    })
+    .filter(Boolean);
+}
+
+function setAiBusy(label) {
+  const busy = Boolean(label);
+  aiStatus.hidden = !busy && !aiStatus.classList.contains("is-error");
+  if (busy) {
+    aiStatus.classList.remove("is-error");
+    aiStatus.hidden = false;
+    aiStatusText.textContent = label;
+    aiCancel.textContent = "中止";
+  }
+  aiStatus.classList.toggle("is-busy", busy);
+  quickBtn.disabled = busy;
+  receiptBtn.disabled = busy;
+}
+
+function showAiError(message) {
+  aiStatus.classList.add("is-error");
+  aiStatus.classList.remove("is-busy");
+  aiStatus.hidden = false;
+  aiStatusText.textContent = message;
+  aiCancel.textContent = "閉じる";
+}
+
+function clearAiError() {
+  if (aiStatus.classList.contains("is-error")) {
+    aiStatus.classList.remove("is-error");
+    aiStatus.hidden = true;
+  }
+}
+
+function disableClaude(message) {
+  sample = null;
+  receiptBtn.hidden = true;
+  document.querySelectorAll(".ai-only").forEach((el) => (el.hidden = true));
+  updateQuickPreview();
+  showAiError(message);
+}
+
+function handleAiError(e) {
+  switch (e?.code) {
+    case "cancelled":
+      return;
+    case "not_granted":
+    case "sampling_disabled":
+    case "not_declared":
+    case "capability_disabled":
+    case "capability_removed":
+      disableClaude("Claude への読み取りが許可されていないため、この機能をオフにしました。決まった書き方（例: ランチ 800）なら記録できます。");
+      return;
+    case "images_unavailable":
+      receiptBtn.hidden = true;
+      showAiError("この表示では写真を送れません。金額を文章で入力してください。");
+      return;
+    case "image_rejected":
+      showAiError("この画像は読み取れませんでした。JPEG・PNG などの写真を選び直してください。");
+      return;
+    case "rate_limited":
+      showAiError("Claude の利用が混み合っているか、上限に達しました。少し時間をおいてからもう一度送ってください。");
+      return;
+    case "session_expired":
+      showAiError("ログインの有効期限が切れました。claude.ai にログインし直してください。");
+      return;
+    case "refused":
+      showAiError("この内容は読み取れませんでした。金額が分かるように書き直してください。");
+      return;
+    default:
+      showAiError("読み取りに失敗しました。もう一度送ってください。");
+  }
+}
+
+async function runAi(label, prompt, options = {}) {
+  aiCtl?.abort();
+  const ctl = new AbortController();
+  aiCtl = ctl;
+  setAiBusy(label);
+  try {
+    return await sample.json(prompt, { ...options, signal: ctl.signal, cache: false });
+  } catch (e) {
+    handleAiError(e);
+    return null;
+  } finally {
+    if (aiCtl === ctl) {
+      aiCtl = null;
+      setAiBusy(null);
+    }
+  }
+}
+
+aiCancel.addEventListener("click", () => {
+  if (aiCtl) aiCtl.abort();
+  else clearAiError();
+});
+
+async function askClaudeText(text) {
+  const prompt = `あなたは支出管理アプリの入力係です。次の文章に書かれた「お金を払った出来事」をすべて抜き出してください。
+
+今日: ${todayLine()}
+カテゴリ（必ずこの中から1つ）: ${CATEGORY_LIST}
+
+ルール:
+- amount は支払った金額（円、整数）。「1.2万」「3k」なども円に直す。
+- date は YYYY-MM-DD。書かれていなければ今日。「昨日」「先週の金曜」などは今日から計算する。未来の日付にはしない。
+- memo は店名や品名などを20文字以内で。なければ空文字。
+- 収入・もらったお金・予定（まだ払っていないもの）は含めない。
+- 支出が1つも読み取れなければ entries を空にして、reason に短い理由を書く。
+
+返答は次の形の JSON だけ:
+{"entries":[{"date":"2026-01-31","category":"食費","amount":650,"memo":"スタバ"}],"reason":""}
+
+文章:
+"""
+${text.slice(0, 2000)}
+"""`;
+  const data = await runAi("Claude が読み取り中…", prompt, { modelTier: "quick" });
+  if (!data) return null;
+  const list = sanitizeAiEntries(data.entries);
+  if (!list.length) {
+    showAiError(`支出を読み取れませんでした${data.reason ? `（${String(data.reason).slice(0, 80)}）` : ""}。金額が分かるように書いてください。`);
+    return null;
+  }
+  clearAiError();
+  commitEntries(list, "Claude が ");
+  return list;
+}
+
+async function readReceipts(files) {
+  const prompt = `画像は買い物のレシートまたは領収書の写真です（${files.length}枚）。支出管理アプリに記録するため、読み取ってください。
+
+今日: ${todayLine()}
+カテゴリ（必ずこの中から1つ）: ${CATEGORY_LIST}
+
+ルール:
+- レシート1枚につき1件。同じレシートが複数の写真に写っていれば1件にまとめる。
+- amount は実際に支払った合計金額（税込・値引き後。ポイントやクーポンを使った場合は差し引いた後の支払額）。円の整数。
+- date はレシートに印字された日付（YYYY-MM-DD）。読めなければ今日。
+- memo は店名（20文字以内）。
+- category は店の種類と品目から最も近いものを選ぶ。
+- レシートでない画像や、金額が読めない画像は entries に入れず、skipped にその理由を書く。
+
+返答は次の形の JSON だけ:
+{"entries":[{"date":"2026-01-31","category":"食費","amount":1280,"memo":"セブンイレブン"}],"skipped":[]}`;
+  const data = await runAi(`レシート${files.length > 1 ? `${files.length}枚` : ""}を読み取り中…`, prompt, { images: files, modelTier: "default" });
+  if (!data) return;
+  const list = sanitizeAiEntries(data.entries, "receipt");
+  const skipped = Array.isArray(data.skipped) ? data.skipped.length : 0;
+  if (!list.length) {
+    showAiError("レシートの金額を読み取れませんでした。明るい場所で、レシート全体が写るように撮り直してください。");
+    return;
+  }
+  clearAiError();
+  commitEntries(list, "レシートから ");
+  if (skipped) showAiError(`${skipped}枚は読み取れなかったため記録していません。`);
+}
+
+receiptBtn.addEventListener("click", () => receiptInput.click());
+
+receiptInput.addEventListener("change", () => {
+  const files = [...receiptInput.files];
+  receiptInput.value = "";
+  if (!files.length || !sample) return;
+  if (files.length > maxImages) showToast(`一度に送れるのは${maxImages}枚までです。最初の${maxImages}枚を読み取ります`);
+  readReceipts(files.slice(0, maxImages));
+});
+
+async function connectClaude() {
+  const s = await claude.use("sample");
+  if (!s) return;
+  sample = s;
+  const caps = await s.limits().catch(() => null);
+  if (caps?.images) {
+    maxImages = caps.images.maxCount || 1;
+    receiptInput.accept = caps.images.mediaTypes.join(",");
+    receiptBtn.hidden = false;
+  }
+  document.querySelectorAll(".ai-only").forEach((el) => (el.hidden = false));
+  quickInput.placeholder = "ランチ 800 / 昨日スタバで650円 など自由に";
+  updateQuickPreview();
+}
+
+/* ---------- 端末間の同期 (claude.ai 上のみ) ---------- */
+
+// サーバーに保存済みの内容 (id → JSON)。ここと手元の差分だけを書き込む
+const synced = { entries: new Map(), meta: "" };
+let serverEntries = [];
+let serverMeta = null;
+let syncChain = Promise.resolve();
+let syncing = 0;
+let serverDirty = false;
+
+function normalizeEntry(id, raw) {
+  if (!raw || raw.type === "income") return null;
+  const amount = Math.round(Number(raw.amount));
+  if (!amount || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(String(raw.date))) return null;
+  return {
+    ...raw,
+    id,
+    type: "expense",
+    date: String(raw.date),
+    amount,
+    category: CATEGORIES[raw.category] ? raw.category : "その他",
+    memo: String(raw.memo ?? "").slice(0, 60),
+  };
+}
+
+function normalizeMeta(raw) {
+  const m = { ...meta, ...(raw || {}) };
+  m.noSpendDays = Array.isArray(m.noSpendDays) ? m.noSpendDays : [];
+  m.recurring = Array.isArray(m.recurring) ? m.recurring.filter((r) => r.type !== "income") : [];
+  m.reminder = { time: "21:00", notify: false, ...(m.reminder || {}) };
+  m.budget = Number(m.budget) || 0;
+  return m;
+}
+
+function applyServer() {
+  entries = serverEntries.slice();
+  synced.entries = new Map(entries.map((e) => [e.id, JSON.stringify(e)]));
+  if (serverMeta) {
+    meta = normalizeMeta(serverMeta);
+    synced.meta = JSON.stringify(meta);
+  }
+  render();
+}
+
+function queueSync() {
+  syncing++;
+  syncChain = syncChain
+    .then(syncToDb)
+    .catch(onSyncError)
+    .finally(() => {
+      syncing--;
+      if (!syncing && serverDirty) {
+        serverDirty = false;
+        applyServer();
+      }
+    });
+  return syncChain;
+}
+
+async function syncToDb() {
+  const col = db.collection("entries");
+  const current = new Map(entries.map((e) => [e.id, JSON.stringify(e)]));
+  for (const [id, json] of current) {
+    if (synced.entries.get(id) === json) continue;
+    await col.doc(id).set(JSON.parse(json));
+    synced.entries.set(id, json);
+  }
+  for (const id of [...synced.entries.keys()]) {
+    if (current.has(id)) continue;
+    await col.doc(id).delete();
+    synced.entries.delete(id);
+  }
+  const metaJson = JSON.stringify(meta);
+  if (metaJson !== synced.meta) {
+    await db.doc("meta/settings").set(JSON.parse(metaJson));
+    synced.meta = metaJson;
+  }
+  setSyncStatus("ok");
+}
+
+function onSyncError(e) {
+  setSyncStatus("error");
+  showToast(
+    e?.code === "quota_exceeded"
+      ? "保存できる件数の上限に達しました。古い記録を削除してください"
+      : e?.code === "invalid_argument"
+        ? "この表示では変更を保存できません（閲覧のみの権限です）"
+        : "保存に失敗しました。通信状態を確認して、もう一度操作してください"
+  );
+}
+
+function setSyncStatus(state) {
+  syncStatus.textContent =
+    state === "ok"
+      ? "✓ この記録は claude.ai に保存され、PC とスマホで同期されています。"
+      : state === "error"
+        ? "保存に失敗した変更があります。通信状態を確認してください。"
+        : "同期の準備中です…";
+}
+
+// 最初に確定した内容が届いたら、同期に切り替える
+// (切り替え前にこの端末だけで記録したものがあれば、サーバーにも保存する)
+function goOnline(store) {
+  const localEntries = entries;
+  const localMeta = meta;
+  db = store;
+  applyServer();
+  const ids = new Set(entries.map((e) => e.id));
+  const extra = localEntries.filter((e) => !ids.has(e.id));
+  if (extra.length) entries.push(...extra);
+  if (!serverMeta) meta = localMeta;
+  queueSync().then(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(META_KEY);
+    } catch {
+      // 消せなくても同期には影響しない
+    }
+  });
+  const added = applyRecurring();
+  render();
+  if (added.length) showToast(`固定費を${added.length}件、自動で記録しました`);
+}
+
+async function connectDb() {
+  const store = await claude.use("db");
+  if (!store) return;
+  setSyncStatus("pending");
+  let gotEntries = false;
+  let gotMeta = false;
+
+  const onChange = () => {
+    if (!db) {
+      if (gotEntries && gotMeta) goOnline(store);
+      return;
+    }
+    if (syncing) serverDirty = true;
+    else applyServer();
+  };
+  const onError = () => setSyncStatus("error");
+
+  store.collection("entries").onSnapshot((snap) => {
+    serverEntries = snap.docs.map((d) => normalizeEntry(d.id, d.data())).filter(Boolean);
+    if (!snap.metadata.fromCache) gotEntries = true;
+    onChange();
+  }, onError);
+  store.doc("meta/settings").onSnapshot((snap) => {
+    serverMeta = snap.exists ? snap.data() : null;
+    if (!snap.metadata.fromCache) gotMeta = true;
+    onChange();
+  }, onError);
+}
 
 /* ---------- 詳細フォーム ---------- */
 
@@ -724,7 +1152,7 @@ function renderBreakdown(monthEntries) {
 // 日付ごとにまとめ、見出しにその日の合計を出す
 function renderList(monthEntries) {
   // 新しい日付順、同じ日なら後から登録したものを上に
-  const sorted = [...monthEntries].sort((a, b) => b.date.localeCompare(a.date) || Number(b.id) - Number(a.id));
+  const sorted = [...monthEntries].sort((a, b) => b.date.localeCompare(a.date) || orderKey(b) - orderKey(a));
 
   const groups = new Map();
   sorted.forEach((e) => {
@@ -759,7 +1187,7 @@ function renderItem(entry) {
     <li class="entry-item">
       <span class="cat-icon" aria-hidden="true">${iconFor(entry.category)}</span>
       <div class="entry-content">
-        <strong>${escapeHtml(entry.category)}${entry.recurringId ? '<span class="tag">固定費</span>' : ""}</strong>
+        <strong>${escapeHtml(entry.category)}${entry.recurringId ? '<span class="tag">固定費</span>' : ""}${entry.source === "receipt" ? '<span class="tag">レシート</span>' : ""}</strong>
         ${entry.memo ? `<span>${escapeHtml(entry.memo)}</span>` : ""}
       </div>
       <span class="entry-amount">${yen.format(entry.amount)}</span>
@@ -833,7 +1261,7 @@ monthLabel.addEventListener("click", () => goToMonth(new Date()));
 // 日付が変わったときや、タブに戻ってきたときに記録チェックを最新にする
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
-    if (applyRecurring().length) showToast("固定費を自動で記録しました");
+    if ((!inViewer || db) && applyRecurring().length) showToast("固定費を自動で記録しました");
     render();
   }
 });
@@ -843,9 +1271,19 @@ document.addEventListener("visibilitychange", () => {
 fillCategorySelect(categorySelect);
 fillCategorySelect(recCategory);
 resetDateInput();
-save();
-const autoAdded = applyRecurring();
-render();
-scheduleReminder();
-handleUrlCommand();
-if (autoAdded.length && toast.hidden) showToast(`固定費を${autoAdded.length}件、自動で記録しました`);
+document.querySelectorAll(".local-only").forEach((el) => (el.hidden = inViewer));
+document.querySelectorAll(".viewer-only").forEach((el) => (el.hidden = !inViewer));
+
+if (inViewer) {
+  // claude.ai 上では、サーバーのデータが届いてから固定費などを処理する
+  render();
+  connectDb();
+  connectClaude();
+} else {
+  save();
+  const autoAdded = applyRecurring();
+  render();
+  scheduleReminder();
+  handleUrlCommand();
+  if (autoAdded.length && toast.hidden) showToast(`固定費を${autoAdded.length}件、自動で記録しました`);
+}

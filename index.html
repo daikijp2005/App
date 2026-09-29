@@ -25,9 +25,18 @@
         <svg class="quick-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M11.5 2 4 11h5l-1 7 7.5-9h-5z" fill="currentColor"/></svg>
         <input type="text" id="quick-input" placeholder="ランチ 800 / 昨日 電車 320 / 家賃 4.2万" aria-label="クイック入力" aria-describedby="quick-preview" enterkeyhint="done">
         <kbd class="quick-kbd" title="どこからでも / キーでここに移動">/</kbd>
-        <button type="submit" class="quick-btn">追加</button>
+        <button type="button" id="receipt-btn" class="camera-btn" aria-label="レシートの写真から追加" title="レシートの写真から追加" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.1l1.2-2h6.4l1.2 2h2.1A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12.8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+        </button>
+        <input type="file" id="receipt-input" accept="image/*" multiple hidden>
+        <button type="submit" class="quick-btn" id="quick-btn">追加</button>
       </form>
       <div id="quick-preview" class="quick-preview" aria-live="polite"></div>
+      <div id="ai-status" class="ai-status" role="status" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="ai-status-text" class="ai-status-text"></span>
+        <button type="button" id="ai-cancel" class="link-btn">中止</button>
+      </div>
       <details class="quick-help">
         <summary>書き方の例</summary>
         <table>
@@ -37,6 +46,7 @@
           <tr><td><code>コンビニ 450、本 1200</code></td><td>「、」や改行で区切ると複数件まとめて追加</td></tr>
         </table>
         <p>カテゴリ名（食費・日用品など）のほか、「コンビニ」「電車」「家賃」などの言葉からも自動で判定します。判定できないときは「その他」になります。</p>
+        <p class="ai-only" hidden>上の形に当てはまらない文章（例:「昨日スタバで650円、帰りにドラッグストアで1,280円」）は Claude が読み取って記録します。カメラのボタンからレシートの写真を送ると、合計金額・日付・お店を読み取って自動で記録します。</p>
       </details>
     </section>
 
@@ -120,14 +130,21 @@
         <h3 id="reminder-title" class="settings-title">毎日のリマインダー</h3>
         <div class="reminder-row">
           <label class="reminder-time">通知時刻 <input type="time" id="reminder-time" value="21:00"></label>
-          <button type="button" id="notify-btn" class="secondary-btn">ブラウザ通知をオンにする</button>
+          <button type="button" id="notify-btn" class="secondary-btn local-only">ブラウザ通知をオンにする</button>
           <button type="button" id="ics-btn" class="secondary-btn">カレンダーに登録（.ics）</button>
         </div>
-        <p id="notify-status" class="settings-note"></p>
-        <p class="settings-note">ブラウザ通知はこのページを開いている間だけ届きます。アプリを閉じていても毎日知らせてほしい場合は「カレンダーに登録」で、スマホやPCのカレンダーに毎日のアラームを追加してください。</p>
+        <p id="notify-status" class="settings-note local-only"></p>
+        <p class="settings-note local-only">ブラウザ通知はこのページを開いている間だけ届きます。アプリを閉じていても毎日知らせてほしい場合は「カレンダーに登録」で、スマホやPCのカレンダーに毎日のアラームを追加してください。</p>
+        <p class="settings-note viewer-only" hidden>「カレンダーに登録」で、スマホやPCのカレンダーに毎日のアラームを追加できます。記録がまだの日は、このページの「記録チェック」にも表示されます。</p>
       </section>
 
-      <section class="settings-section" aria-labelledby="shortcut-title">
+      <section class="settings-section viewer-only" aria-labelledby="sync-title" hidden>
+        <h3 id="sync-title" class="settings-title">同期と Claude への送信</h3>
+        <p id="sync-status" class="settings-note"></p>
+        <p class="settings-note">スマホの Claude アプリでこのページを開けば、PC と同じデータを見たり追加したりできます。入力欄に自由な文章を書くか、カメラのボタンでレシートの写真を送ると、Claude が読み取ってその場で記録します。</p>
+      </section>
+
+      <section class="settings-section local-only" aria-labelledby="shortcut-title">
         <h3 id="shortcut-title" class="settings-title">ショートカットから入力</h3>
         <p class="settings-note">このページのURLの末尾に <code>?add=</code> とコマンドを付けて開くと、その内容がすぐ記録されます。iPhoneの「ショートカット」アプリやブックマークに登録しておくと、1タップで入力画面を開けます。</p>
         <div class="copy-row">

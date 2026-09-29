@@ -132,6 +132,8 @@ function parseCommand(input, today = new Date()) {
 
   return {
     ok: errors.length === 0,
+    // カテゴリを言葉から特定できたか (できなければ Claude に任せたほうが正確)
+    matched: Boolean(match),
     errors,
     source: input.trim(),
     entry: {
