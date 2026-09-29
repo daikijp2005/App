@@ -41,10 +41,6 @@
         <svg class="quick-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M11.5 2 4 11h5l-1 7 7.5-9h-5z" fill="currentColor"/></svg>
         <input type="text" id="quick-input" placeholder="ランチ 800 / 昨日 電車 320 / 家賃 4.2万" aria-label="クイック入力" aria-describedby="quick-preview" enterkeyhint="done">
         <kbd class="quick-kbd" title="どこからでも / キーでここに移動">/</kbd>
-        <button type="button" id="receipt-btn" class="camera-btn" aria-label="レシートの写真から追加" title="レシートの写真から追加" hidden>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.1l1.2-2h6.4l1.2 2h2.1A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12.8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
-        </button>
-        <input type="file" id="receipt-input" accept="image/*" multiple hidden>
         <button type="submit" class="quick-btn" id="quick-btn">追加</button>
       </form>
       <div id="quick-preview" class="quick-preview" aria-live="polite"></div>
@@ -62,8 +58,37 @@
           <tr><td><code>コンビニ 450、本 1200</code></td><td>「、」や改行で区切ると複数件まとめて追加</td></tr>
         </table>
         <p>カテゴリ名（食費・日用品など）のほか、「コンビニ」「電車」「家賃」などの言葉からも自動で判定します。判定できないときは「その他」になります。</p>
-        <p class="ai-only" hidden>上の形に当てはまらない文章（例:「昨日スタバで650円、帰りにドラッグストアで1,280円」）は Claude が読み取って記録します。カメラのボタンからレシートの写真を送ると、合計金額・日付・お店を読み取って自動で記録します。</p>
+        <p class="ai-only" hidden>上の形に当てはまらない文章（例:「昨日スタバで650円、帰りにドラッグストアで1,280円」）は Claude が読み取って記録します。レシートは下の「レシートを読み取る」から写真で送れます。</p>
       </details>
+    </section>
+
+    <section class="receipt card" id="receipt-card" aria-labelledby="receipt-title" hidden>
+      <div class="card-head">
+        <h2 id="receipt-title" class="section-title">レシートを読み取る</h2>
+        <span class="head-note">合計金額・日付・お店を自動で記録</span>
+      </div>
+      <div id="receipt-drop" class="receipt-drop">
+        <div class="receipt-actions">
+          <button type="button" id="receipt-camera-btn" class="receipt-action">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.1l1.2-2h6.4l1.2 2h2.1A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12.8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+            <span>カメラで撮る</span>
+          </button>
+          <button type="button" id="receipt-library-btn" class="receipt-action">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="9" cy="10" r="1.6" fill="currentColor"/><path d="m4.5 17.5 5-5 3.5 3.5 2.5-2.5 4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+            <span>写真から選ぶ</span>
+          </button>
+        </div>
+        <input type="file" id="receipt-camera" accept="image/*" capture="environment" hidden>
+        <input type="file" id="receipt-library" accept="image/*" multiple hidden>
+        <p class="receipt-hint">PCでは画像をここにドラッグ＆ドロップするか、貼り付け（Ctrl+V）でも送れます。一度に <span id="receipt-max">5</span> 枚まで。</p>
+      </div>
+      <div id="receipt-thumbs" class="receipt-thumbs" hidden></div>
+      <div id="receipt-status" class="ai-status" role="status" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="receipt-status-text" class="ai-status-text"></span>
+        <button type="button" id="receipt-cancel" class="link-btn">中止</button>
+      </div>
+      <div id="receipt-results" class="receipt-results" hidden></div>
     </section>
 
     <section class="checkin card" id="checkin" aria-label="記録チェック"></section>

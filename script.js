@@ -70,12 +70,15 @@ const recCategory = $("rec-category");
 const reminderTimeInput = $("reminder-time");
 const notifyBtn = $("notify-btn");
 const notifyStatus = $("notify-status");
-const receiptBtn = $("receipt-btn");
-const receiptInput = $("receipt-input");
 const quickBtn = $("quick-btn");
-const aiStatus = $("ai-status");
-const aiStatusText = $("ai-status-text");
-const aiCancel = $("ai-cancel");
+const receiptCard = $("receipt-card");
+const receiptDrop = $("receipt-drop");
+const receiptCamera = $("receipt-camera");
+const receiptLibrary = $("receipt-library");
+const receiptCameraBtn = $("receipt-camera-btn");
+const receiptLibraryBtn = $("receipt-library-btn");
+const receiptThumbs = $("receipt-thumbs");
+const receiptResults = $("receipt-results");
 const syncStatus = $("sync-status");
 
 const yen = new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" });
@@ -716,8 +719,6 @@ $("copy-url-btn").addEventListener("click", async (e) => {
 
 /* ---------- Claude による読み取り (claude.ai 上のみ) ---------- */
 
-let aiCtl = null;
-
 function todayLine() {
   const t = new Date();
   return `${toDateStr(t)}（${WEEKDAYS[t.getDay()]}曜日）`;
@@ -744,44 +745,58 @@ function sanitizeAiEntries(list, source) {
     .filter(Boolean);
 }
 
-function setAiBusy(label) {
+// 読み取りの進み具合やエラーを出す場所。文章の入力欄とレシート欄でそれぞれ持つ
+function makePanel(prefix, buttons) {
+  const panel = { box: $(`${prefix}-status`), text: $(`${prefix}-status-text`), cancel: $(`${prefix}-cancel`), buttons, ctl: null };
+  panel.cancel.addEventListener("click", () => {
+    if (panel.ctl) panel.ctl.abort();
+    else clearAiError(panel);
+  });
+  return panel;
+}
+
+const quickPanel = makePanel("ai", [quickBtn]);
+const receiptPanel = makePanel("receipt", [receiptCameraBtn, receiptLibraryBtn]);
+
+function setAiBusy(panel, label) {
   const busy = Boolean(label);
-  aiStatus.hidden = !busy && !aiStatus.classList.contains("is-error");
   if (busy) {
-    aiStatus.classList.remove("is-error");
-    aiStatus.hidden = false;
-    aiStatusText.textContent = label;
-    aiCancel.textContent = "中止";
+    panel.box.classList.remove("is-error");
+    panel.box.hidden = false;
+    panel.text.textContent = label;
+    panel.cancel.textContent = "中止";
+  } else if (!panel.box.classList.contains("is-error")) {
+    panel.box.hidden = true;
   }
-  aiStatus.classList.toggle("is-busy", busy);
-  quickBtn.disabled = busy;
-  receiptBtn.disabled = busy;
+  panel.box.classList.toggle("is-busy", busy);
+  panel.buttons.forEach((b) => (b.disabled = busy));
 }
 
-function showAiError(message) {
-  aiStatus.classList.add("is-error");
-  aiStatus.classList.remove("is-busy");
-  aiStatus.hidden = false;
-  aiStatusText.textContent = message;
-  aiCancel.textContent = "閉じる";
+function showAiError(panel, message) {
+  panel.box.classList.add("is-error");
+  panel.box.classList.remove("is-busy");
+  panel.box.hidden = false;
+  panel.text.textContent = message;
+  panel.cancel.textContent = "閉じる";
 }
 
-function clearAiError() {
-  if (aiStatus.classList.contains("is-error")) {
-    aiStatus.classList.remove("is-error");
-    aiStatus.hidden = true;
+function clearAiError(panel) {
+  if (panel.box.classList.contains("is-error")) {
+    panel.box.classList.remove("is-error");
+    panel.box.hidden = true;
   }
 }
 
-function disableClaude(message) {
+function disableClaude(panel, message) {
   sample = null;
-  receiptBtn.hidden = true;
+  receiptCard.hidden = true;
   document.querySelectorAll(".ai-only").forEach((el) => (el.hidden = true));
   updateQuickPreview();
-  showAiError(message);
+  // レシート欄は隠れるので、メッセージは常に入力欄の下に出す
+  showAiError(quickPanel, message);
 }
 
-function handleAiError(e) {
+function handleAiError(panel, e) {
   switch (e?.code) {
     case "cancelled":
       return;
@@ -790,51 +805,46 @@ function handleAiError(e) {
     case "not_declared":
     case "capability_disabled":
     case "capability_removed":
-      disableClaude("Claude への読み取りが許可されていないため、この機能をオフにしました。決まった書き方（例: ランチ 800）なら記録できます。");
+      disableClaude(panel, "Claude への読み取りが許可されていないため、この機能をオフにしました。決まった書き方（例: ランチ 800）なら記録できます。");
       return;
     case "images_unavailable":
-      receiptBtn.hidden = true;
-      showAiError("この表示では写真を送れません。金額を文章で入力してください。");
+      receiptCard.hidden = true;
+      showAiError(quickPanel, "この表示では写真を送れません。金額を文章で入力してください。");
       return;
     case "image_rejected":
-      showAiError("この画像は読み取れませんでした。JPEG・PNG などの写真を選び直してください。");
+      showAiError(panel, "この画像は読み取れませんでした。JPEG・PNG などの写真を選び直してください。");
       return;
     case "rate_limited":
-      showAiError("Claude の利用が混み合っているか、上限に達しました。少し時間をおいてからもう一度送ってください。");
+      showAiError(panel, "Claude の利用が混み合っているか、上限に達しました。少し時間をおいてからもう一度送ってください。");
       return;
     case "session_expired":
-      showAiError("ログインの有効期限が切れました。claude.ai にログインし直してください。");
+      showAiError(panel, "ログインの有効期限が切れました。claude.ai にログインし直してください。");
       return;
     case "refused":
-      showAiError("この内容は読み取れませんでした。金額が分かるように書き直してください。");
+      showAiError(panel, "この内容は読み取れませんでした。別の写真や書き方で送り直してください。");
       return;
     default:
-      showAiError("読み取りに失敗しました。もう一度送ってください。");
+      showAiError(panel, "読み取りに失敗しました。もう一度送ってください。");
   }
 }
 
-async function runAi(label, prompt, options = {}) {
-  aiCtl?.abort();
+async function runAi(panel, label, prompt, options = {}) {
+  panel.ctl?.abort();
   const ctl = new AbortController();
-  aiCtl = ctl;
-  setAiBusy(label);
+  panel.ctl = ctl;
+  setAiBusy(panel, label);
   try {
     return await sample.json(prompt, { ...options, signal: ctl.signal, cache: false });
   } catch (e) {
-    handleAiError(e);
+    handleAiError(panel, e);
     return null;
   } finally {
-    if (aiCtl === ctl) {
-      aiCtl = null;
-      setAiBusy(null);
+    if (panel.ctl === ctl) {
+      panel.ctl = null;
+      setAiBusy(panel, null);
     }
   }
 }
-
-aiCancel.addEventListener("click", () => {
-  if (aiCtl) aiCtl.abort();
-  else clearAiError();
-});
 
 async function askClaudeText(text) {
   const prompt = `あなたは支出管理アプリの入力係です。次の文章に書かれた「お金を払った出来事」をすべて抜き出してください。
@@ -856,14 +866,14 @@ async function askClaudeText(text) {
 """
 ${text.slice(0, 2000)}
 """`;
-  const data = await runAi("Claude が読み取り中…", prompt, { modelTier: "quick" });
+  const data = await runAi(quickPanel, "Claude が読み取り中…", prompt, { modelTier: "quick" });
   if (!data) return null;
   const list = sanitizeAiEntries(data.entries);
   if (!list.length) {
-    showAiError(`支出を読み取れませんでした${data.reason ? `（${String(data.reason).slice(0, 80)}）` : ""}。金額が分かるように書いてください。`);
+    showAiError(quickPanel, `支出を読み取れませんでした${data.reason ? `（${String(data.reason).slice(0, 80)}）` : ""}。金額が分かるように書いてください。`);
     return null;
   }
-  clearAiError();
+  clearAiError(quickPanel);
   commitEntries(list, "Claude が ");
   return list;
 }
@@ -884,27 +894,94 @@ async function readReceipts(files) {
 
 返答は次の形の JSON だけ:
 {"entries":[{"date":"2026-01-31","category":"食費","amount":1280,"memo":"セブンイレブン"}],"skipped":[]}`;
-  const data = await runAi(`レシート${files.length > 1 ? `${files.length}枚` : ""}を読み取り中…`, prompt, { images: files, modelTier: "default" });
+  showReceiptThumbs(files);
+  receiptResults.hidden = true;
+  const data = await runAi(receiptPanel, `レシート${files.length > 1 ? `${files.length}枚` : ""}を読み取り中…`, prompt, { images: files, modelTier: "default" });
+  showReceiptThumbs([]);
   if (!data) return;
   const list = sanitizeAiEntries(data.entries, "receipt");
   const skipped = Array.isArray(data.skipped) ? data.skipped.length : 0;
   if (!list.length) {
-    showAiError("レシートの金額を読み取れませんでした。明るい場所で、レシート全体が写るように撮り直してください。");
+    showAiError(receiptPanel, "レシートの金額を読み取れませんでした。明るい場所で、レシート全体が写るように撮り直してください。");
     return;
   }
-  clearAiError();
+  clearAiError(receiptPanel);
   commitEntries(list, "レシートから ");
-  if (skipped) showAiError(`${skipped}枚は読み取れなかったため記録していません。`);
+  showReceiptResults(list);
+  if (skipped) showAiError(receiptPanel, `${skipped}枚は読み取れなかったため記録していません。`);
 }
 
-receiptBtn.addEventListener("click", () => receiptInput.click());
+// 読み取り中は、送った写真を小さく並べて見せる
+function showReceiptThumbs(files) {
+  receiptThumbs.querySelectorAll("img").forEach((img) => URL.revokeObjectURL(img.src));
+  receiptThumbs.innerHTML = "";
+  files.forEach((f) => {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(f);
+    img.alt = "送ったレシートの写真";
+    receiptThumbs.append(img);
+  });
+  receiptThumbs.hidden = files.length === 0;
+}
 
-receiptInput.addEventListener("change", () => {
-  const files = [...receiptInput.files];
-  receiptInput.value = "";
-  if (!files.length || !sample) return;
+// 読み取って記録した内容を、次に読み取るまでこの欄に残しておく
+function showReceiptResults(list) {
+  receiptResults.innerHTML = `
+    <p class="receipt-results-head"><span class="checkin-mark" aria-hidden="true">✓</span>${list.length}件を記録しました<strong>${yen.format(total(list))}</strong></p>
+    <ul class="receipt-result-list">
+      ${list
+        .map(
+          (e) => `
+        <li>
+          <span class="cat-icon" aria-hidden="true">${iconFor(e.category)}</span>
+          <div class="entry-content">
+            <strong>${escapeHtml(e.memo || e.category)}</strong>
+            <span>${shortDate(e.date)}・${escapeHtml(e.category)}</span>
+          </div>
+          <span class="entry-amount">${yen.format(e.amount)}</span>
+        </li>`
+        )
+        .join("")}
+    </ul>
+    <p class="receipt-results-note">金額やカテゴリが違うときは、履歴の ✕ で消して入力し直してください。</p>`;
+  receiptResults.hidden = false;
+}
+
+function sendReceiptFiles(fileList) {
+  const files = [...fileList].filter((f) => f.type.startsWith("image/"));
+  if (!files.length || !sample || receiptPanel.ctl) return;
   if (files.length > maxImages) showToast(`一度に送れるのは${maxImages}枚までです。最初の${maxImages}枚を読み取ります`);
   readReceipts(files.slice(0, maxImages));
+}
+
+receiptCameraBtn.addEventListener("click", () => receiptCamera.click());
+receiptLibraryBtn.addEventListener("click", () => receiptLibrary.click());
+[receiptCamera, receiptLibrary].forEach((input) =>
+  input.addEventListener("change", () => {
+    const files = [...input.files];
+    input.value = "";
+    sendReceiptFiles(files);
+  })
+);
+
+// PC では画像のドラッグ＆ドロップや貼り付けでも送れる
+receiptDrop.addEventListener("dragover", (e) => {
+  if (!sample) return;
+  e.preventDefault();
+  receiptDrop.classList.add("is-dragover");
+});
+receiptDrop.addEventListener("dragleave", () => receiptDrop.classList.remove("is-dragover"));
+receiptDrop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  receiptDrop.classList.remove("is-dragover");
+  sendReceiptFiles(e.dataTransfer?.files ?? []);
+});
+document.addEventListener("paste", (e) => {
+  if (receiptCard.hidden) return;
+  const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  sendReceiptFiles(files);
 });
 
 async function connectClaude() {
@@ -914,8 +991,12 @@ async function connectClaude() {
   const caps = await s.limits().catch(() => null);
   if (caps?.images) {
     maxImages = caps.images.maxCount || 1;
-    receiptInput.accept = caps.images.mediaTypes.join(",");
-    receiptBtn.hidden = false;
+    const accept = caps.images.mediaTypes.join(",");
+    receiptCamera.accept = accept;
+    receiptLibrary.accept = accept;
+    receiptLibrary.multiple = maxImages > 1;
+    $("receipt-max").textContent = maxImages;
+    receiptCard.hidden = false;
   }
   document.querySelectorAll(".ai-only").forEach((el) => (el.hidden = false));
   quickInput.placeholder = "ランチ 800 / 昨日スタバで650円 など自由に";
@@ -1116,13 +1197,17 @@ function renderSummary(monthEntries, planned) {
 
   let budgetBlock;
   if (meta.budget > 0) {
-    const pct = Math.round((spent / meta.budget) * 100);
-    const remaining = meta.budget - spent;
+    // 固定費はその日が来る前から「使うことが決まったお金」として予算から差し引く
+    const committed = spent + plannedSum;
+    const pct = Math.round((committed / meta.budget) * 100);
+    const remaining = meta.budget - committed;
     const daysLeft = isCurrent ? daysInMonth(today) - today.getDate() + 1 : 0;
+    const planNote = plannedSum ? `<span class="note-sub">（固定費の予定 ${yen.format(plannedSum)} を差し引き済み）</span>` : "";
     let note;
-    if (remaining < 0) note = `予算を <strong class="is-over">${yen.format(-remaining)}</strong> 超えています`;
-    else if (isCurrent) note = `残り <strong>${yen.format(remaining)}</strong>・1日あたり ${yen.format(Math.floor(remaining / daysLeft))} まで`;
-    else note = `残り <strong>${yen.format(remaining)}</strong>`;
+    if (remaining < 0 && spent > meta.budget) note = `予算を <strong class="is-over">${yen.format(spent - meta.budget)}</strong> 超えています`;
+    else if (remaining < 0) note = `固定費の予定を含めると予算を <strong class="is-over">${yen.format(-remaining)}</strong> 超える見込みです`;
+    else if (isCurrent) note = `残り <strong>${yen.format(remaining)}</strong>・1日あたり ${yen.format(Math.floor(remaining / daysLeft))} まで${planNote}`;
+    else note = `残り <strong>${yen.format(remaining)}</strong>${planNote}`;
 
     // 使った分に続けて、これから引き落とされる固定費を斜線で示す
     const usedWidth = Math.min(100, (spent / meta.budget) * 100);
@@ -1132,7 +1217,7 @@ function renderSummary(monthEntries, planned) {
         <span class="meter-used" style="width:${usedWidth}%"></span>
         ${planWidth > 0 ? `<span class="meter-plan" style="width:${planWidth}%"></span>` : ""}
       </div>
-      <p class="meter-note"><span>${note}</span><span>予算 ${yen.format(meta.budget)} の ${pct}%</span></p>`;
+      <p class="meter-note"><span>${note}</span><span>予算 ${yen.format(meta.budget)} の ${pct}%${plannedSum ? "（予定を含む）" : ""}</span></p>`;
   } else {
     budgetBlock = `<p class="meter-note"><button type="button" class="link-btn" id="set-budget-btn">月の予算を設定する</button></p>`;
   }
@@ -1171,28 +1256,37 @@ function renderSummary(monthEntries, planned) {
 }
 
 // カテゴリ別の支出を多い順に並べ、割合を横棒で表示する
-function renderBreakdown(monthEntries) {
+// まだ引き落とされていない固定費も、そのカテゴリに斜線の部分として含める
+function renderBreakdown(monthEntries, planned) {
   const totals = {};
-  monthEntries.forEach((e) => {
-    totals[e.category] = (totals[e.category] || 0) + e.amount;
-  });
+  const add = (e, key) => {
+    totals[e.category] ??= { spent: 0, planned: 0 };
+    totals[e.category][key] += e.amount;
+  };
+  monthEntries.forEach((e) => add(e, "spent"));
+  planned.forEach((e) => add(e, "planned"));
 
-  const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-  const sum = rows.reduce((s, [, v]) => s + v, 0);
-  const max = rows.length ? rows[0][1] : 0;
+  const rows = Object.entries(totals)
+    .map(([cat, t]) => ({ cat, ...t, total: t.spent + t.planned }))
+    .sort((a, b) => b.total - a.total);
+  const sum = rows.reduce((s, r) => s + r.total, 0);
+  const max = rows.length ? rows[0].total : 0;
 
   breakdownEmpty.hidden = rows.length > 0;
   breakdownList.innerHTML = rows
     .map(
-      ([cat, value]) => `
+      (r) => `
         <li class="breakdown-row">
-          <span class="cat-icon" aria-hidden="true">${iconFor(cat)}</span>
+          <span class="cat-icon" aria-hidden="true">${iconFor(r.cat)}</span>
           <div class="breakdown-main">
             <div class="breakdown-top">
-              <span class="breakdown-cat">${escapeHtml(cat)}</span>
-              <span class="breakdown-val">${yen.format(value)}<small>${Math.round((value / sum) * 100)}%</small></span>
+              <span class="breakdown-cat">${escapeHtml(r.cat)}${r.planned ? `<span class="breakdown-plan">うち予定 ${yen.format(r.planned)}</span>` : ""}</span>
+              <span class="breakdown-val">${yen.format(r.total)}<small>${Math.round((r.total / sum) * 100)}%</small></span>
             </div>
-            <span class="breakdown-bar"><span style="width:${(value / max) * 100}%"></span></span>
+            <span class="breakdown-bar">
+              <span class="bar-spent" style="width:${(r.spent / max) * 100}%"></span>
+              ${r.planned ? `<span class="bar-plan" style="width:${(r.planned / max) * 100}%"></span>` : ""}
+            </span>
           </div>
         </li>
       `
@@ -1373,7 +1467,7 @@ function render() {
   renderCalendar(monthEntries, planned);
   renderCheckin();
   renderSummary(monthEntries, planned);
-  renderBreakdown(monthEntries);
+  renderBreakdown(monthEntries, planned);
   renderList(monthEntries, planned);
   renderRecurring();
   renderReminder();
