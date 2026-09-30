@@ -207,15 +207,83 @@ select:focus-visible {
 
 /* クイック入力 */
 
-.quick {
-  padding: 0.9rem;
+/* 入力ハブ: いちばん上に置き、開いてすぐ入力できるようにする */
+
+.entry-hub {
+  padding: 0.5rem 0.9rem 0.95rem;
+  border-width: 1.5px;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.entry-hub.is-editing {
+  border-color: var(--accent);
+  box-shadow: var(--ring), var(--shadow);
+}
+
+.hub-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 -0.2rem 0.75rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: var(--sunken);
+}
+
+.hub-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.3rem;
+  padding: 0 0.6rem;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.hub-tab:hover {
+  color: var(--ink);
+}
+
+.hub-tab[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.hub-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.edit-banner .link-btn {
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .quick-form {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.3rem 0.3rem 0.3rem 0.8rem;
+  padding: 0.3rem 0.3rem 0.3rem 1rem;
   border: 1.5px solid var(--line);
   border-radius: 999px;
   background: var(--sunken);
@@ -238,10 +306,6 @@ select:focus-visible {
   75% { transform: translateX(4px); }
 }
 
-.quick-icon {
-  flex-shrink: 0;
-  color: var(--accent);
-}
 
 .quick-form input {
   flex: 1;
@@ -904,7 +968,7 @@ code {
 }
 
 .meter-note strong.is-over,
-.summary-split dd.is-up {
+.stat-row dd.is-up {
   color: var(--expense);
 }
 
@@ -912,26 +976,58 @@ code {
   margin: 0;
 }
 
-.summary-split {
+/* 立て替え・奢り・1日平均・前月比を1列に並べる (狭い画面では2列) */
+.stat-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
-.summary-split dt {
-  font-size: 0.78rem;
+.stat-row > div {
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+}
+
+.stat-row > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.stat-row dt {
+  font-size: 0.72rem;
   color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.summary-split dd {
+.stat-row dd {
   margin: 0.1rem 0 0;
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+.stat-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+.stat-link:hover {
+  text-decoration-color: var(--accent);
+}
+
+.budget {
+  margin-bottom: 0.2rem;
+}
+
+.meter-pct {
+  font-variant-numeric: tabular-nums;
 }
 
 
@@ -1181,9 +1277,45 @@ code {
   height: 2.9rem;
 }
 
-.entry-form.is-editing {
-  border-color: var(--accent);
-  box-shadow: var(--ring), var(--shadow);
+/* 割り勘・立て替え と 奢り の切り替え */
+.share-type {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: var(--sunken);
+}
+
+.share-type label {
+  position: relative;
+}
+
+.share-type input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.share-type span {
+  display: block;
+  padding: 0.4rem 0.5rem;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.share-type input:checked + span {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.share-type input:focus-visible + span {
+  box-shadow: var(--ring);
 }
 
 .submit-btn {
@@ -1525,7 +1657,12 @@ code {
   color: var(--ink-soft);
 }
 
-.tag--payee {
+.tag--split {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tag--treat {
   background: var(--warn-soft);
   color: var(--ink);
 }
@@ -2125,5 +2262,123 @@ code {
 
   .quick-btn {
     padding: 0 0.9rem;
+  }
+}
+
+/* 立て替え・奢り (相手ごと) */
+
+.people-totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.people-total {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.people-total.is-split {
+  background: var(--accent-soft);
+}
+
+.people-total.is-treat {
+  background: var(--warn-soft);
+}
+
+.people-total span {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.people-total strong {
+  font-size: 1.3rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.people-total small {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.people-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.people-table th,
+.people-table td {
+  padding: 0.5rem 0.7rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.people-table th:first-child {
+  text-align: left;
+}
+
+.people-table thead th {
+  background: var(--sunken);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.people-table tbody tr + tr,
+.people-table tbody tr:first-child,
+.people-table tfoot tr {
+  border-top: 1px solid var(--line);
+}
+
+.people-table tbody th {
+  font-weight: 600;
+}
+
+.people-table tfoot {
+  background: var(--sunken);
+  font-weight: 700;
+}
+
+.people-table .zero {
+  color: var(--ink-faint);
+}
+
+.history-hint {
+  margin: -0.4rem 0 0.8rem;
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 480px) {
+  .stat-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stat-row > div:nth-child(3) {
+    border-left: none;
+  }
+
+  .stat-row > div:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .hub-tab {
+    font-size: 0.8rem;
+    padding: 0 0.3rem;
   }
 }

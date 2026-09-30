@@ -20,6 +20,140 @@
       </nav>
     </header>
 
+    <section class="entry-hub card" id="entry-hub" aria-label="支出を記録">
+      <div class="hub-tabs" role="tablist" aria-label="入力方法">
+        <button type="button" role="tab" id="tab-quick" class="hub-tab" data-tab="quick" aria-controls="panel-quick" aria-selected="true">
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M11.5 2 4 11h5l-1 7 7.5-9h-5z" fill="currentColor"/></svg>ひとこと
+        </button>
+        <button type="button" role="tab" id="tab-receipt" class="hub-tab" data-tab="receipt" aria-controls="panel-receipt" aria-selected="false" hidden>
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.1l1.2-2h6.4l1.2 2h2.1A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12.8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>レシート
+        </button>
+        <button type="button" role="tab" id="tab-form" class="hub-tab" data-tab="form" aria-controls="entry-form" aria-selected="false">
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 5.5h12M4 10h12M4 14.5h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>フォーム
+        </button>
+      </div>
+
+      <div class="hub-panel" id="panel-quick" role="tabpanel" aria-labelledby="tab-quick">
+        <form id="quick-form" class="quick-form" autocomplete="off">
+          <input type="text" id="quick-input" placeholder="ランチ 800 / 昨日 電車 320 / 飲み会 6000 自分2000" aria-label="支出をひとことで入力" aria-describedby="quick-preview" enterkeyhint="done">
+          <kbd class="quick-kbd" title="どこからでも / キーでここに移動">/</kbd>
+          <button type="submit" class="quick-btn" id="quick-btn">追加</button>
+        </form>
+        <div id="quick-preview" class="quick-preview" aria-live="polite"></div>
+        <div id="ai-status" class="ai-status" role="status" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="ai-status-text" class="ai-status-text"></span>
+          <button type="button" id="ai-cancel" class="link-btn">中止</button>
+        </div>
+        <details class="quick-help">
+          <summary>書き方の例</summary>
+          <div class="help-scroll">
+            <table>
+              <tr><td><code>ランチ 800</code></td><td>今日の食費 ¥800（メモ: ランチ）</td></tr>
+              <tr><td><code>昨日 電車 320</code></td><td>昨日の交通費。<code>一昨日</code> <code>3日前</code> <code>9/25</code> <code>25日</code> も可</td></tr>
+              <tr><td><code>家賃 4.2万</code></td><td><code>万</code> <code>千</code> <code>k</code> <code>円</code> を使った金額</td></tr>
+              <tr><td><code>コンビニ 450、本 1200</code></td><td>「、」や改行で区切ると複数件まとめて追加</td></tr>
+              <tr><td><code>飲み会 6000 自分2000</code></td><td>割り勘（立て替え）。自分の分を指定（<code>うち2000</code> も可）</td></tr>
+              <tr><td><code>ランチ 3000 3人</code></td><td>人数で割って自分の分を計算（<code>割り勘</code> だけなら2人）</td></tr>
+              <tr><td><code>後輩に奢り 焼肉 8000 2人</code></td><td>奢り。<code>奢り</code> <code>おごり</code> で指定。人数がなければ全額が相手の分</td></tr>
+              <tr><td><code>家族の分 弁当 1200</code></td><td>「〜の分」は全額が相手の分の立て替え、「〜に」は奢り</td></tr>
+            </table>
+          </div>
+          <p>カテゴリは「コンビニ」「電車」などの言葉から、相手は「友達」「家族」「彼女」「会社」などの言葉から判定します。</p>
+          <p class="ai-only" hidden>形に当てはまらない文章（例:「昨日スタバで650円、帰りにドラッグストアで1,280円」）は Claude が読み取って記録します。</p>
+        </details>
+      </div>
+
+      <div class="hub-panel" id="panel-receipt" role="tabpanel" aria-labelledby="tab-receipt" hidden>
+        <div id="receipt-drop" class="receipt-drop">
+          <div class="receipt-actions">
+            <button type="button" id="receipt-camera-btn" class="receipt-action">
+              <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.1l1.2-2h6.4l1.2 2h2.1A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12.8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+              <span>カメラで撮る</span>
+            </button>
+            <button type="button" id="receipt-library-btn" class="receipt-action">
+              <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="9" cy="10" r="1.6" fill="currentColor"/><path d="m4.5 17.5 5-5 3.5 3.5 2.5-2.5 4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+              <span>写真から選ぶ</span>
+            </button>
+          </div>
+          <input type="file" id="receipt-camera" accept="image/*" capture="environment" hidden>
+          <input type="file" id="receipt-library" accept="image/*" multiple hidden>
+          <p class="receipt-hint">合計金額・日付・お店を読み取って自動で記録します。PCではドラッグ＆ドロップや貼り付け（Ctrl+V）も可。一度に <span id="receipt-max">5</span> 枚まで。</p>
+        </div>
+        <div id="receipt-thumbs" class="receipt-thumbs" hidden></div>
+        <div id="receipt-status" class="ai-status" role="status" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="receipt-status-text" class="ai-status-text"></span>
+          <button type="button" id="receipt-cancel" class="link-btn">中止</button>
+        </div>
+        <div id="receipt-results" class="receipt-results" hidden></div>
+      </div>
+
+      <form id="entry-form" class="hub-panel entry-form" role="tabpanel" aria-labelledby="tab-form" hidden>
+        <div id="edit-banner" class="edit-banner" hidden>
+          <span id="form-title">記録を変更</span>
+          <button type="button" id="cancel-edit" class="link-btn">やめる</button>
+        </div>
+        <label class="amount-field">
+          <span class="amount-prefix" aria-hidden="true">¥</span>
+          <input type="number" id="amount" placeholder="0" min="1" step="1" inputmode="numeric" required aria-label="支払った金額">
+        </label>
+
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">日付</span>
+            <input type="date" id="date" required>
+          </label>
+          <label class="field">
+            <span class="field-label">カテゴリ</span>
+            <select id="category" required></select>
+          </label>
+          <label class="field field--wide">
+            <span class="field-label">メモ</span>
+            <input type="text" id="memo" placeholder="任意" maxlength="60">
+          </label>
+        </div>
+
+        <details class="split-box" id="split-box">
+          <summary>割り勘・奢り（人の分も払った）</summary>
+          <div class="split-body">
+            <div class="share-type" role="radiogroup" aria-label="種類">
+              <label><input type="radio" name="share-type" value="split" checked><span>🤝 割り勘・立て替え</span></label>
+              <label><input type="radio" name="share-type" value="treat"><span>🎁 奢り</span></label>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span class="field-label">そのうち自分の分</span>
+                <span class="yen-field">
+                  <span aria-hidden="true">¥</span>
+                  <input type="number" id="my-amount" min="0" step="1" inputmode="numeric" placeholder="例: 500">
+                </span>
+              </label>
+              <label class="field">
+                <span class="field-label">誰の分？</span>
+                <select id="for-whom"></select>
+              </label>
+            </div>
+            <div class="split-quick" role="group" aria-label="人数で割って自分の分を入れる">
+              <span class="split-quick-label">人数で割る</span>
+              <button type="button" class="chip-btn" data-split="2">2人</button>
+              <button type="button" class="chip-btn" data-split="3">3人</button>
+              <button type="button" class="chip-btn" data-split="4">4人</button>
+              <button type="button" class="chip-btn" data-split="5">5人</button>
+              <button type="button" class="chip-btn" data-split="0">全額 相手の分</button>
+            </div>
+            <p id="split-calc" class="split-calc" aria-live="polite"></p>
+          </div>
+        </details>
+
+        <button type="submit" class="submit-btn" id="submit-btn">支出を追加</button>
+      </form>
+    </section>
+
+    <section class="checkin card" id="checkin" aria-label="記録チェック"></section>
+
+    <section class="summary card" id="summary" aria-live="polite"></section>
+
     <section class="calendar card" aria-labelledby="calendar-title">
       <div class="card-head">
         <h2 id="calendar-title" class="section-title">カレンダー</h2>
@@ -30,77 +164,24 @@
       </div>
       <div id="cal-grid" class="cal-grid"></div>
       <ul class="cal-legend" aria-label="凡例">
-        <li><span class="legend-swatch is-spend" aria-hidden="true"></span>支出（多いほど濃い）</li>
+        <li><span class="legend-swatch is-spend" aria-hidden="true"></span>支払額（多いほど濃い）</li>
         <li><span class="legend-swatch is-plan" aria-hidden="true"></span>予定（固定費）</li>
         <li><span class="legend-dot" aria-hidden="true"></span>未記録</li>
       </ul>
     </section>
 
-    <section class="quick card" aria-label="クイック入力">
-      <form id="quick-form" class="quick-form" autocomplete="off">
-        <svg class="quick-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M11.5 2 4 11h5l-1 7 7.5-9h-5z" fill="currentColor"/></svg>
-        <input type="text" id="quick-input" placeholder="ランチ 800 / 昨日 電車 320 / 家賃 4.2万" aria-label="クイック入力" aria-describedby="quick-preview" enterkeyhint="done">
-        <kbd class="quick-kbd" title="どこからでも / キーでここに移動">/</kbd>
-        <button type="submit" class="quick-btn" id="quick-btn">追加</button>
-      </form>
-      <div id="quick-preview" class="quick-preview" aria-live="polite"></div>
-      <div id="ai-status" class="ai-status" role="status" hidden>
-        <span class="spinner" aria-hidden="true"></span>
-        <span id="ai-status-text" class="ai-status-text"></span>
-        <button type="button" id="ai-cancel" class="link-btn">中止</button>
-      </div>
-      <details class="quick-help">
-        <summary>書き方の例</summary>
-        <table>
-          <tr><td><code>ランチ 800</code></td><td>今日の食費 ¥800（メモ: ランチ）</td></tr>
-          <tr><td><code>昨日 電車 320</code></td><td>昨日の交通費。<code>一昨日</code> <code>3日前</code> <code>9/25</code> <code>25日</code> も可</td></tr>
-          <tr><td><code>家賃 4.2万</code></td><td><code>万</code> <code>千</code> <code>k</code> <code>円</code> を使った金額</td></tr>
-          <tr><td><code>コンビニ 450、本 1200</code></td><td>「、」や改行で区切ると複数件まとめて追加</td></tr>
-          <tr><td><code>飲み会 6000 自分2000</code></td><td>割り勘などで自分の分を指定（<code>うち2000</code> も可）</td></tr>
-          <tr><td><code>ランチ 3000 3人</code></td><td>人数で割って自分の分を計算（<code>割り勘</code> だけなら2人）</td></tr>
-          <tr><td><code>家族の分 弁当 1200</code></td><td>「〜に」「〜の分」は全額が相手の分。相手は 友人・家族・パートナー・職場 から判定</td></tr>
-        </table>
-        <p>カテゴリ名（食費・日用品など）のほか、「コンビニ」「電車」「家賃」などの言葉からも自動で判定します。判定できないときは「その他」になります。</p>
-        <p class="ai-only" hidden>上の形に当てはまらない文章（例:「昨日スタバで650円、帰りにドラッグストアで1,280円」）は Claude が読み取って記録します。レシートは下の「レシートを読み取る」から写真で送れます。</p>
-      </details>
-    </section>
-
-    <section class="receipt card" id="receipt-card" aria-labelledby="receipt-title" hidden>
+    <section class="people card" aria-labelledby="people-title">
       <div class="card-head">
-        <h2 id="receipt-title" class="section-title">レシートを読み取る</h2>
-        <span class="head-note">合計金額・日付・お店を自動で記録</span>
+        <h2 id="people-title" class="section-title">立て替え・奢り</h2>
+        <span class="head-note">相手ごとの合計（人の分として払った金額）</span>
       </div>
-      <div id="receipt-drop" class="receipt-drop">
-        <div class="receipt-actions">
-          <button type="button" id="receipt-camera-btn" class="receipt-action">
-            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.1l1.2-2h6.4l1.2 2h2.1A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12.8" r="3.3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
-            <span>カメラで撮る</span>
-          </button>
-          <button type="button" id="receipt-library-btn" class="receipt-action">
-            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="9" cy="10" r="1.6" fill="currentColor"/><path d="m4.5 17.5 5-5 3.5 3.5 2.5-2.5 4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-            <span>写真から選ぶ</span>
-          </button>
-        </div>
-        <input type="file" id="receipt-camera" accept="image/*" capture="environment" hidden>
-        <input type="file" id="receipt-library" accept="image/*" multiple hidden>
-        <p class="receipt-hint">PCでは画像をここにドラッグ＆ドロップするか、貼り付け（Ctrl+V）でも送れます。一度に <span id="receipt-max">5</span> 枚まで。</p>
-      </div>
-      <div id="receipt-thumbs" class="receipt-thumbs" hidden></div>
-      <div id="receipt-status" class="ai-status" role="status" hidden>
-        <span class="spinner" aria-hidden="true"></span>
-        <span id="receipt-status-text" class="ai-status-text"></span>
-        <button type="button" id="receipt-cancel" class="link-btn">中止</button>
-      </div>
-      <div id="receipt-results" class="receipt-results" hidden></div>
+      <div id="people-body"></div>
     </section>
-
-    <section class="checkin card" id="checkin" aria-label="記録チェック"></section>
-
-    <section class="summary card" id="summary" aria-live="polite"></section>
 
     <section class="breakdown card" aria-labelledby="breakdown-title">
       <div class="card-head">
         <h2 id="breakdown-title" class="section-title">カテゴリ別</h2>
+        <span class="head-note">自分のための支出</span>
       </div>
       <ul id="breakdown-list" class="breakdown-list"></ul>
       <p id="breakdown-empty" class="muted" hidden>この月の支出はまだありません。</p>
@@ -114,70 +195,13 @@
           <button type="button" id="sort-btn" class="sort-btn"></button>
         </div>
       </div>
+      <p class="history-hint">記録を押すと内容を変更できます。</p>
       <div id="entry-groups"></div>
       <div id="empty-message" class="empty-state" hidden>
         <span class="empty-icon" aria-hidden="true">📒</span>
-        <p>この月の記録はまだありません。<br>上の入力欄から追加してみましょう。</p>
+        <p>この月の記録はまだありません。<br>いちばん上の入力欄から追加してみましょう。</p>
       </div>
     </section>
-
-    <form id="entry-form" class="entry-form card">
-      <div class="card-head">
-        <h2 id="form-title" class="section-title">フォームで入力</h2>
-      </div>
-      <label class="amount-field">
-        <span class="amount-prefix" aria-hidden="true">¥</span>
-        <input type="number" id="amount" placeholder="0" min="1" step="1" inputmode="numeric" required aria-label="金額">
-      </label>
-
-      <div class="field-grid">
-        <label class="field">
-          <span class="field-label">日付</span>
-          <input type="date" id="date" required>
-        </label>
-        <label class="field">
-          <span class="field-label">カテゴリ</span>
-          <select id="category" required></select>
-        </label>
-        <label class="field field--wide">
-          <span class="field-label">メモ</span>
-          <input type="text" id="memo" placeholder="任意" maxlength="60">
-        </label>
-      </div>
-
-      <details class="split-box" id="split-box">
-        <summary>割り勘・人の分も払った</summary>
-        <div class="split-body">
-          <div class="field-grid">
-            <label class="field">
-              <span class="field-label">そのうち自分の分</span>
-              <span class="yen-field">
-                <span aria-hidden="true">¥</span>
-                <input type="number" id="my-amount" min="0" step="1" inputmode="numeric" placeholder="例: 500">
-              </span>
-            </label>
-            <label class="field">
-              <span class="field-label">誰のために払った？</span>
-              <select id="for-whom"></select>
-            </label>
-          </div>
-          <div class="split-quick" role="group" aria-label="人数で割って自分の分を入れる">
-            <span class="split-quick-label">人数で割る</span>
-            <button type="button" class="chip-btn" data-split="2">2人</button>
-            <button type="button" class="chip-btn" data-split="3">3人</button>
-            <button type="button" class="chip-btn" data-split="4">4人</button>
-            <button type="button" class="chip-btn" data-split="5">5人</button>
-            <button type="button" class="chip-btn" data-split="0">全額 人の分</button>
-          </div>
-          <p id="split-calc" class="split-calc" aria-live="polite"></p>
-        </div>
-      </details>
-
-      <div class="form-actions">
-        <button type="button" id="cancel-edit" class="secondary-btn" hidden>キャンセル</button>
-        <button type="submit" class="submit-btn" id="submit-btn">支出を追加</button>
-      </div>
-    </form>
 
     <details class="settings card" id="settings">
       <summary><span>予算・固定費・リマインダーの設定</span></summary>

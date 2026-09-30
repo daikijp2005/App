@@ -3,7 +3,7 @@
 // 「、」「;」または改行で区切ると、複数件をまとめて入力できる
 
 const CATEGORY_ALIASES = {
-  食費: ["ランチ", "昼", "昼食", "昼ごはん", "朝食", "朝ごはん", "夕食", "晩ごはん", "夜ごはん", "ご飯", "ごはん", "飯", "コンビニ", "スーパー", "カフェ", "コーヒー", "外食", "弁当", "お弁当", "飲み物", "お菓子", "おやつ", "パン", "食材"],
+  食費: ["ランチ", "昼", "昼食", "昼ごはん", "朝食", "朝ごはん", "夕食", "晩ごはん", "夜ごはん", "ご飯", "ごはん", "飯", "コンビニ", "スーパー", "カフェ", "コーヒー", "外食", "弁当", "お弁当", "飲み物", "お菓子", "おやつ", "パン", "食材", "焼肉", "寿司", "ラーメン", "うどん", "そば", "カレー", "ディナー", "ファミレス", "マック"],
   日用品: ["ドラッグストア", "ドラスト", "洗剤", "ティッシュ", "トイレットペーパー", "シャンプー", "100均", "百均", "雑貨"],
   交通費: ["電車", "バス", "タクシー", "定期", "suica", "pasmo", "icoca", "切符", "新幹線", "ガソリン", "駐車場", "駐輪場"],
   住居費: ["家賃", "管理費", "更新料"],
@@ -22,11 +22,14 @@ const PAYEE_ALIASES = {
   "職場・仕事": ["職場", "会社", "同僚", "上司", "部下", "仕事", "取引先"],
 };
 
-// 「友達の分」「家族に」のように相手のために払ったときは forThem、「友達と」のように一緒のときは false
+// 相手を表す言葉を探す。「友達の分」は全額が相手の分の立て替え、「家族に」「上司のため」は奢り、
+// 「友達と」は一緒にいただけ (割り勘の人数などがなければ自分の支出)
 function matchPayee(token) {
   const m = token.match(/^(.+?)(の分|のため|に|へ|と)?$/);
   for (const [payee, words] of Object.entries(PAYEE_ALIASES)) {
-    if (words.includes(m[1])) return { payee, forThem: Boolean(m[2]) && m[2] !== "と" };
+    if (!words.includes(m[1])) continue;
+    const suffix = m[2] || "";
+    return { payee, forThem: suffix === "の分", treat: ["に", "へ", "のため"].includes(suffix) };
   }
   return null;
 }
@@ -115,10 +118,18 @@ function parseCommand(input, today = new Date()) {
   let people = 0;
   let payee = null;
   let forThem = false;
+  let treat = false;
   let expectMy = false;
   const words = [];
 
-  for (const token of tokens) {
+  for (let token of tokens) {
+    // 奢り:「奢り」「おごった」、または「後輩に奢り」のように相手とつながった形
+    const t = token.match(/^(.*?)(奢り|おごり|奢った|おごった|奢る|おごる|奢)$/);
+    if (t) {
+      treat = true;
+      if (!t[1]) continue;
+      token = t[1];
+    }
     // 自分の分:「自分500」「うち500」「自分の分 500」(金額と離れていてもよい)
     const my = token.match(/^(?:自分の分|自分|うち)[:：]?(.*)$/);
     if (my) {
@@ -155,6 +166,7 @@ function parseCommand(input, today = new Date()) {
     if (p) {
       payee = p.payee;
       forThem = p.forThem;
+      treat = treat || p.treat;
       continue;
     }
     if (!date) {
@@ -190,15 +202,16 @@ function parseCommand(input, today = new Date()) {
   const errors = [];
   if (!amount || amount <= 0) errors.push("金額が見つかりません");
 
-  // 自分の分: 直接書いた金額 → 人数で割った金額 → 「〜の分」「〜に」なら全額が相手の分
+  // 自分の分: 直接書いた金額 → 人数で割った金額 → 奢りや「〜の分」なら全額が相手の分
   let mine = null;
   if (amount) {
     if (myAmount !== null) mine = myAmount;
     else if (people >= 2) mine = Math.round(amount / people);
-    else if (payee && forThem) mine = 0;
+    else if (treat || (payee && forThem)) mine = 0;
   }
   if (mine !== null && mine > amount) errors.push("自分の分が合計より多くなっています");
-  const share = mine !== null && mine < amount ? { myAmount: mine, forWhom: payee || "友人" } : {};
+  const share =
+    mine !== null && mine < amount ? { myAmount: mine, forWhom: payee || "友人", shareType: treat ? "treat" : "split" } : {};
 
   return {
     ok: errors.length === 0,

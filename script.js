@@ -42,12 +42,28 @@ function othersShare(e) {
   return e.amount - myShare(e);
 }
 
-// 自分の分と相手を、形を整えてから記録に付ける (全額自分の分なら何も付けない)
-function withShare(entry, myAmount, forWhom) {
-  const { myAmount: _m, forWhom: _f, ...rest } = entry;
+// 人の分の払い方: 割り勘・立て替え (あとで返してもらう分) と 奢り (返してもらわない分)
+const SHARE_TYPES = {
+  split: { label: "割り勘・立て替え", short: "立て替え", icon: "🤝" },
+  treat: { label: "奢り", short: "奢り", icon: "🎁" },
+};
+
+// 人の分がある記録の払い方。以前の記録には shareType がないので割り勘として扱う
+function shareTypeOf(e) {
+  return e.shareType === "treat" ? "treat" : "split";
+}
+
+// 自分の分・相手・払い方を、形を整えてから記録に付ける (全額自分の分なら何も付けない)
+function withShare(entry, myAmount, forWhom, shareType) {
+  const { myAmount: _m, forWhom: _f, shareType: _t, ...rest } = entry;
   const mine = Math.round(Number(myAmount));
   if (myAmount === null || myAmount === undefined || myAmount === "" || !Number.isFinite(mine) || mine < 0 || mine >= rest.amount) return rest;
-  return { ...rest, myAmount: mine, forWhom: PAYEES[forWhom] ? forWhom : "その他" };
+  return {
+    ...rest,
+    myAmount: mine,
+    forWhom: PAYEES[forWhom] ? forWhom : "その他",
+    shareType: shareType === "treat" ? "treat" : "split",
+  };
 }
 
 // 以前のバージョンで記録した収入データは、画面には出さずにそのまま保存し続ける
@@ -98,7 +114,6 @@ const reminderTimeInput = $("reminder-time");
 const notifyBtn = $("notify-btn");
 const notifyStatus = $("notify-status");
 const quickBtn = $("quick-btn");
-const receiptCard = $("receipt-card");
 const receiptDrop = $("receipt-drop");
 const receiptCamera = $("receipt-camera");
 const receiptLibrary = $("receipt-library");
@@ -372,6 +387,8 @@ checkinBox.addEventListener("click", (e) => {
 
 // 日付を入れた状態でクイック入力に移動する (今日なら日付は省略)
 function focusQuickInput(date) {
+  if (editingId) endEdit();
+  setTab("quick");
   const prefix = date === toDateStr(new Date()) ? "" : `${Number(date.slice(5, 7))}/${Number(date.slice(8))} `;
   quickInput.value = prefix;
   updateQuickPreview();
@@ -627,7 +644,7 @@ $("ics-btn").addEventListener("click", downloadIcs);
 /* ---------- クイック入力 ---------- */
 
 function describeEntry(entry) {
-  const share = othersShare(entry) > 0 ? `（自分の分 ${yen.format(myShare(entry))}）` : "";
+  const share = othersShare(entry) > 0 ? `（${SHARE_TYPES[shareTypeOf(entry)].short}・自分の分 ${yen.format(myShare(entry))}）` : "";
   return `${iconFor(entry.category)} ${entry.category} ${yen.format(entry.amount)}${share}`;
 }
 
@@ -712,6 +729,7 @@ document.addEventListener("keydown", (e) => {
   const typing = e.target.closest("input, textarea, select, [contenteditable]");
   if ((e.key === "/" && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) {
     e.preventDefault();
+    setTab("quick");
     quickInput.focus();
     quickInput.select();
   }
@@ -768,7 +786,7 @@ function sanitizeAiEntries(list, source) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(fromDateStr(date).getTime()) || date > todayStr || date < oldest) date = todayStr;
       const category = CATEGORIES[raw?.category] ? raw.category : "その他";
       const memo = String(raw?.memo ?? "").trim().slice(0, 60);
-      return withShare({ date, category, amount, memo, ...(source ? { source } : {}) }, raw?.myAmount, raw?.forWhom);
+      return withShare({ date, category, amount, memo, ...(source ? { source } : {}) }, raw?.myAmount, raw?.forWhom, raw?.shareType);
     })
     .filter(Boolean);
 }
@@ -817,7 +835,7 @@ function clearAiError(panel) {
 
 function disableClaude(panel, message) {
   sample = null;
-  receiptCard.hidden = true;
+  setReceiptAvailable(false);
   document.querySelectorAll(".ai-only").forEach((el) => (el.hidden = true));
   updateQuickPreview();
   // レシート欄は隠れるので、メッセージは常に入力欄の下に出す
@@ -836,7 +854,7 @@ function handleAiError(panel, e) {
       disableClaude(panel, "Claude への読み取りが許可されていないため、この機能をオフにしました。決まった書き方（例: ランチ 800）なら記録できます。");
       return;
     case "images_unavailable":
-      receiptCard.hidden = true;
+      setReceiptAvailable(false);
       showAiError(quickPanel, "この表示では写真を送れません。金額を文章で入力してください。");
       return;
     case "image_rejected":
@@ -884,14 +902,16 @@ async function askClaudeText(text) {
 - amount は支払った金額（円、整数）。「1.2万」「3k」なども円に直す。
 - date は YYYY-MM-DD。書かれていなければ今日。「昨日」「先週の金曜」などは今日から計算する。未来の日付にはしない。
 - memo は店名や品名などを20文字以内で。なければ空文字。
-- 割り勘や、人の分も払った場合: amount は自分が実際に払った合計、myAmount はそのうち自分のための金額（円、整数）。
-  「3人で割り勘」なら amount ÷ 3、「自分の分は500円」ならその金額。人へのおごりやプレゼントなど全額が相手のためなら 0。
-  forWhom は誰のためか（${Object.keys(PAYEES).join("、")} から1つ）。全額が自分のためなら myAmount と forWhom は null。
+- 割り勘・立て替え・奢りなど人の分も払った場合: amount は自分が実際に払った合計、myAmount はそのうち自分のための金額（円、整数）。
+  「3人で割り勘」なら amount ÷ 3、「自分の分は500円」ならその金額。全額が相手のため（奢り・プレゼント・立て替え）なら 0。
+  forWhom は誰のためか（${Object.keys(PAYEES).join("、")} から1つ）。
+  shareType は、あとで返してもらう割り勘・立て替えなら "split"、奢り・プレゼントなど返してもらわないなら "treat"。
+  全額が自分のためなら myAmount・forWhom・shareType は null。
 - 収入・もらったお金・予定（まだ払っていないもの）は含めない。
 - 支出が1つも読み取れなければ entries を空にして、reason に短い理由を書く。
 
 返答は次の形の JSON だけ:
-{"entries":[{"date":"2026-01-31","category":"食費","amount":650,"memo":"スタバ","myAmount":null,"forWhom":null},{"date":"2026-01-31","category":"交際費","amount":6000,"memo":"飲み会","myAmount":2000,"forWhom":"友人"}],"reason":""}
+{"entries":[{"date":"2026-01-31","category":"食費","amount":650,"memo":"スタバ","myAmount":null,"forWhom":null,"shareType":null},{"date":"2026-01-31","category":"交際費","amount":6000,"memo":"飲み会","myAmount":2000,"forWhom":"友人","shareType":"split"},{"date":"2026-01-31","category":"食費","amount":3000,"memo":"後輩にランチ","myAmount":1000,"forWhom":"友人","shareType":"treat"}],"reason":""}
 
 文章:
 """
@@ -974,7 +994,7 @@ function showReceiptResults(list) {
         )
         .join("")}
     </ul>
-    <p class="receipt-results-note">金額やカテゴリが違うときは、履歴の ✕ で消して入力し直してください。</p>`;
+    <p class="receipt-results-note">金額やカテゴリが違うときは、履歴でその記録を押すと変更できます（割り勘・奢りの設定も可）。</p>`;
   receiptResults.hidden = false;
 }
 
@@ -1008,7 +1028,7 @@ receiptDrop.addEventListener("drop", (e) => {
   sendReceiptFiles(e.dataTransfer?.files ?? []);
 });
 document.addEventListener("paste", (e) => {
-  if (receiptCard.hidden) return;
+  if (!receiptAvailable) return;
   const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
   if (!files.length) return;
   e.preventDefault();
@@ -1027,7 +1047,9 @@ async function connectClaude() {
     receiptLibrary.accept = accept;
     receiptLibrary.multiple = maxImages > 1;
     $("receipt-max").textContent = maxImages;
-    receiptCard.hidden = false;
+    setReceiptAvailable(true);
+    // 前回レシートのタブを使っていたら、それを開き直す
+    if (loadJson(TAB_KEY, "quick") === "receipt" && !editingId) setTab("receipt", { remember: false });
   }
   document.querySelectorAll(".ai-only").forEach((el) => (el.hidden = false));
   quickInput.placeholder = "ランチ 800 / 昨日スタバで650円 など自由に";
@@ -1059,7 +1081,8 @@ function normalizeEntry(id, raw) {
       memo: String(raw.memo ?? "").slice(0, 60),
     },
     raw.myAmount,
-    raw.forWhom
+    raw.forWhom,
+    raw.shareType
   );
 }
 
@@ -1199,21 +1222,75 @@ function resetDateInput() {
   dateInput.value = monthKey(today) === monthKey(viewMonth) ? toDateStr(today) : toDateStr(viewMonth);
 }
 
-/* 割り勘・人の分 */
+/* 入力方法のタブ (ひとこと / レシート / フォーム) */
+
+const TAB_KEY = "household-budget-tab";
+const hubTabs = document.querySelectorAll(".hub-tab");
+const hubPanels = { quick: $("panel-quick"), receipt: $("panel-receipt"), form: form };
+let receiptAvailable = false;
+
+// 選んだタブを表示する。最後に使ったタブは、この端末だけの表示設定として覚えておく
+function setTab(name, { remember = true } = {}) {
+  if (name === "receipt" && !receiptAvailable) name = "quick";
+  hubTabs.forEach((t) => {
+    const on = t.dataset.tab === name;
+    t.setAttribute("aria-selected", on);
+    t.tabIndex = on ? 0 : -1;
+  });
+  Object.entries(hubPanels).forEach(([key, panel]) => (panel.hidden = key !== name));
+  if (remember) saveJson(TAB_KEY, name);
+}
+
+function setReceiptAvailable(on) {
+  receiptAvailable = on;
+  $("tab-receipt").hidden = !on;
+  if (!on && !hubPanels.receipt.hidden) setTab("quick");
+}
+
+hubTabs.forEach((t) =>
+  t.addEventListener("click", () => {
+    setTab(t.dataset.tab);
+    if (t.dataset.tab === "quick") quickInput.focus();
+    if (t.dataset.tab === "form" && !editingId) amountInput.focus();
+  })
+);
+
+// 左右キーでタブを移動できるようにする
+$("entry-hub").querySelector(".hub-tabs").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const visible = [...hubTabs].filter((t) => !t.hidden);
+  const i = visible.indexOf(document.activeElement);
+  if (i < 0) return;
+  const next = visible[(i + (e.key === "ArrowRight" ? 1 : visible.length - 1)) % visible.length];
+  next.focus();
+  next.click();
+});
+
+/* 割り勘・奢り (人の分も払った) */
 
 const splitBox = $("split-box");
 const myAmountInput = $("my-amount");
 const forWhomSelect = $("for-whom");
 const splitCalc = $("split-calc");
+const shareTypeRadios = form.querySelectorAll('input[name="share-type"]');
 
 forWhomSelect.innerHTML = Object.entries(PAYEES)
   .map(([name, icon]) => `<option value="${name}">${icon} ${name}</option>`)
   .join("");
 
+function selectedShareType() {
+  return form.querySelector('input[name="share-type"]:checked').value;
+}
+
+function setShareType(type) {
+  shareTypeRadios.forEach((r) => (r.checked = r.value === type));
+}
+
 // 合計と自分の分から「相手の分」を計算して見せる
 function updateSplitCalc() {
   const amount = Math.round(Number(amountInput.value));
   const mine = myAmountInput.value === "" ? null : Math.round(Number(myAmountInput.value));
+  const kind = SHARE_TYPES[selectedShareType()];
   let text = "";
   let error = false;
   if (!amount) text = "上の金額に、自分が払った合計を入れてください。";
@@ -1222,7 +1299,7 @@ function updateSplitCalc() {
     text = `自分の分が合計 ${yen.format(amount)} より多くなっています。`;
     error = true;
   } else if (mine === amount) text = "全額が自分の分として記録されます。";
-  else text = `自分の分 ${yen.format(mine)} ／ ${forWhomSelect.value}の分 ${yen.format(amount - mine)}`;
+  else text = `自分の分 ${yen.format(mine)} ／ ${forWhomSelect.value}への${kind.short} ${yen.format(amount - mine)}`;
   splitCalc.textContent = text;
   splitCalc.classList.toggle("is-error", error);
   myAmountInput.setCustomValidity(error ? "自分の分は合計以下にしてください" : "");
@@ -1230,9 +1307,10 @@ function updateSplitCalc() {
 
 [amountInput, myAmountInput].forEach((el) => el.addEventListener("input", updateSplitCalc));
 forWhomSelect.addEventListener("change", updateSplitCalc);
+shareTypeRadios.forEach((r) => r.addEventListener("change", updateSplitCalc));
 splitBox.addEventListener("toggle", updateSplitCalc);
 
-$("split-box").querySelector(".split-quick").addEventListener("click", (e) => {
+splitBox.querySelector(".split-quick").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-split]");
   if (!btn) return;
   const amount = Math.round(Number(amountInput.value));
@@ -1246,7 +1324,7 @@ $("split-box").querySelector(".split-quick").addEventListener("click", (e) => {
   updateSplitCalc();
 });
 
-/* 記録の変更 (履歴の行を押すと、このフォームで直せる) */
+/* 記録の変更 (履歴の行を押すと、いちばん上のフォームで直せる) */
 
 let editingId = null;
 
@@ -1256,29 +1334,31 @@ function startEdit(entry) {
   categorySelect.value = entry.category;
   amountInput.value = entry.amount;
   memoInput.value = entry.memo || "";
-  const split = othersShare(entry) > 0;
-  myAmountInput.value = split ? myShare(entry) : "";
-  forWhomSelect.value = split ? entry.forWhom : "友人";
-  splitBox.open = split;
+  const shared = othersShare(entry) > 0;
+  myAmountInput.value = shared ? myShare(entry) : "";
+  forWhomSelect.value = shared && PAYEES[entry.forWhom] ? entry.forWhom : "友人";
+  setShareType(shared ? shareTypeOf(entry) : "split");
+  splitBox.open = shared;
   updateSplitCalc();
-  form.classList.add("is-editing");
-  $("form-title").textContent = `記録を変更（${shortDate(entry.date)}）`;
+  $("entry-hub").classList.add("is-editing");
+  $("form-title").textContent = `${shortDate(entry.date)} の「${entry.memo || entry.category}」を変更中`;
+  $("edit-banner").hidden = false;
   $("submit-btn").textContent = "変更を保存";
-  $("cancel-edit").hidden = false;
-  form.scrollIntoView({ block: "start", behavior: "smooth" });
+  setTab("form", { remember: false });
+  $("entry-hub").scrollIntoView({ block: "start", behavior: "smooth" });
   amountInput.focus({ preventScroll: true });
 }
 
 function endEdit() {
   editingId = null;
-  form.classList.remove("is-editing");
-  $("form-title").textContent = "フォームで入力";
+  $("entry-hub").classList.remove("is-editing");
+  $("edit-banner").hidden = true;
   $("submit-btn").textContent = "支出を追加";
-  $("cancel-edit").hidden = true;
   amountInput.value = "";
   memoInput.value = "";
   myAmountInput.value = "";
   forWhomSelect.value = "友人";
+  setShareType("split");
   splitBox.open = false;
   resetDateInput();
 }
@@ -1298,120 +1378,118 @@ form.addEventListener("submit", (e) => {
   }
 
   const fields = { date: dateInput.value, category: categorySelect.value, amount, memo: memoInput.value.trim() };
+  const share = [mine, forWhomSelect.value, selectedShareType()];
+  const added = withShare(fields, ...share);
+  const wasEditing = Boolean(editingId);
   snapshot();
-  if (editingId) {
+  if (wasEditing) {
     const old = entries.find((x) => x.id === editingId);
     if (old) {
-      const updated = withShare({ ...old, ...fields }, mine, forWhomSelect.value);
+      const updated = withShare({ ...old, ...fields }, ...share);
       entries = entries.map((x) => (x.id === editingId ? updated : x));
     }
   } else {
-    addEntries([withShare(fields, mine, forWhomSelect.value)]);
+    addEntries([added]);
   }
-  const wasEditing = Boolean(editingId);
   save();
 
   // 登録した日付の月へ移動して、追加結果がすぐ見えるようにする
   viewMonth = startOfMonth(fromDateStr(dateInput.value));
   endEdit();
   render();
-  showToast(wasEditing ? "記録を変更しました" : `${describeEntry(withShare(fields, mine, forWhomSelect.value))} を追加しました`);
+  showToast(wasEditing ? "記録を変更しました" : `${describeEntry(added)} を追加しました`);
   if (!wasEditing) amountInput.focus();
 });
 
 /* ---------- 月の表示 ---------- */
 
-// 月の合計に加え、予算があれば残り金額を、なければ前月との比較を出す
+// 自分のための支出 (予算の対象) と、人の分も含めて払った合計を出す
+// 割り勘・立て替えと奢りで相手の分として払った金額は、予算やカテゴリ別には含めない
 function renderSummary(monthEntries, planned) {
   const today = new Date();
   const isCurrent = monthKey(viewMonth) === monthKey(today);
   const isFuture = viewMonth > today;
-  const spent = total(monthEntries);
+  const paid = total(monthEntries);
+  const mine = monthEntries.reduce((s, e) => s + myShare(e), 0);
   const plannedSum = total(planned);
-  const prevSpent = total(entriesOfMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)));
+  const prevEntries = entriesOfMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1));
+  const prevMine = prevEntries.reduce((s, e) => s + myShare(e), 0);
   const elapsedDays = isCurrent ? today.getDate() : isFuture ? 0 : daysInMonth(viewMonth);
-  const dailyAvg = elapsedDays ? Math.round(spent / elapsedDays) : 0;
+  const dailyAvg = elapsedDays ? Math.round(mine / elapsedDays) : 0;
+  const people = sumOthers(monthEntries);
 
   let budgetBlock;
   if (meta.budget > 0) {
     // 固定費はその日が来る前から「使うことが決まったお金」として予算から差し引く
-    const committed = spent + plannedSum;
+    const committed = mine + plannedSum;
     const pct = Math.round((committed / meta.budget) * 100);
     const remaining = meta.budget - committed;
     const daysLeft = isCurrent ? daysInMonth(today) - today.getDate() + 1 : 0;
-    const planNote = plannedSum ? `<span class="note-sub">（固定費の予定 ${yen.format(plannedSum)} を差し引き済み）</span>` : "";
+    const planNote = plannedSum ? `<span class="note-sub">固定費の予定 ${yen.format(plannedSum)} を差し引き済み</span>` : "";
     let note;
-    if (remaining < 0 && spent > meta.budget) note = `予算を <strong class="is-over">${yen.format(spent - meta.budget)}</strong> 超えています`;
+    if (remaining < 0 && mine > meta.budget) note = `予算を <strong class="is-over">${yen.format(mine - meta.budget)}</strong> 超えています`;
     else if (remaining < 0) note = `固定費の予定を含めると予算を <strong class="is-over">${yen.format(-remaining)}</strong> 超える見込みです`;
-    else if (isCurrent) note = `残り <strong>${yen.format(remaining)}</strong>・1日あたり ${yen.format(Math.floor(remaining / daysLeft))} まで${planNote}`;
+    else if (isCurrent) note = `あと <strong>${yen.format(remaining)}</strong>・1日 ${yen.format(Math.floor(remaining / daysLeft))} まで${planNote}`;
     else note = `残り <strong>${yen.format(remaining)}</strong>${planNote}`;
 
     // 使った分に続けて、これから引き落とされる固定費を斜線で示す
-    const usedWidth = Math.min(100, (spent / meta.budget) * 100);
+    const usedWidth = Math.min(100, (mine / meta.budget) * 100);
     const planWidth = Math.min(100 - usedWidth, (plannedSum / meta.budget) * 100);
     budgetBlock = `
-      <div class="meter ${pct >= 100 ? "is-over" : pct >= 80 ? "is-warn" : ""}" role="img" aria-label="予算の${pct}%を使用${plannedSum ? `、ほかに固定費の予定 ${yen.format(plannedSum)}` : ""}">
-        <span class="meter-used" style="width:${usedWidth}%"></span>
-        ${planWidth > 0 ? `<span class="meter-plan" style="width:${planWidth}%"></span>` : ""}
-      </div>
-      <p class="meter-note"><span>${note}</span><span>支払い合計が予算 ${yen.format(meta.budget)} の ${pct}%${plannedSum ? "（予定を含む）" : ""}</span></p>`;
+      <div class="budget">
+        <div class="meter ${pct >= 100 ? "is-over" : pct >= 80 ? "is-warn" : ""}" role="img" aria-label="予算の${pct}%を使用${plannedSum ? `、ほかに固定費の予定 ${yen.format(plannedSum)}` : ""}">
+          <span class="meter-used" style="width:${usedWidth}%"></span>
+          ${planWidth > 0 ? `<span class="meter-plan" style="width:${planWidth}%"></span>` : ""}
+        </div>
+        <p class="meter-note"><span>${note}</span><span class="meter-pct">予算 ${yen.format(meta.budget)} の ${pct}%</span></p>
+      </div>`;
   } else {
     budgetBlock = `<p class="meter-note"><button type="button" class="link-btn" id="set-budget-btn">月の予算を設定する</button></p>`;
   }
 
   const planLine = plannedSum
-    ? `<p class="plan-line"><span class="legend-swatch is-plan" aria-hidden="true"></span>固定費の予定 <strong>${yen.format(plannedSum)}</strong>（${planned.length}件）を含めると <strong>${yen.format(spent + plannedSum)}</strong></p>`
+    ? `<p class="plan-line"><span class="legend-swatch is-plan" aria-hidden="true"></span>固定費の予定 <strong>${yen.format(plannedSum)}</strong>（${planned.length}件）を含めると自分の支出は <strong>${yen.format(mine + plannedSum)}</strong></p>`
     : "";
 
   let compare = "—";
-  if (prevSpent > 0) {
-    const diff = spent - prevSpent;
+  if (prevMine > 0) {
+    const diff = mine - prevMine;
     compare = `${diff > 0 ? "+" : diff < 0 ? "−" : "±"}${yen.format(Math.abs(diff))}`;
   }
 
-  // 自分のための分と、人の分も含めて払った合計を並べて出す
-  const mineSum = monthEntries.reduce((s, e) => s + myShare(e), 0);
-  const othersSum = spent - mineSum;
-  const byWhom = {};
-  monthEntries.forEach((e) => {
-    const o = othersShare(e);
-    if (o > 0) byWhom[e.forWhom] = (byWhom[e.forWhom] || 0) + o;
-  });
-  const othersBlock = othersSum
-    ? `<div class="others-box">
-        <p class="others-head">人のために払った分 <strong>${yen.format(othersSum)}</strong></p>
-        <ul class="payee-chips">
-          ${Object.entries(byWhom)
-            .sort((a, b) => b[1] - a[1])
-            .map(([who, v]) => `<li><span aria-hidden="true">${PAYEES[who] ?? "👤"}</span>${escapeHtml(who)} <b>${yen.format(v)}</b></li>`)
-            .join("")}
-        </ul>
-      </div>`
-    : "";
-
   summaryBox.innerHTML = `
-    <p class="summary-label">${isCurrent ? "今月" : `${viewMonth.getMonth() + 1}月`}の合計</p>
+    <div class="card-head">
+      <h2 class="section-title">${isCurrent ? "今月" : `${viewMonth.getFullYear()}年${viewMonth.getMonth() + 1}月`}の合計</h2>
+      <span class="head-note">予算は自分のための支出で計算</span>
+    </div>
     <div class="summary-totals">
       <div class="total-main">
         <span class="total-label">自分のための支出</span>
-        <span class="summary-balance">${yen.format(mineSum)}</span>
+        <span class="summary-balance">${yen.format(mine)}</span>
       </div>
       <div class="total-sub">
         <span class="total-label">支払い合計<small>（人の分を含む）</small></span>
-        <span class="total-value">${yen.format(spent)}</span>
+        <span class="total-value">${yen.format(paid)}</span>
       </div>
     </div>
-    ${othersBlock}
     ${budgetBlock}
     ${planLine}
-    <dl class="summary-split">
+    <dl class="stat-row">
       <div>
-        <dt>1日平均</dt>
+        <dt>${SHARE_TYPES.split.icon} 立て替え</dt>
+        <dd><a href="#people-title" class="stat-link">${yen.format(people.totals.split)}</a></dd>
+      </div>
+      <div>
+        <dt>${SHARE_TYPES.treat.icon} 奢り</dt>
+        <dd><a href="#people-title" class="stat-link">${yen.format(people.totals.treat)}</a></dd>
+      </div>
+      <div>
+        <dt>1日平均（自分）</dt>
         <dd>${yen.format(dailyAvg)}</dd>
       </div>
       <div>
         <dt>前月との差</dt>
-        <dd class="${prevSpent > 0 && spent > prevSpent ? "is-up" : ""}">${compare}</dd>
+        <dd class="${prevMine > 0 && mine > prevMine ? "is-up" : ""}">${compare}</dd>
       </div>
     </dl>
   `;
@@ -1422,16 +1500,87 @@ function renderSummary(monthEntries, planned) {
   });
 }
 
+// 相手ごとに、立て替え (割り勘) と奢りで払った「相手の分」を別々に合計する
+function sumOthers(list) {
+  const rows = {};
+  const totals = { split: 0, treat: 0 };
+  const counts = { split: 0, treat: 0 };
+  list.forEach((e) => {
+    const o = othersShare(e);
+    if (o <= 0) return;
+    const type = shareTypeOf(e);
+    const who = PAYEES[e.forWhom] ? e.forWhom : "その他";
+    rows[who] ??= { split: 0, treat: 0 };
+    rows[who][type] += o;
+    totals[type] += o;
+    counts[type] += 1;
+  });
+  return { rows, totals, counts };
+}
+
+function renderPeople(monthEntries) {
+  const { rows, totals, counts } = sumOthers(monthEntries);
+  const body = $("people-body");
+  const list = Object.entries(rows)
+    .map(([who, r]) => ({ who, ...r, total: r.split + r.treat }))
+    .sort((a, b) => b.total - a.total);
+
+  if (!list.length) {
+    body.innerHTML = `<p class="muted">この月の立て替え・奢りはまだありません。フォームの「割り勘・奢り」や、<code>飲み会 6000 自分2000</code>・<code>後輩に奢り 3000</code> のような入力で記録できます。</p>`;
+    return;
+  }
+
+  const cell = (v) => (v ? yen.format(v) : `<span class="zero">—</span>`);
+  body.innerHTML = `
+    <div class="people-totals">
+      <div class="people-total is-split">
+        <span>${SHARE_TYPES.split.icon} 立て替え（割り勘）</span>
+        <strong>${yen.format(totals.split)}</strong>
+        <small>${counts.split}件・あとで返してもらう分</small>
+      </div>
+      <div class="people-total is-treat">
+        <span>${SHARE_TYPES.treat.icon} 奢り</span>
+        <strong>${yen.format(totals.treat)}</strong>
+        <small>${counts.treat}件・返してもらわない分</small>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="people-table">
+        <thead>
+          <tr><th scope="col">相手</th><th scope="col">立て替え</th><th scope="col">奢り</th><th scope="col">合計</th></tr>
+        </thead>
+        <tbody>
+          ${list
+            .map(
+              (r) => `
+            <tr>
+              <th scope="row"><span aria-hidden="true">${PAYEES[r.who]}</span> ${escapeHtml(r.who)}</th>
+              <td>${cell(r.split)}</td>
+              <td>${cell(r.treat)}</td>
+              <td><strong>${yen.format(r.total)}</strong></td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+        <tfoot>
+          <tr><th scope="row">合計</th><td>${yen.format(totals.split)}</td><td>${yen.format(totals.treat)}</td><td><strong>${yen.format(totals.split + totals.treat)}</strong></td></tr>
+        </tfoot>
+      </table>
+    </div>`;
+}
+
 // カテゴリ別の支出を多い順に並べ、割合を横棒で表示する
 // まだ引き落とされていない固定費も、そのカテゴリに斜線の部分として含める
+// 割り勘・奢りで相手の分として払った金額は含めず、自分のための金額だけで集計する
 function renderBreakdown(monthEntries, planned) {
   const totals = {};
-  const add = (e, key) => {
-    totals[e.category] ??= { spent: 0, planned: 0 };
-    totals[e.category][key] += e.amount;
+  const add = (category, key, value) => {
+    if (!value) return;
+    totals[category] ??= { spent: 0, planned: 0 };
+    totals[category][key] += value;
   };
-  monthEntries.forEach((e) => add(e, "spent"));
-  planned.forEach((e) => add(e, "planned"));
+  monthEntries.forEach((e) => add(e.category, "spent", myShare(e)));
+  planned.forEach((e) => add(e.category, "planned", e.amount));
 
   const rows = Object.entries(totals)
     .map(([cat, t]) => ({ cat, ...t, total: t.spent + t.planned }))
@@ -1523,7 +1672,7 @@ function renderCalendar(monthEntries, planned) {
 
   const spentSum = total(monthEntries);
   const planSum = total(planned);
-  $("cal-totals").innerHTML = `<span>支出 <strong>${yen.format(spentSum)}</strong></span>${
+  $("cal-totals").innerHTML = `<span>支払額 <strong>${yen.format(spentSum)}</strong></span>${
     planSum ? `<span class="cal-totals-plan">予定 <strong>${yen.format(planSum)}</strong></span>` : ""
   }`;
 }
@@ -1619,9 +1768,9 @@ function renderItem(entry) {
     <li class="entry-item is-editable" data-edit="${entry.id}" tabindex="0" role="button" aria-label="${escapeHtml(entry.category)} ${yen.format(entry.amount)}${others ? `（自分の分 ${yen.format(myShare(entry))}）` : ""}。押すと変更できます">
       <span class="cat-icon" aria-hidden="true">${iconFor(entry.category)}</span>
       <div class="entry-content">
-        <strong>${escapeHtml(entry.category)}${entry.recurringId ? '<span class="tag">固定費</span>' : ""}${entry.source === "receipt" ? '<span class="tag">レシート</span>' : ""}${others ? `<span class="tag tag--payee">${PAYEES[entry.forWhom] ?? "👤"} ${escapeHtml(entry.forWhom)}</span>` : ""}</strong>
+        <strong>${escapeHtml(entry.category)}${entry.recurringId ? '<span class="tag">固定費</span>' : ""}${entry.source === "receipt" ? '<span class="tag">レシート</span>' : ""}${others ? `<span class="tag tag--${shareTypeOf(entry)}">${SHARE_TYPES[shareTypeOf(entry)].icon} ${SHARE_TYPES[shareTypeOf(entry)].short}</span>` : ""}</strong>
         ${entry.memo ? `<span>${escapeHtml(entry.memo)}</span>` : ""}
-        ${others ? `<span class="share-line">自分 <b>${yen.format(myShare(entry))}</b> ／ ${escapeHtml(entry.forWhom)}の分 <b>${yen.format(others)}</b></span>` : ""}
+        ${others ? `<span class="share-line">自分 <b>${yen.format(myShare(entry))}</b> ／ ${PAYEES[entry.forWhom] ?? "👤"} ${escapeHtml(PAYEES[entry.forWhom] ? entry.forWhom : "その他")}の分 <b>${yen.format(others)}</b></span>` : ""}
       </div>
       <span class="entry-amount">${yen.format(entry.amount)}${others ? `<small>支払額</small>` : ""}</span>
       <button class="delete-btn" data-id="${entry.id}" aria-label="${escapeHtml(entry.category)} ${yen.format(entry.amount)} を削除">${closeIcon()}</button>
@@ -1636,6 +1785,7 @@ function render() {
   renderCalendar(monthEntries, planned);
   renderCheckin();
   renderSummary(monthEntries, planned);
+  renderPeople(monthEntries);
   renderBreakdown(monthEntries, planned);
   renderList(monthEntries, planned);
   renderRecurring();
@@ -1725,6 +1875,7 @@ document.addEventListener("visibilitychange", () => {
 fillCategorySelect(categorySelect);
 fillCategorySelect(recCategory);
 resetDateInput();
+setTab(loadJson(TAB_KEY, "quick"), { remember: false });
 document.querySelectorAll(".local-only").forEach((el) => (el.hidden = inViewer));
 document.querySelectorAll(".viewer-only").forEach((el) => (el.hidden = !inViewer));
 
