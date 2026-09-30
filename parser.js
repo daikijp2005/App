@@ -14,6 +14,23 @@ const CATEGORY_ALIASES = {
   医療費: ["病院", "薬", "歯医者", "通院", "処方"],
 };
 
+// 誰のために払ったかを表す言葉 (区分は script.js の PAYEES)
+const PAYEE_ALIASES = {
+  友人: ["友人", "友達", "友だち", "ともだち", "先輩", "後輩"],
+  家族: ["家族", "親", "母", "父", "母親", "父親", "兄", "弟", "姉", "妹", "子ども", "子供", "祖母", "祖父"],
+  パートナー: ["パートナー", "恋人", "彼女", "彼氏", "妻", "夫", "嫁", "旦那"],
+  "職場・仕事": ["職場", "会社", "同僚", "上司", "部下", "仕事", "取引先"],
+};
+
+// 「友達の分」「家族に」のように相手のために払ったときは forThem、「友達と」のように一緒のときは false
+function matchPayee(token) {
+  const m = token.match(/^(.+?)(の分|のため|に|へ|と)?$/);
+  for (const [payee, words] of Object.entries(PAYEE_ALIASES)) {
+    if (words.includes(m[1])) return { payee, forThem: Boolean(m[2]) && m[2] !== "と" };
+  }
+  return null;
+}
+
 // 全角英数字・記号を半角に、全角スペースを半角スペースにそろえる
 function normalizeCommand(str) {
   return str
@@ -94,9 +111,52 @@ function parseCommand(input, today = new Date()) {
 
   let date = null;
   let amount = null;
+  let myAmount = null;
+  let people = 0;
+  let payee = null;
+  let forThem = false;
+  let expectMy = false;
   const words = [];
 
   for (const token of tokens) {
+    // 自分の分:「自分500」「うち500」「自分の分 500」(金額と離れていてもよい)
+    const my = token.match(/^(?:自分の分|自分|うち)[:：]?(.*)$/);
+    if (my) {
+      if (!my[1]) {
+        expectMy = true;
+        continue;
+      }
+      const s = splitAmountToken(my[1]);
+      if (s && !s.rest) {
+        myAmount = s.amount;
+        continue;
+      }
+    }
+    if (expectMy) {
+      expectMy = false;
+      const s = splitAmountToken(token);
+      if (s && !s.rest) {
+        myAmount = s.amount;
+        continue;
+      }
+    }
+    // 割り勘の人数:「3人」「3人で割り勘」「割り勘」(人数がなければ2人)
+    const n = token.match(/^(?:割り勘|割勘)?(\d{1,2})人(?:で)?(?:割り勘|割勘|割り)?$/);
+    if (n) {
+      people = Number(n[1]);
+      continue;
+    }
+    if (token === "割り勘" || token === "割勘") {
+      people = people || 2;
+      continue;
+    }
+    // 誰のために払ったか:「友達の分」「家族に」「会社と」
+    const p = !payee && matchPayee(token);
+    if (p) {
+      payee = p.payee;
+      forThem = p.forThem;
+      continue;
+    }
     if (!date) {
       const d = parseDateToken(token, today);
       if (d) {
@@ -130,6 +190,16 @@ function parseCommand(input, today = new Date()) {
   const errors = [];
   if (!amount || amount <= 0) errors.push("金額が見つかりません");
 
+  // 自分の分: 直接書いた金額 → 人数で割った金額 → 「〜の分」「〜に」なら全額が相手の分
+  let mine = null;
+  if (amount) {
+    if (myAmount !== null) mine = myAmount;
+    else if (people >= 2) mine = Math.round(amount / people);
+    else if (payee && forThem) mine = 0;
+  }
+  if (mine !== null && mine > amount) errors.push("自分の分が合計より多くなっています");
+  const share = mine !== null && mine < amount ? { myAmount: mine, forWhom: payee || "友人" } : {};
+
   return {
     ok: errors.length === 0,
     // カテゴリを言葉から特定できたか (できなければ Claude に任せたほうが正確)
@@ -142,6 +212,7 @@ function parseCommand(input, today = new Date()) {
       category: match ? match.category : "その他",
       amount: amount || 0,
       memo: memoWords.join(" ").slice(0, 60),
+      ...share,
     },
   };
 }

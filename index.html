@@ -56,6 +56,9 @@
           <tr><td><code>昨日 電車 320</code></td><td>昨日の交通費。<code>一昨日</code> <code>3日前</code> <code>9/25</code> <code>25日</code> も可</td></tr>
           <tr><td><code>家賃 4.2万</code></td><td><code>万</code> <code>千</code> <code>k</code> <code>円</code> を使った金額</td></tr>
           <tr><td><code>コンビニ 450、本 1200</code></td><td>「、」や改行で区切ると複数件まとめて追加</td></tr>
+          <tr><td><code>飲み会 6000 自分2000</code></td><td>割り勘などで自分の分を指定（<code>うち2000</code> も可）</td></tr>
+          <tr><td><code>ランチ 3000 3人</code></td><td>人数で割って自分の分を計算（<code>割り勘</code> だけなら2人）</td></tr>
+          <tr><td><code>家族の分 弁当 1200</code></td><td>「〜に」「〜の分」は全額が相手の分。相手は 友人・家族・パートナー・職場 から判定</td></tr>
         </table>
         <p>カテゴリ名（食費・日用品など）のほか、「コンビニ」「電車」「家賃」などの言葉からも自動で判定します。判定できないときは「その他」になります。</p>
         <p class="ai-only" hidden>上の形に当てはまらない文章（例:「昨日スタバで650円、帰りにドラッグストアで1,280円」）は Claude が読み取って記録します。レシートは下の「レシートを読み取る」から写真で送れます。</p>
@@ -120,7 +123,7 @@
 
     <form id="entry-form" class="entry-form card">
       <div class="card-head">
-        <h2 class="section-title">フォームで入力</h2>
+        <h2 id="form-title" class="section-title">フォームで入力</h2>
       </div>
       <label class="amount-field">
         <span class="amount-prefix" aria-hidden="true">¥</span>
@@ -142,7 +145,38 @@
         </label>
       </div>
 
-      <button type="submit" class="submit-btn">支出を追加</button>
+      <details class="split-box" id="split-box">
+        <summary>割り勘・人の分も払った</summary>
+        <div class="split-body">
+          <div class="field-grid">
+            <label class="field">
+              <span class="field-label">そのうち自分の分</span>
+              <span class="yen-field">
+                <span aria-hidden="true">¥</span>
+                <input type="number" id="my-amount" min="0" step="1" inputmode="numeric" placeholder="例: 500">
+              </span>
+            </label>
+            <label class="field">
+              <span class="field-label">誰のために払った？</span>
+              <select id="for-whom"></select>
+            </label>
+          </div>
+          <div class="split-quick" role="group" aria-label="人数で割って自分の分を入れる">
+            <span class="split-quick-label">人数で割る</span>
+            <button type="button" class="chip-btn" data-split="2">2人</button>
+            <button type="button" class="chip-btn" data-split="3">3人</button>
+            <button type="button" class="chip-btn" data-split="4">4人</button>
+            <button type="button" class="chip-btn" data-split="5">5人</button>
+            <button type="button" class="chip-btn" data-split="0">全額 人の分</button>
+          </div>
+          <p id="split-calc" class="split-calc" aria-live="polite"></p>
+        </div>
+      </details>
+
+      <div class="form-actions">
+        <button type="button" id="cancel-edit" class="secondary-btn" hidden>キャンセル</button>
+        <button type="submit" class="submit-btn" id="submit-btn">支出を追加</button>
+      </div>
     </form>
 
     <details class="settings card" id="settings">

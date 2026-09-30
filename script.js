@@ -21,7 +21,34 @@ const CATEGORIES = {
   その他: "📦",
 };
 
+// 他の人の分も払ったとき、誰のためだったかの区分
+const PAYEES = {
+  友人: "🧑‍🤝‍🧑",
+  家族: "👪",
+  パートナー: "💞",
+  "職場・仕事": "💼",
+  その他: "👤",
+};
+
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+// 記録のうち自分のための金額。myAmount がなければ全額が自分の分
+function myShare(e) {
+  return Number.isFinite(e.myAmount) ? e.myAmount : e.amount;
+}
+
+// 割り勘の相手や家族など、自分以外のために払った金額
+function othersShare(e) {
+  return e.amount - myShare(e);
+}
+
+// 自分の分と相手を、形を整えてから記録に付ける (全額自分の分なら何も付けない)
+function withShare(entry, myAmount, forWhom) {
+  const { myAmount: _m, forWhom: _f, ...rest } = entry;
+  const mine = Math.round(Number(myAmount));
+  if (myAmount === null || myAmount === undefined || myAmount === "" || !Number.isFinite(mine) || mine < 0 || mine >= rest.amount) return rest;
+  return { ...rest, myAmount: mine, forWhom: PAYEES[forWhom] ? forWhom : "その他" };
+}
 
 // 以前のバージョンで記録した収入データは、画面には出さずにそのまま保存し続ける
 // (消してしまわないよう、保存時に元に戻す)
@@ -600,7 +627,8 @@ $("ics-btn").addEventListener("click", downloadIcs);
 /* ---------- クイック入力 ---------- */
 
 function describeEntry(entry) {
-  return `${iconFor(entry.category)} ${entry.category} ${yen.format(entry.amount)}`;
+  const share = othersShare(entry) > 0 ? `（自分の分 ${yen.format(myShare(entry))}）` : "";
+  return `${iconFor(entry.category)} ${entry.category} ${yen.format(entry.amount)}${share}`;
 }
 
 function updateQuickPreview() {
@@ -740,7 +768,7 @@ function sanitizeAiEntries(list, source) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(fromDateStr(date).getTime()) || date > todayStr || date < oldest) date = todayStr;
       const category = CATEGORIES[raw?.category] ? raw.category : "その他";
       const memo = String(raw?.memo ?? "").trim().slice(0, 60);
-      return { date, category, amount, memo, ...(source ? { source } : {}) };
+      return withShare({ date, category, amount, memo, ...(source ? { source } : {}) }, raw?.myAmount, raw?.forWhom);
     })
     .filter(Boolean);
 }
@@ -856,11 +884,14 @@ async function askClaudeText(text) {
 - amount は支払った金額（円、整数）。「1.2万」「3k」なども円に直す。
 - date は YYYY-MM-DD。書かれていなければ今日。「昨日」「先週の金曜」などは今日から計算する。未来の日付にはしない。
 - memo は店名や品名などを20文字以内で。なければ空文字。
+- 割り勘や、人の分も払った場合: amount は自分が実際に払った合計、myAmount はそのうち自分のための金額（円、整数）。
+  「3人で割り勘」なら amount ÷ 3、「自分の分は500円」ならその金額。人へのおごりやプレゼントなど全額が相手のためなら 0。
+  forWhom は誰のためか（${Object.keys(PAYEES).join("、")} から1つ）。全額が自分のためなら myAmount と forWhom は null。
 - 収入・もらったお金・予定（まだ払っていないもの）は含めない。
 - 支出が1つも読み取れなければ entries を空にして、reason に短い理由を書く。
 
 返答は次の形の JSON だけ:
-{"entries":[{"date":"2026-01-31","category":"食費","amount":650,"memo":"スタバ"}],"reason":""}
+{"entries":[{"date":"2026-01-31","category":"食費","amount":650,"memo":"スタバ","myAmount":null,"forWhom":null},{"date":"2026-01-31","category":"交際費","amount":6000,"memo":"飲み会","myAmount":2000,"forWhom":"友人"}],"reason":""}
 
 文章:
 """
@@ -1017,15 +1048,19 @@ function normalizeEntry(id, raw) {
   if (!raw || raw.type === "income") return null;
   const amount = Math.round(Number(raw.amount));
   if (!amount || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(String(raw.date))) return null;
-  return {
-    ...raw,
-    id,
-    type: "expense",
-    date: String(raw.date),
-    amount,
-    category: CATEGORIES[raw.category] ? raw.category : "その他",
-    memo: String(raw.memo ?? "").slice(0, 60),
-  };
+  return withShare(
+    {
+      ...raw,
+      id,
+      type: "expense",
+      date: String(raw.date),
+      amount,
+      category: CATEGORIES[raw.category] ? raw.category : "その他",
+      memo: String(raw.memo ?? "").slice(0, 60),
+    },
+    raw.myAmount,
+    raw.forWhom
+  );
 }
 
 function normalizeMeta(raw) {
@@ -1164,22 +1199,124 @@ function resetDateInput() {
   dateInput.value = monthKey(today) === monthKey(viewMonth) ? toDateStr(today) : toDateStr(viewMonth);
 }
 
+/* 割り勘・人の分 */
+
+const splitBox = $("split-box");
+const myAmountInput = $("my-amount");
+const forWhomSelect = $("for-whom");
+const splitCalc = $("split-calc");
+
+forWhomSelect.innerHTML = Object.entries(PAYEES)
+  .map(([name, icon]) => `<option value="${name}">${icon} ${name}</option>`)
+  .join("");
+
+// 合計と自分の分から「相手の分」を計算して見せる
+function updateSplitCalc() {
+  const amount = Math.round(Number(amountInput.value));
+  const mine = myAmountInput.value === "" ? null : Math.round(Number(myAmountInput.value));
+  let text = "";
+  let error = false;
+  if (!amount) text = "上の金額に、自分が払った合計を入れてください。";
+  else if (mine === null) text = `合計 ${yen.format(amount)} のうち、自分のための金額を入れてください。`;
+  else if (mine > amount) {
+    text = `自分の分が合計 ${yen.format(amount)} より多くなっています。`;
+    error = true;
+  } else if (mine === amount) text = "全額が自分の分として記録されます。";
+  else text = `自分の分 ${yen.format(mine)} ／ ${forWhomSelect.value}の分 ${yen.format(amount - mine)}`;
+  splitCalc.textContent = text;
+  splitCalc.classList.toggle("is-error", error);
+  myAmountInput.setCustomValidity(error ? "自分の分は合計以下にしてください" : "");
+}
+
+[amountInput, myAmountInput].forEach((el) => el.addEventListener("input", updateSplitCalc));
+forWhomSelect.addEventListener("change", updateSplitCalc);
+splitBox.addEventListener("toggle", updateSplitCalc);
+
+$("split-box").querySelector(".split-quick").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-split]");
+  if (!btn) return;
+  const amount = Math.round(Number(amountInput.value));
+  if (!amount) {
+    amountInput.focus();
+    updateSplitCalc();
+    return;
+  }
+  const n = Number(btn.dataset.split);
+  myAmountInput.value = n ? Math.round(amount / n) : 0;
+  updateSplitCalc();
+});
+
+/* 記録の変更 (履歴の行を押すと、このフォームで直せる) */
+
+let editingId = null;
+
+function startEdit(entry) {
+  editingId = entry.id;
+  dateInput.value = entry.date;
+  categorySelect.value = entry.category;
+  amountInput.value = entry.amount;
+  memoInput.value = entry.memo || "";
+  const split = othersShare(entry) > 0;
+  myAmountInput.value = split ? myShare(entry) : "";
+  forWhomSelect.value = split ? entry.forWhom : "友人";
+  splitBox.open = split;
+  updateSplitCalc();
+  form.classList.add("is-editing");
+  $("form-title").textContent = `記録を変更（${shortDate(entry.date)}）`;
+  $("submit-btn").textContent = "変更を保存";
+  $("cancel-edit").hidden = false;
+  form.scrollIntoView({ block: "start", behavior: "smooth" });
+  amountInput.focus({ preventScroll: true });
+}
+
+function endEdit() {
+  editingId = null;
+  form.classList.remove("is-editing");
+  $("form-title").textContent = "フォームで入力";
+  $("submit-btn").textContent = "支出を追加";
+  $("cancel-edit").hidden = true;
+  amountInput.value = "";
+  memoInput.value = "";
+  myAmountInput.value = "";
+  forWhomSelect.value = "友人";
+  splitBox.open = false;
+  resetDateInput();
+}
+
+$("cancel-edit").addEventListener("click", endEdit);
+
 form.addEventListener("submit", (e) => {
   e.preventDefault();
 
   const amount = Math.round(Number(amountInput.value));
   if (!amount || amount <= 0) return;
+  const mine = splitBox.open && myAmountInput.value !== "" ? Math.round(Number(myAmountInput.value)) : null;
+  if (mine !== null && mine > amount) {
+    updateSplitCalc();
+    myAmountInput.focus();
+    return;
+  }
 
+  const fields = { date: dateInput.value, category: categorySelect.value, amount, memo: memoInput.value.trim() };
   snapshot();
-  addEntries([{ date: dateInput.value, category: categorySelect.value, amount, memo: memoInput.value.trim() }]);
+  if (editingId) {
+    const old = entries.find((x) => x.id === editingId);
+    if (old) {
+      const updated = withShare({ ...old, ...fields }, mine, forWhomSelect.value);
+      entries = entries.map((x) => (x.id === editingId ? updated : x));
+    }
+  } else {
+    addEntries([withShare(fields, mine, forWhomSelect.value)]);
+  }
+  const wasEditing = Boolean(editingId);
   save();
 
   // 登録した日付の月へ移動して、追加結果がすぐ見えるようにする
   viewMonth = startOfMonth(fromDateStr(dateInput.value));
-  amountInput.value = "";
-  memoInput.value = "";
+  endEdit();
   render();
-  amountInput.focus();
+  showToast(wasEditing ? "記録を変更しました" : `${describeEntry(withShare(fields, mine, forWhomSelect.value))} を追加しました`);
+  if (!wasEditing) amountInput.focus();
 });
 
 /* ---------- 月の表示 ---------- */
@@ -1217,7 +1354,7 @@ function renderSummary(monthEntries, planned) {
         <span class="meter-used" style="width:${usedWidth}%"></span>
         ${planWidth > 0 ? `<span class="meter-plan" style="width:${planWidth}%"></span>` : ""}
       </div>
-      <p class="meter-note"><span>${note}</span><span>予算 ${yen.format(meta.budget)} の ${pct}%${plannedSum ? "（予定を含む）" : ""}</span></p>`;
+      <p class="meter-note"><span>${note}</span><span>支払い合計が予算 ${yen.format(meta.budget)} の ${pct}%${plannedSum ? "（予定を含む）" : ""}</span></p>`;
   } else {
     budgetBlock = `<p class="meter-note"><button type="button" class="link-btn" id="set-budget-btn">月の予算を設定する</button></p>`;
   }
@@ -1232,9 +1369,39 @@ function renderSummary(monthEntries, planned) {
     compare = `${diff > 0 ? "+" : diff < 0 ? "−" : "±"}${yen.format(Math.abs(diff))}`;
   }
 
+  // 自分のための分と、人の分も含めて払った合計を並べて出す
+  const mineSum = monthEntries.reduce((s, e) => s + myShare(e), 0);
+  const othersSum = spent - mineSum;
+  const byWhom = {};
+  monthEntries.forEach((e) => {
+    const o = othersShare(e);
+    if (o > 0) byWhom[e.forWhom] = (byWhom[e.forWhom] || 0) + o;
+  });
+  const othersBlock = othersSum
+    ? `<div class="others-box">
+        <p class="others-head">人のために払った分 <strong>${yen.format(othersSum)}</strong></p>
+        <ul class="payee-chips">
+          ${Object.entries(byWhom)
+            .sort((a, b) => b[1] - a[1])
+            .map(([who, v]) => `<li><span aria-hidden="true">${PAYEES[who] ?? "👤"}</span>${escapeHtml(who)} <b>${yen.format(v)}</b></li>`)
+            .join("")}
+        </ul>
+      </div>`
+    : "";
+
   summaryBox.innerHTML = `
-    <p class="summary-label">${isCurrent ? "今月の支出" : `${viewMonth.getMonth() + 1}月の支出`}</p>
-    <p class="summary-balance">${yen.format(spent)}</p>
+    <p class="summary-label">${isCurrent ? "今月" : `${viewMonth.getMonth() + 1}月`}の合計</p>
+    <div class="summary-totals">
+      <div class="total-main">
+        <span class="total-label">自分のための支出</span>
+        <span class="summary-balance">${yen.format(mineSum)}</span>
+      </div>
+      <div class="total-sub">
+        <span class="total-label">支払い合計<small>（人の分を含む）</small></span>
+        <span class="total-value">${yen.format(spent)}</span>
+      </div>
+    </div>
+    ${othersBlock}
     ${budgetBlock}
     ${planLine}
     <dl class="summary-split">
@@ -1447,14 +1614,16 @@ function renderItem(entry) {
       <span class="delete-spacer" aria-hidden="true"></span>
     </li>`;
   }
+  const others = othersShare(entry);
   return `
-    <li class="entry-item">
+    <li class="entry-item is-editable" data-edit="${entry.id}" tabindex="0" role="button" aria-label="${escapeHtml(entry.category)} ${yen.format(entry.amount)}${others ? `（自分の分 ${yen.format(myShare(entry))}）` : ""}。押すと変更できます">
       <span class="cat-icon" aria-hidden="true">${iconFor(entry.category)}</span>
       <div class="entry-content">
-        <strong>${escapeHtml(entry.category)}${entry.recurringId ? '<span class="tag">固定費</span>' : ""}${entry.source === "receipt" ? '<span class="tag">レシート</span>' : ""}</strong>
+        <strong>${escapeHtml(entry.category)}${entry.recurringId ? '<span class="tag">固定費</span>' : ""}${entry.source === "receipt" ? '<span class="tag">レシート</span>' : ""}${others ? `<span class="tag tag--payee">${PAYEES[entry.forWhom] ?? "👤"} ${escapeHtml(entry.forWhom)}</span>` : ""}</strong>
         ${entry.memo ? `<span>${escapeHtml(entry.memo)}</span>` : ""}
+        ${others ? `<span class="share-line">自分 <b>${yen.format(myShare(entry))}</b> ／ ${escapeHtml(entry.forWhom)}の分 <b>${yen.format(others)}</b></span>` : ""}
       </div>
-      <span class="entry-amount">${yen.format(entry.amount)}</span>
+      <span class="entry-amount">${yen.format(entry.amount)}${others ? `<small>支払額</small>` : ""}</span>
       <button class="delete-btn" data-id="${entry.id}" aria-label="${escapeHtml(entry.category)} ${yen.format(entry.amount)} を削除">${closeIcon()}</button>
     </li>
   `;
@@ -1513,14 +1682,30 @@ undoBtn.addEventListener("click", () => {
 
 entryGroups.addEventListener("click", (e) => {
   const btn = e.target.closest(".delete-btn");
-  if (!btn) return;
-  const entry = entries.find((en) => en.id === btn.dataset.id);
-  if (!entry) return;
-  snapshot();
-  entries = entries.filter((en) => en !== entry);
-  save();
-  render();
-  showToast(`「${entry.category}」を削除しました`);
+  if (btn) {
+    const entry = entries.find((en) => en.id === btn.dataset.id);
+    if (!entry) return;
+    snapshot();
+    entries = entries.filter((en) => en !== entry);
+    if (editingId === entry.id) endEdit();
+    save();
+    render();
+    showToast(`「${entry.category}」を削除しました`);
+    return;
+  }
+  // 行そのものを押したら、フォームで内容を変更できるようにする
+  const row = e.target.closest(".entry-item[data-edit]");
+  const entry = row && entries.find((en) => en.id === row.dataset.edit);
+  if (entry) startEdit(entry);
+});
+
+entryGroups.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest(".entry-item[data-edit]");
+  if (!row || e.target !== row) return;
+  e.preventDefault();
+  const entry = entries.find((en) => en.id === row.dataset.edit);
+  if (entry) startEdit(entry);
 });
 
 $("prev-month").addEventListener("click", () => goToMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)));
