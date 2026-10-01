@@ -151,6 +151,7 @@ function loadMeta() {
   const m = {
     trackingStart: earliest,
     noSpendDays: [],
+    autoNoSpendDays: [],
     recurring: [],
     budget: 0,
     reminder: { time: "21:00", notify: false },
@@ -280,33 +281,64 @@ function orderKey(e) {
   return String(e.id).length >= 16 ? n / 1000 : n;
 }
 
-/* ---------- 記録チェック (入れ忘れ防止) ---------- */
+/* ---------- 支出なしの日と、きのうのふりかえり ---------- */
 
-// 自分で入力した記録があるか、「支出なし」と確認した日を「記録済み」とみなす
+function dayOffset(n) {
+  const t = new Date();
+  return toDateStr(new Date(t.getFullYear(), t.getMonth(), t.getDate() + n));
+}
+
+// 自分で入力した記録があるか、「支出なし」になっている日を「記録済み」とみなす
 // (固定費の自動記録だけの日は、日々の支出を入れ忘れている可能性があるので含めない)
 function isRecorded(dateStr) {
   return meta.noSpendDays.includes(dateStr) || entries.some((e) => e.date === dateStr && !e.recurringId);
 }
 
+// 支出なしの日: 「支出なし」になっていて、自分で入力した支出がない日 (固定費の引き落としだけの日も含む)
+function isNoSpendDay(dateStr) {
+  return meta.noSpendDays.includes(dateStr) && !entries.some((e) => e.date === dateStr && !e.recurringId);
+}
+
 function unrecordedDays() {
-  const today = new Date();
   const days = [];
   for (let i = 1; i <= CHECK_DAYS; i++) {
-    const s = toDateStr(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i));
+    const s = dayOffset(-i);
     if (s < meta.trackingStart) break;
     if (!isRecorded(s)) days.push(s);
   }
   return days;
 }
 
-// 今日(未記録なら昨日)から何日連続で記録できているか
-function streakDays() {
-  const today = new Date();
-  let i = isRecorded(toDateStr(today)) ? 0 : 1;
+function pruneNoSpend() {
+  // 古い記録は不要なので、直近分だけ残す
+  const limit = dayOffset(-90);
+  meta.noSpendDays = meta.noSpendDays.filter((d) => d >= limit);
+  meta.autoNoSpendDays = meta.autoNoSpendDays.filter((d) => d >= limit && meta.noSpendDays.includes(d));
+}
+
+// 日付が変わったら、前の日までで何も記録がない日を自動で「支出なし」にする
+function autoMarkNoSpend() {
+  const added = [];
+  for (let i = 1; i <= 60; i++) {
+    const s = dayOffset(-i);
+    if (s < meta.trackingStart) break;
+    if (!isRecorded(s)) added.push(s);
+  }
+  if (!added.length) return [];
+  meta.noSpendDays = [...meta.noSpendDays, ...added];
+  meta.autoNoSpendDays = [...meta.autoNoSpendDays, ...added];
+  pruneNoSpend();
+  save();
+  return added;
+}
+
+// 支出なしの日が何日続いているか (今日が支出なしなら今日から、そうでなければ昨日から数える)
+function noSpendStreak() {
+  let i = isNoSpendDay(dayOffset(0)) ? 0 : 1;
   let count = 0;
   for (;; i++) {
-    const s = toDateStr(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i));
-    if (s < meta.trackingStart || !isRecorded(s)) break;
+    const s = dayOffset(-i);
+    if (s < meta.trackingStart || !isNoSpendDay(s)) break;
     count++;
   }
   return count;
@@ -314,12 +346,8 @@ function streakDays() {
 
 function markNoSpend(days) {
   snapshot();
-  days.forEach((d) => {
-    if (!meta.noSpendDays.includes(d)) meta.noSpendDays.push(d);
-  });
-  // 古い記録は不要なので、直近分だけ残す
-  const limit = toDateStr(new Date(Date.now() - 90 * 86400000));
-  meta.noSpendDays = meta.noSpendDays.filter((d) => d >= limit);
+  meta.noSpendDays = [...new Set([...meta.noSpendDays, ...days])];
+  pruneNoSpend();
   save();
   render();
   showToast(days.length === 1 ? `${shortDate(days[0])} を「支出なし」にしました` : `${days.length}日分を「支出なし」にしました`);
@@ -331,48 +359,148 @@ function isPastReminderTime() {
   return now.getHours() * 60 + now.getMinutes() >= h * 60 + m;
 }
 
+// 日によって言い回しが変わるよう、日付から決まった1つを選ぶ
+function pick(list, salt = 0) {
+  const d = new Date();
+  const n = Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400000) + salt;
+  return list[((n % list.length) + list.length) % list.length];
+}
+
+const CHEERS_ZERO = [
+  "お金を使わない日は、未来の自分へのプレゼントです。",
+  "小さな「ゼロの日」の積み重ねが、月末の大きな差になります。",
+  "この調子で、今日も「本当に必要なもの」だけにしていきましょう。",
+  "使わずに済んだお金は、楽しみのためにとっておけます。",
+];
+
+const SAVING_TIPS = [
+  "コンビニに寄る前に「本当に今いる？」と10秒だけ考えてみましょう。",
+  "欲しい物は一晩おいてから買うと、衝動買いがぐっと減ります。",
+  "水筒やお弁当を持って出ると、飲み物代・昼食代が浮きます。",
+  "支払いの前に、家にある物で代わりにならないか思い出してみましょう。",
+  "使っていないサブスクがないか、月に一度見直すと固定費が下がります。",
+  "まとめ買いは「使い切れる量」だけにすると、むだが出にくくなります。",
+  "ポイント還元より「買わない」がいちばん大きな節約です。",
+];
+
+// 自分で選んで使ったお金 (固定費を除いた、自分のための金額)
+function ownSpentOn(dateStr) {
+  return entries.filter((e) => e.date === dateStr && !e.recurringId).reduce((s, e) => s + myShare(e), 0);
+}
+
+// きのうの支出と予算のペースから、ひとことコメントを作る
+function buildCheer() {
+  const today = new Date();
+  const yesterday = dayOffset(-1);
+  const start = meta.trackingStart;
+
+  if (yesterday < start) {
+    return {
+      tone: "start",
+      icon: "🌱",
+      title: start === dayOffset(0) ? "今日から記録スタート！" : `${shortDate(start)} から記録スタート！`,
+      body: "毎日ひとこと入力するだけで、お金の流れが見えてきます。何も買わなかった日は、次の日に自動で「支出なし」になります。",
+    };
+  }
+
+  if (isNoSpendDay(yesterday)) {
+    const streak = noSpendStreak();
+    return {
+      tone: "zero",
+      icon: "🎉",
+      title: streak >= 2 ? `${streak}日連続で支出ゼロ！` : "昨日は支出ゼロでした！",
+      body: pick(CHEERS_ZERO),
+      autoDay: meta.autoNoSpendDays.includes(yesterday) ? yesterday : null,
+    };
+  }
+
+  const spent = ownSpentOn(yesterday);
+  const tip = pick(SAVING_TIPS, 3);
+
+  if (meta.budget > 0) {
+    // 予算を月の日数で割った「1日の目安」と比べる
+    const target = Math.floor(meta.budget / daysInMonth(fromDateStr(yesterday)));
+    if (spent <= target) {
+      return {
+        tone: "good",
+        icon: "👏",
+        title: `昨日は ${yen.format(spent)}。1日の目安以内です`,
+        body: `目安の ${yen.format(target)} より ${yen.format(target - spent)} 少なく抑えられました。この調子でいきましょう。`,
+      };
+    }
+    const monthEntries = entriesOfMonth(today);
+    const mine = monthEntries.reduce((s, e) => s + myShare(e), 0);
+    const remaining = meta.budget - mine - total(plannedForMonth(today));
+    const daysLeft = daysInMonth(today) - today.getDate() + 1;
+    return {
+      tone: "care",
+      icon: "🌤️",
+      title: `昨日は ${yen.format(spent)} 使いました`,
+      body:
+        remaining > 0
+          ? `今日からは1日 ${yen.format(Math.floor(remaining / daysLeft))} 以内にすると、予算どおりに過ごせます。${tip}`
+          : `今月の予算はすでに使い切っています。今日は「支出ゼロの日」を目指してみませんか。${tip}`,
+    };
+  }
+
+  // 予算がないときは、今月のこれまでの1日平均と比べる
+  const days = [];
+  for (let i = 2; i <= 31; i++) {
+    const s = dayOffset(-i);
+    if (s < start || s.slice(0, 7) !== yesterday.slice(0, 7)) break;
+    days.push(ownSpentOn(s));
+  }
+  const avg = days.length ? Math.round(days.reduce((a, b) => a + b, 0) / days.length) : null;
+  if (avg !== null && spent <= avg) {
+    return {
+      tone: "good",
+      icon: "👏",
+      title: `昨日は ${yen.format(spent)}。いつもより控えめです`,
+      body: `今月のこれまでの1日平均 ${yen.format(avg)} より少なく済みました。`,
+    };
+  }
+  return {
+    tone: "care",
+    icon: "💡",
+    title: `昨日は ${yen.format(spent)} 使いました`,
+    body: `${avg !== null ? `今月の1日平均は ${yen.format(avg)} です。` : ""}${tip}`,
+  };
+}
+
 function renderCheckin() {
-  const todayStr = toDateStr(new Date());
-  const missing = unrecordedDays();
+  const todayStr = dayOffset(0);
   const todayDone = isRecorded(todayStr);
-  const streak = streakDays();
+  const cheer = buildCheer();
+  const monthKeyNow = todayStr.slice(0, 7);
+  const zeroDays = meta.noSpendDays.filter((d) => d.startsWith(monthKeyNow) && d >= meta.trackingStart && isNoSpendDay(d)).length;
+  const streak = noSpendStreak();
 
   const todayLine = todayDone
-    ? `<p class="checkin-status is-done"><span class="checkin-mark" aria-hidden="true">✓</span>今日の記録は完了しています</p>`
+    ? `<p class="checkin-status is-done"><span class="checkin-mark" aria-hidden="true">✓</span>${isNoSpendDay(todayStr) ? "今日は「支出なし」にしています" : "今日の記録は入力済みです"}</p>`
     : `<div class="checkin-status ${isPastReminderTime() ? "is-alert" : ""}">
         <span class="checkin-mark" aria-hidden="true">!</span>
-        <span class="checkin-text">今日の記録はまだです</span>
+        <span class="checkin-text">今日の支出はまだ記録していません<small>何も記録しなければ、明日「支出なし」になります</small></span>
         <button type="button" class="chip-btn" data-action="input" data-date="${todayStr}">入力する</button>
-        <button type="button" class="chip-btn" data-action="nospend" data-date="${todayStr}">今日は支出なし</button>
       </div>`;
 
-  const missingBlock = missing.length
-    ? `<div class="missing">
-        <p class="missing-title">記録していない日が <strong>${missing.length}日</strong> あります</p>
-        <ul class="missing-list">
-          ${missing
-            .map(
-              (d) => `
-            <li>
-              <span class="missing-date">${shortDate(d)}</span>
-              <button type="button" class="chip-btn" data-action="input" data-date="${d}">入力する</button>
-              <button type="button" class="chip-btn" data-action="nospend" data-date="${d}">支出なし</button>
-            </li>`
-            )
-            .join("")}
-        </ul>
-        ${missing.length > 1 ? `<button type="button" class="link-btn" data-action="nospend-all">すべて「支出なし」にする</button>` : ""}
-      </div>`
-    : "";
-
-  checkinBox.classList.toggle("has-missing", missing.length > 0);
   checkinBox.innerHTML = `
-    <div class="checkin-head">
-      <h2 class="section-title">記録チェック</h2>
-      <span class="streak" title="毎日記録できている日数">🔥 連続 <strong>${streak}</strong> 日</span>
+    <div class="card-head">
+      <h2 class="section-title">きのうのふりかえり</h2>
+      <span class="streak" title="支出なしの日">🌱 今月の支出ゼロ <strong>${zeroDays}</strong> 日${streak >= 2 ? `・<strong>${streak}</strong> 日連続` : ""}</span>
+    </div>
+    <div class="cheer is-${cheer.tone}">
+      <span class="cheer-icon" aria-hidden="true">${cheer.icon}</span>
+      <div class="cheer-text">
+        <p class="cheer-title">${cheer.title}</p>
+        <p class="cheer-body">${cheer.body}</p>
+        ${
+          cheer.autoDay
+            ? `<p class="cheer-note">何も記録がなかったので自動で「支出なし」にしました。入れ忘れがあれば <button type="button" class="link-btn" data-action="input" data-date="${cheer.autoDay}">${shortDate(cheer.autoDay)} の支出を入力</button></p>`
+            : ""
+        }
+      </div>
     </div>
     ${todayLine}
-    ${missingBlock}
   `;
 }
 
@@ -381,9 +509,25 @@ checkinBox.addEventListener("click", (e) => {
   if (!btn) return;
   const { action, date } = btn.dataset;
   if (action === "nospend") markNoSpend([date]);
-  if (action === "nospend-all") markNoSpend(unrecordedDays());
   if (action === "input") focusQuickInput(date);
 });
+
+// ページを開いたまま日付が変わったときも、前の日を「支出なし」にしてふりかえりを更新する
+let dayTimer = null;
+function scheduleDayChange() {
+  clearTimeout(dayTimer);
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 30);
+  dayTimer = setTimeout(() => {
+    if (!inViewer || db) {
+      applyRecurring();
+      autoMarkNoSpend();
+    }
+    resetDateInput();
+    render();
+    scheduleDayChange();
+  }, next - now);
+}
 
 // 日付を入れた状態でクイック入力に移動する (今日なら日付は省略)
 function focusQuickInput(date) {
@@ -1086,9 +1230,11 @@ function normalizeEntry(id, raw) {
   );
 }
 
+// サーバーから届くデータは読み取り専用 (凍結済み) なので、丸ごと複製してから手元で書き換える
 function normalizeMeta(raw) {
-  const m = { ...meta, ...(raw || {}) };
+  const m = { ...JSON.parse(JSON.stringify(meta)), ...JSON.parse(JSON.stringify(raw || {})) };
   m.noSpendDays = Array.isArray(m.noSpendDays) ? m.noSpendDays : [];
+  m.autoNoSpendDays = Array.isArray(m.autoNoSpendDays) ? m.autoNoSpendDays : [];
   m.recurring = Array.isArray(m.recurring) ? m.recurring.filter((r) => r.type !== "income") : [];
   m.reminder = { time: "21:00", notify: false, ...(m.reminder || {}) };
   m.budget = Number(m.budget) || 0;
@@ -1181,6 +1327,7 @@ function goOnline(store) {
     }
   });
   const added = applyRecurring();
+  autoMarkNoSpend();
   render();
   if (added.length) showToast(`固定費を${added.length}件、自動で記録しました`);
 }
@@ -1865,7 +2012,10 @@ monthLabel.addEventListener("click", () => goToMonth(new Date()));
 // 日付が変わったときや、タブに戻ってきたときに記録チェックを最新にする
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
-    if ((!inViewer || db) && applyRecurring().length) showToast("固定費を自動で記録しました");
+    if (!inViewer || db) {
+      if (applyRecurring().length) showToast("固定費を自動で記録しました");
+      autoMarkNoSpend();
+    }
     render();
   }
 });
@@ -1879,14 +2029,17 @@ setTab(loadJson(TAB_KEY, "quick"), { remember: false });
 document.querySelectorAll(".local-only").forEach((el) => (el.hidden = inViewer));
 document.querySelectorAll(".viewer-only").forEach((el) => (el.hidden = !inViewer));
 
+scheduleDayChange();
+
 if (inViewer) {
-  // claude.ai 上では、サーバーのデータが届いてから固定費などを処理する
+  // claude.ai 上では、サーバーのデータが届いてから固定費や「支出なし」を処理する
   render();
   connectDb();
   connectClaude();
 } else {
   save();
   const autoAdded = applyRecurring();
+  autoMarkNoSpend();
   render();
   scheduleReminder();
   handleUrlCommand();
