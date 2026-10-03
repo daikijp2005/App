@@ -32,7 +32,7 @@ async function artifactBackend() {
   return {
     kind: "artifact",
     unavailable: db ? "" : "claude.ai にサインインして開くと、みんなで共有して使えます。",
-    features: { map: false, thumbnails: false, aiButton: aiOn, askAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, members: false, lists: false, export: false, clipboardRead: false, geolocation: false },
+    features: { map: false, thumbnails: false, aiButton: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, members: false, lists: false, export: false, clipboardRead: false, geolocation: false },
     shareNote: "一緒に使う人も claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
     readerNote: aiOn ? "本文を読み取り、「AIで読み取る」でClaudeが整理します（押した人の利用枠を使います）" : "本文をルールで読み取っています",
     subscribe(fn) {
@@ -57,7 +57,13 @@ async function artifactBackend() {
     addSpot: (body) => wrap(db.collection("spots").add({ ...body, status: "want", likes: meId ? { [meId]: true } : {}, comments: [], addedBy: meId, createdAt: new Date().toISOString() })),
     updateSpot: (id, patch) => wrap(db.collection("spots").doc(id).update({ ...patch, updatedAt: new Date().toISOString() })),
     deleteSpot: (id) => wrap(db.collection("spots").doc(id).delete()),
-    vote: (id, value) => wrap(db.collection("spots").doc(id).update({ likes: { [meId]: value } })),
+    // 「まあまあ」には理由（任意）を添える。答え直したら「もう一度聞く」は終わり
+    vote(id, value, reason = null) {
+      const it = spots.find((s) => s.id === id);
+      const patch = { likes: { [meId]: value }, reasons: { [meId]: value === "no" ? reason || null : null } };
+      if ((value === true || value === "no") && it?.reaskAt) Object.assign(patch, { reaskAt: "", reaskBy: "" });
+      return wrap(db.collection("spots").doc(id).update(patch));
+    },
     comment(id, text) {
       const it = spots.find((s) => s.id === id);
       return wrap(db.collection("spots").doc(id).update({ comments: [...(it?.comments || []), { by: meId, text, at: new Date().toISOString() }].slice(-100) }));
@@ -65,22 +71,21 @@ async function artifactBackend() {
     saveSettings: (patch) => wrap(db.doc("meta/settings").set({ name: "行きたいリスト", bases: [], ...(settings || {}), ...patch })),
     async readPost({ url = "", text = "", image = null, ai = false }) {
       const cleanUrl = url ? normalizeUrl(url) : "";
-      const draft = { ...analyzeText(text), url: cleanUrl, platform: cleanUrl ? detectPlatform(cleanUrl) : "web", caption: text, ...(coordsFrom(url) || coordsFrom(text) || {}) };
+      const draft = { ...analyzeText(text), ...(cleanUrl ? {} : parseFreeform(text)), url: cleanUrl, platform: cleanUrl ? detectPlatform(cleanUrl) : "web", caption: text, ...(coordsFrom(url) || coordsFrom(text) || {}) };
       if (!ai) return draft;
       if (!aiOn) throw new Error("この表示ではAI読み取りを使えません");
-      const genres = GENRES.map((g) => `"${g.id}"(${g.label})`).join("/");
-      const prompt = `SNSで見つけたお出かけ先を整理しています。次の投稿から、行きたい場所の情報をJSONで返してください。\n` +
-        `わからない項目は空文字かnullにし、投稿にない値段や営業時間は作らないでください。\n` +
-        `lat/lng は、店名や住所・駅名から位置をおおよそ特定できるときだけ、あなたの知識で推定してください（わからなければnull）。\n` +
-        `今日は ${new Date().toISOString().slice(0, 10)} です。` + (image ? "添付画像は投稿のスクリーンショットです。写っている文字も読んでください。" : "") + `\n` +
-        `返すJSON: {"placeName":"店名・施設名","address":"住所","prefecture":"都道府県","city":"市区町村","station":"最寄り駅","genre":${genres},"priceMin":1人あたりの最低価格(円・数値かnull),"priceMax":数値かnull,"hours":"営業時間","closed":"定休日","deadline":"期間限定の終了日 YYYY-MM-DD か空文字","summary":"どんな場所かを40字以内で紹介","lat":数値かnull,"lng":数値かnull}\n\n` +
-        `<post>\nURL: ${cleanUrl || "なし"}\n本文:\n${String(text).slice(0, 4000)}\n</post>`;
+      const prompt = `SNSの投稿から、行きたいお出かけ先の情報を抜き出してください。今日は ${new Date().toISOString().slice(0, 10)} です。\n` +
+        (image ? "添付画像は投稿のスクリーンショットです。写っている文字（店名・住所・価格・営業時間）も読んでください。\n" : "") +
+        `\n${EXTRACT_RULES}\n- lat / lng: 店名・住所・駅名から位置がおおよそ特定できるときだけ、あなたの知識で緯度経度を推定（わからなければ null）。\n\n<genres>\n${GENRE_GUIDE}\n</genres>\n\n` +
+        `返すJSON: {"placeName":"","address":"","prefecture":"","city":"","station":"","walkMin":null,"genre":"other","priceMin":null,"priceMax":null,"hours":"","closed":"","deadline":"","summary":"","lat":null,"lng":null}\n\n` +
+        `<post>\nURL: ${cleanUrl || "なし"}\n本文:\n${String(text).slice(0, 4000)}\n</post>` + hintsText(draft);
       try {
-        const res = await sample.json(prompt, image ? { images: image } : {});
-        if (!res || typeof res !== "object") throw { code: "invalid_json" };
+        const res = cleanAiResult(await sample.json(prompt, image ? { images: image } : {}));
+        if (!res) throw { code: "invalid_json" };
         const out = { ...draft, aiUsed: true };
-        for (const [k, v] of Object.entries(res)) if (v !== "" && v != null && (out[k] === "" || out[k] == null || out[k] === "other")) out[k] = v;
-        if (res.lat != null && Number.isFinite(Number(res.lat))) { out.lat = Number(res.lat); out.lng = Number(res.lng); out.geoNote = "AIが推定した位置です"; }
+        // AIの答えを優先（ルールで読んだ候補を直してもらうため）。AIが空のところだけルールの値を残す
+        for (const [k, v] of Object.entries(res)) if (v !== "" && v != null && !(k === "genre" && v === "other")) out[k] = v;
+        if (res.lat != null) { out.lat = res.lat; out.lng = res.lng; out.geoNote = "AIが推定した位置です"; }
         return out;
       } catch (e) {
         throw new Error(sampleError(e));
@@ -94,6 +99,16 @@ async function artifactBackend() {
       try {
         const r = await sample.json(prompt);
         return Array.isArray(r?.picks) ? r.picks : [];
+      } catch (e) {
+        throw new Error(sampleError(e));
+      }
+    },
+    async route({ from, to, mode }) {
+      if (!aiOn) throw new Error("この表示ではAIを使えません");
+      const prompt = `${ROUTE_RULES}\n\n返すJSON: {"steps":[{"type":"walk","text":"","minutes":5}],"totalMinutes":null,"fareYen":null,"note":""}\n\n<from>${JSON.stringify(from)}</from>\n<to>${JSON.stringify(to)}</to>\n<mode>${mode}</mode>`;
+      try {
+        const r = await sample.json(prompt);
+        return r && Array.isArray(r.steps) ? r : { steps: [], note: "うまく調べられませんでした" };
       } catch (e) {
         throw new Error(sampleError(e));
       }

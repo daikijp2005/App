@@ -12,6 +12,7 @@ const flatten = (src) => src.replace(/^import .* from .*;$/gm, "").replace(/^exp
 
 const bundle = [
   flatten(read("lib/analyze.js")),
+  flatten(read("lib/prompts.js")),
   flatten(read("public/util.js")),
   flatten(read("public/smart.js")),
   flatten(read("public/core.js")),

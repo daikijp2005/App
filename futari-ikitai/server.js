@@ -8,10 +8,10 @@ import { createReadStream, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { analyzeText, GENRES } from "./lib/analyze.js";
+import { analyzeText, parseFreeform, cleanAiResult, cityFromAddress, GENRES } from "./lib/analyze.js";
 import { fetchPreview, cleanCaption, normalizeUrl } from "./lib/preview.js";
 import { geocode, geocodePlace } from "./lib/geo.js";
-import { aiEnabled, aiExtract, aiAsk } from "./lib/ai.js";
+import { aiEnabled, aiExtract, aiAsk, aiRoute } from "./lib/ai.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, "public");
@@ -104,10 +104,12 @@ async function buildDraft({ url, text, image = null }) {
   const caption = [cleanCaption(preview.platform, preview.description), text].filter(Boolean).join("\n");
   const ldText = [preview.ld?.name, preview.ld?.address, preview.ld?.priceRange, preview.ld?.cuisine].filter(Boolean).join("\n");
   const allText = [preview.title, caption, ldText].filter(Boolean).join("\n");
-  const rule = analyzeText(allText);
+  // リンク先が読めないメモ書き（本文だけ）は、まとめて入力と同じ読み方をする
+  const rule = preview.url ? analyzeText(allText) : { ...analyzeText(allText), ...parseFreeform(allText) };
+  if (preview.ld?.address && !rule.address) { rule.address = preview.ld.address; rule.city = cityFromAddress(preview.ld.address); }
 
   let ai = null;
-  if (allText.trim() || image) ai = await aiExtract({ url: preview.url, platform: preview.platform, title: preview.title, caption: caption + "\n" + ldText, image });
+  if (allText.trim() || image) ai = cleanAiResult(await aiExtract({ url: preview.url, platform: preview.platform, title: preview.title, caption: caption + "\n" + ldText, image, hints: rule }));
 
   const pick = (k) => (ai && ai[k] !== "" && ai[k] != null ? ai[k] : rule[k]);
   const draft = {
@@ -123,13 +125,13 @@ async function buildDraft({ url, text, image = null }) {
     prefecture: pick("prefecture"),
     city: pick("city"),
     station: pick("station"),
-    walkMin: rule.walkMin,
-    priceMin: ai ? ai.priceMin : rule.priceMin,
-    priceMax: ai ? ai.priceMax : rule.priceMax,
+    walkMin: ai?.walkMin ?? rule.walkMin,
+    priceMin: ai && ai.priceMin != null ? ai.priceMin : rule.priceMin,
+    priceMax: ai && ai.priceMax != null ? ai.priceMax : rule.priceMax,
     priceNote: rule.priceNote || preview.ld?.priceRange || "",
     hours: pick("hours"),
-    closed: rule.closed,
-    deadline: ai?.deadline || "",
+    closed: pick("closed"),
+    deadline: pick("deadline") || "",
     tags: rule.tags,
     summary: ai?.summary || "",
     lat: preview.lat || null,
@@ -152,7 +154,7 @@ const ITEM_FIELDS = {
   url: "s", platform: "s", title: "s", caption: "s", image: "s", author: "s", genre: "s", placeName: "s", address: "s",
   prefecture: "s", city: "s", station: "s", walkMin: "n", priceMin: "n", priceMax: "n", priceNote: "s", hours: "s", closed: "s",
   tags: "a", summary: "s", lat: "n", lng: "n", memo: "s", status: "s", plannedDate: "s", visitedAt: "s", rating: "n", review: "s",
-  deadline: "s", pinned: "b", planTime: "s", planOrder: "n",
+  deadline: "s", pinned: "b", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
 };
 
 function sanitizeItem(input) {
@@ -175,6 +177,7 @@ function sanitizeItem(input) {
 const MEMBER_COLORS = ["#df4a72", "#3b6fd8", "#1d936a", "#c47b0c", "#8a56d6", "#d6561f", "#0f8fa0", "#b0469a"];
 const GROUP_TYPES = ["couple", "friends", "family", "work", "circle", "solo"];
 const MAX_MEMBERS = 50;
+const REASONS = ["far", "budget", "mood", "crowd", "time", "taste"];
 
 function sanitizeMember(m, i) {
   return {
@@ -248,6 +251,14 @@ async function handleApi(req, res, url) {
     if (body.image && !aiEnabled()) return send(res, 400, { error: "スクリーンショットの読み取りにはAIの設定が必要です" });
     const image = body.image ? { data: String(body.image), mediaType: /^image\/(png|jpeg|webp|gif)$/.test(body.mediaType) ? body.mediaType : "image/jpeg" } : null;
     return send(res, 200, await buildDraft({ url: body.url, text: body.text, image }));
+  }
+
+  if (parts[1] === "route" && method === "POST") {
+    if (!aiEnabled()) return send(res, 400, { error: "AIで行き方を調べるには、サーバーに ANTHROPIC_API_KEY の設定が必要です" });
+    const { from, to, mode } = await readJson(req);
+    const clip = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k]) => ["name", "label", "address", "station", "lat", "lng"].includes(k)).map(([k, v]) => [k, typeof v === "string" ? v.slice(0, 120) : v]));
+    try { return send(res, 200, (await aiRoute({ from: clip(from), to: clip(to), mode: String(mode || "train").slice(0, 20) })) || { steps: [], note: "" }); }
+    catch (e) { console.warn("[ai] route", e.message); return send(res, 502, { error: "AIにうまく聞けませんでした。少し待ってからもう一度試してください" }); }
   }
 
   if (parts[1] === "geocode" && method === "GET") {
@@ -387,6 +398,11 @@ async function handleApi(req, res, url) {
       item.likes = { ...(item.likes || {}) };
       if (value === true || value === false || value === "no") item.likes[memberId] = value;
       else delete item.likes[memberId];
+      // 「まあまあ」の理由（相手を責めない選択肢だけ）
+      item.reasons = { ...(item.reasons || {}) };
+      if (value === "no" && REASONS.includes(body.reason)) item.reasons[memberId] = body.reason;
+      else delete item.reasons[memberId];
+      if (value === true || value === "no") { if (item.reaskBy && item.reaskAt) { item.reaskAt = ""; item.reaskBy = ""; } }
       await saveRoom(room);
       return send(res, 200, item);
     }

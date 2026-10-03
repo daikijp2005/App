@@ -122,3 +122,24 @@ test("メンバーの称号と相性", async () => {
   assert.equal(g.indexOf("2026-10-01"), 4, "2026年10月1日は木曜日");
   assert.equal(eventsOn([{ status: "planned", plannedDate: "2026-10-10" }, { deadline: "2026-10-10" }], "2026-10-10").deadline.length, 1);
 });
+
+test("移動手段ごとの目安", async () => {
+  const { travelModes } = await import("../public/smart.js");
+  const shibuya = { lat: 35.658, lng: 139.7016 };
+  const near = travelModes(shibuya, { lat: 35.6654, lng: 139.7121 }, { toStation: "表参道駅", toName: "カフェ" });
+  const ids = near.modes.map((m) => m.id);
+  assert.ok(["walk", "bicycle", "train", "bus", "car", "taxi"].every((id) => ids.includes(id)));
+  assert.ok(!ids.includes("shinkansen") && !ids.includes("plane"));
+  const train = near.modes.find((m) => m.id === "train");
+  assert.match(train.steps[1].text, /表参道駅/);
+  assert.equal(train.min, train.steps.reduce((s, x) => s + x.min, 0), "合計は各ステップの和");
+  const kyoto = travelModes(shibuya, { lat: 35.0116, lng: 135.7681 });
+  const k = Object.fromEntries(kyoto.modes.map((m) => [m.id, m]));
+  assert.ok(k.shinkansen && k.highwayBus && k.plane && k.car);
+  assert.ok(!k.walk && !k.bus && !k.taxi);
+  assert.ok(k.shinkansen.min > 120 && k.shinkansen.min < 260, `新幹線 ${k.shinkansen.min}分`);
+  assert.ok(k.shinkansen.recommended, "京都へは新幹線がおすすめ");
+  assert.ok(k.highwayBus.fare < k.shinkansen.fare);
+  const fukuoka = travelModes(shibuya, { lat: 33.5902, lng: 130.4017 });
+  assert.ok(fukuoka.modes.find((m) => m.id === "plane").recommended, "福岡へは飛行機がおすすめ");
+});

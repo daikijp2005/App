@@ -211,7 +211,7 @@ function timeline(picked, style, day, required) {
     else unknownPrice = true;
   });
   const score = order.reduce((s, x) => s + loveScore(x, required), 0) - km * 0.25 - warnings.length;
-  const area = order[0].station?.replace(/駅$/, "") || order[0].city || order[0].prefecture || "";
+  const area = order[0].station?.replace(/駅$/, "") || (String(order[0].city || "").match(/^.*?[市区町村]/) || [order[0].city])[0] || order[0].prefecture || "";
   return { stops, warnings, km, budget, unknownPrice, score, area, start: stops[0].arrive, end: stops[stops.length - 1].leave };
 }
 
@@ -464,4 +464,85 @@ export function eventsOn(spots, date) {
     deadline: spots.filter((s) => s.status !== "visited" && s.deadline === date),
     visited: spots.filter((s) => s.status === "visited" && s.visitedAt === date),
   };
+}
+
+// ---------- 移動手段ごとの目安 ----------
+// 直線距離から、電車・新幹線・バス・高速バス・飛行機・車・タクシー・自転車・徒歩の時間と料金の目安、
+// それぞれの「具体的な行き方」（どこまで歩いて何に乗るか）を作る。正確な時刻や運賃は乗換案内で確認する前提。
+const round = (n, unit) => Math.round(n / unit) * unit;
+export const MODE_INFO = {
+  walk: { label: "徒歩", icon: "walk", maps: "walking" },
+  bicycle: { label: "自転車", icon: "bike", maps: "bicycling" },
+  train: { label: "電車", icon: "train", maps: "transit", transit: true },
+  bus: { label: "路線バス", icon: "bus", maps: "transit", transit: true },
+  shinkansen: { label: "新幹線", icon: "shinkansen", maps: "transit", transit: true },
+  highwayBus: { label: "高速バス", icon: "bus", maps: "transit", transit: true },
+  plane: { label: "飛行機", icon: "plane", maps: "transit", transit: true },
+  car: { label: "車", icon: "car", maps: "driving" },
+  taxi: { label: "タクシー", icon: "taxi", maps: "driving" },
+};
+
+export function travelModes(from, to, { fromName = "出発地", toName = "目的地", toStation = "", walkMin = null } = {}) {
+  const km = distanceKm(from, to);
+  const road = km * 1.3;
+  const lastWalk = walkMin ?? (road < 3 ? 3 : 6);
+  const station = toStation || "目的地の最寄り駅";
+  const out = [];
+  const add = (id, raw, fare, note = "") => {
+    const steps = raw.map((x) => ({ ...x, min: Math.max(1, Math.round(x.min)) }));
+    out.push({ id, ...MODE_INFO[id], min: steps.reduce((s, x) => s + x.min, 0), fare, note, steps });
+  };
+
+  if (road <= 5) add("walk", [{ icon: "walk", text: `${fromName}から${toName}まで歩く`, min: (road / 4.5) * 60 }], 0);
+  if (road <= 15) add("bicycle", [{ icon: "bike", text: `${fromName}から自転車で${toName}へ`, min: (road / 14) * 60 + 2 }], 0, road > 8 ? "坂道によっては大変かも" : "");
+  if (km >= 0.8 && road <= 220) {
+    const ride = (road / Math.min(55, 20 + road * 0.5)) * 60;
+    const transfer = road > 40 ? "乗り換え2回ほど" : road > 12 ? "乗り換え1回ほど" : "乗り換えなし〜1回";
+    add("train", [
+      { icon: "walk", text: `${fromName}から最寄り駅まで歩く`, min: 8 },
+      { icon: "train", text: `電車で${station}へ（${transfer}）`, min: ride + (road > 12 ? 6 : 3) },
+      { icon: "walk", text: `${toStation || "駅"}から${toName}まで歩く`, min: lastWalk },
+    ], round(140 + road * 17, 10));
+  }
+  if (km >= 1 && road <= 30) add("bus", [
+    { icon: "walk", text: "近くのバス停まで歩く", min: 5 },
+    { icon: "bus", text: "路線バスで移動（待ち時間込み）", min: 8 + (road / 15) * 60 },
+    { icon: "walk", text: `バス停から${toName}まで歩く`, min: 4 },
+  ], round(220 + Math.max(0, road - 8) * 25, 10), "本数が少ない路線もあります");
+  if (km >= 100 && km <= 1300) add("shinkansen", [
+    { icon: "train", text: "最寄り駅から新幹線の停まる駅へ", min: 25 },
+    { icon: "clock", text: "乗車まで（切符・乗り場へ）", min: 10 },
+    { icon: "shinkansen", text: "新幹線で移動", min: (road / 210) * 60 },
+    { icon: "train", text: `到着駅から在来線・バスで${station}へ`, min: 20 },
+    { icon: "walk", text: `${toName}まで歩く`, min: lastWalk },
+  ], round(road * 24 + 2500, 100), "指定席の料金の目安");
+  if (km >= 80 && km <= 900) add("highwayBus", [
+    { icon: "train", text: "高速バスの乗り場（大きな駅・バスターミナル）へ", min: 20 },
+    { icon: "bus", text: road > 400 ? "高速バスで移動（夜行便もあり）" : "高速バスで移動", min: (road / 65) * 60 + 10 },
+    { icon: "train", text: `到着地から${toName}へ`, min: 20 },
+  ], round(road * 9, 100), "安く行きたいときに");
+  if (km >= 350) add("plane", [
+    { icon: "train", text: "空港へ移動", min: 60 },
+    { icon: "clock", text: "搭乗手続き・保安検査", min: 45 },
+    { icon: "plane", text: "飛行機で移動", min: (km / 700) * 60 + 25 },
+    { icon: "train", text: `到着空港から${toName}へ`, min: 50 },
+  ], round(12000 + km * 12, 1000), "早めの予約で安くなることも");
+  if (road <= 1200) {
+    const drive = (road / Math.min(80, 18 + road * 0.6)) * 60;
+    const toll = road > 30 ? road * 22 : 0;
+    add("car", [
+      { icon: "car", text: `${fromName}から車で出発${road > 30 ? "（高速道路を使うと早い）" : ""}`, min: drive + 5 },
+      { icon: "pin", text: "近くの駐車場に停める", min: 5 },
+    ], round(road * 12 + toll, 100), road > 30 ? "ガソリン代と高速代の目安（1台）" : "ガソリン代の目安（1台）");
+  }
+  if (road <= 40) add("taxi", [{ icon: "car", text: `タクシーで${toName}へ直行`, min: (road / Math.min(40, 18 + road * 0.6)) * 60 + 3 }], round(500 + road * 420, 100), "1台あたり。何人かで乗ると割安");
+
+  const publicModes = out.filter((m) => m.transit);
+  const fastest = [...publicModes].sort((a, b) => a.min - b.min)[0];
+  if (fastest) fastest.recommended = true;
+  return { km, modes: out.sort((a, b) => (a.transit === b.transit ? a.min - b.min : a.transit ? -1 : 1)) };
+}
+
+export function yahooTransitUrl(fromName, toName) {
+  return `https://transit.yahoo.co.jp/search/result?from=${encodeURIComponent(fromName)}&to=${encodeURIComponent(toName)}`;
 }

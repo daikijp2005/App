@@ -1,11 +1,26 @@
 // あれどこ — 画面（Webアプリとアーティファクトで共通）
 // データの読み書きは backend に任せる。backend の形は README の「しくみ」を参照。
-import { GENRES, analyzeText, parseFreeform } from "/lib/analyze.js";
+import { GENRES, analyzeText, parseFreeform, cityShort } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
-import { openState, seasonOf, buildCourses, externalLinks, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn } from "./smart.js";
+import { openState, seasonOf, buildCourses, externalLinks, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
 
 const TINT = { cafe: "#efd5bd", sweets: "#f8cfdc", gourmet: "#f4cfae", bar: "#ddc8e6", nature: "#c9e3cf", sightseeing: "#eed7c0", art: "#d3d8f2", event: "#fbdfaa", shopping: "#cfe8ee", stay: "#f1cbc3", activity: "#cfe7c9", other: "#e6dfdc" };
 const STATUS = { want: "行きたい", planned: "予定あり", visited: "行った" };
+// 「まあまあ」の理由。相手のセンスを否定しない言い方だけにして、見た人へのやさしい一言と次の一手を添える
+const MEH = {
+  far: { label: "ちょっと遠い", emoji: "🚃", hint: "遠出の日や、近くに行く予定があるときに誘うと行きやすくなるかも。" },
+  budget: { label: "予算が気になる", emoji: "👛", hint: "ランチや平日のお得なプランなら、気軽に行けるかも。" },
+  mood: { label: "今は気分じゃない", emoji: "🌙", hint: "気分は変わるもの。少し時間をおいて、もう一度聞いてみよう。" },
+  crowd: { label: "混んでそう", emoji: "👥", hint: "平日や朝いち・夜遅めなら、ゆったり楽しめるかも。" },
+  time: { label: "時間が合わなそう", emoji: "🗓️", hint: "カレンダーで空いている日を一緒に探してみよう。" },
+  taste: { label: "好みがちょっと違う", emoji: "🎨", hint: "好みが違うのも楽しさのうち。相手の♡の場所と“交換こ”で行くのもアリ。" },
+};
+const KIND_WORDS = [
+  "「まあまあ」は「条件が合えば行けるかも」のサイン。",
+  "あなたの♡はちゃんと残っています。タイミングを変えればアリかも。",
+  "ひとりでも行きたい場所なら、それも立派な予定。いつか一緒に行けるかも。",
+  "見つけてくれたこと自体がうれしいはず。次の候補もきっと刺さります。",
+];
 const STYLE_LABEL = { day: "昼から", afternoon: "午後から", evening: "夕方から" };
 
 const ICONS = {
@@ -36,6 +51,12 @@ const ICONS = {
   dice: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 8h.01M16 16h.01M12 12h.01M16 8h.01M8 16h.01",
   skip: "M5 4l10 8-10 8zM19 5v14",
   chev: "M6 9l6 6 6-6",
+  bike: "M5.5 17.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM18.5 17.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM15 6h2l1.5 7.5M5.5 14l4-7h5l-3.5 7M9 7l-1-2H6",
+  bus: "M6 4h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM4 11h16M8 18v2M16 18v2M7.5 14.5h.01M16.5 14.5h.01M8 7h8",
+  shinkansen: "M3 15c0-4 4-8 11-8h3c2 0 4 2 4 4v2a2 2 0 0 1-2 2H3zM3 15v1a2 2 0 0 0 2 2h14M14 7v4h7M7 19l-1 2M17 19l1 2",
+  plane: "M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z",
+  taxi: "M5 17h14M5 17a2 2 0 1 0 4 0M15 17a2 2 0 1 0 4 0M3 17v-5l2-5h14l2 5v5M3 12h18M10 4h4v3h-4z",
+  meh: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 15h8M9 9.5h.01M15 9.5h.01",
   users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
   help: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
   share: "M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13",
@@ -117,7 +138,7 @@ const TOUR = [
   },
   {
     title: "スワイプで「行きたい」を答え合わせ",
-    text: "誰かが見つけた場所を、右にスワイプで「行きたい」、左で「うーん」。みんなが行きたい場所は「マッチ」します。",
+    text: "誰かが見つけた場所を、右にスワイプで「行きたい」、左で「まあまあ」。みんなが行きたい場所は「マッチ」します。",
     art: () => `<div class="tour-mock" style="display:grid;place-items:center"><div class="swipe-card" style="position:relative;width:200px;height:220px;transform:rotate(8deg) translateX(14px)">
       <div class="cover" style="--tint:${TINT.gourmet};font-size:54px">🍽️<span class="stamp yes" style="opacity:1;font-size:16px">行きたい！</span></div>
       <div class="body" style="padding:10px 12px"><b>渋谷の隠れ家ビストロ</b><span class="sub">¥4,000〜</span></div></div></div>`,
@@ -179,7 +200,7 @@ export function startApp(backend, mount = document.body) {
     view: local.get("view", "home"), q: "", seg: "all", groupBy: local.get("groupBy", "date"), sortBy: local.get("sortBy", "new"),
     f: { genres: new Set(), price: "", travel: "", area: "", who: "", openNow: false }, listMode: "grid",
     baseId: local.get("baseId", null), plan: { date: nextSaturday(), style: "day", stops: 3, budget: "", bothOnly: false }, courses: null,
-    skipped: new Set(), planTab: "calendar", calMonth: "", calDay: "",
+    skipped: new Set(), planTab: "calendar", calMonth: "", calDay: "", openMode: "", routeCache: {},
   };
 
   mount.insertAdjacentHTML("beforeend", `<div class="app" id="app"></div><div id="modal-root"></div><div id="toast" aria-live="polite"></div>`);
@@ -208,7 +229,9 @@ export function startApp(backend, mount = document.body) {
   const matchText = (it) => { const y = yesIds(it).length, n = memberCount(); return y >= n ? V().all : `${y}/${n}人`; };
   const matchPhrase = () => (memberCount() <= 2 || S.settings.type === "couple" ? `${V().all}行きたい` : "過半数が行きたい");
   const myVote = (it) => votes(it)[me()];
-  const pending = () => S.spots.filter((it) => (it.status || "want") !== "visited" && it.addedBy && it.addedBy !== me() && (myVote(it) === undefined || myVote(it) === null));
+  // 答え合わせ待ち：まだ答えていない場所＋「もう一度どう？」と聞き直された場所
+  const reasked = (it) => myVote(it) === "no" && it.reaskAt && it.reaskAt <= todayStr() && it.reaskBy !== me();
+  const pending = () => S.spots.filter((it) => (it.status || "want") !== "visited" && it.addedBy && it.addedBy !== me() && (myVote(it) === undefined || myVote(it) === null || reasked(it)));
   const activeBase = () => S.settings.bases.find((b) => b.id === S.baseId) || S.settings.bases[0] || null;
   const travelOf = (it) => { const b = activeBase(); return b && it.lat != null && it.lng != null ? estimateTravel(b, it) : null; };
 
@@ -313,7 +336,7 @@ export function startApp(backend, mount = document.body) {
   function groupKey(it) {
     switch (S.groupBy) {
       case "genre": { const g = genreOf(it.genre); return { key: g.id, label: `${g.emoji} ${g.label}`, order: GENRES.indexOf(g) }; }
-      case "area": { const a = it.prefecture ? `${it.prefecture}${it.city && !it.city.startsWith(it.prefecture) ? " " + it.city : ""}` : it.city || "エリア未設定"; return { key: a, label: a, order: a === "エリア未設定" ? 1e9 : 0 }; }
+      case "area": { const c = cityShort(it.city); const a = it.prefecture ? `${it.prefecture}${c ? " " + c : ""}` : c || "エリア未設定"; return { key: a, label: a, order: a === "エリア未設定" ? 1e9 : 0 }; }
       case "travel": { const b = travelBucket(travelOf(it)); return { key: b.id, label: b.label.replace(/^\S+\s/, ""), order: b.order }; }
       case "price": { const b = priceBucket(it); return { key: b.id, label: b.label.replace(/^\S+\s/, ""), order: b.order }; }
       case "who": return { key: it.addedBy || "?", label: `${pname(it.addedBy)}が見つけた`, order: it.addedBy === me() ? 0 : 1 };
@@ -333,7 +356,7 @@ export function startApp(backend, mount = document.body) {
   function card(it) {
     const g = genreOf(it.genre);
     const t = travelOf(it);
-    const area = it.station || it.city || it.prefecture;
+    const area = it.station || cityShort(it.city) || it.prefecture;
     const liked = myVote(it) === true;
     return `<article class="card" data-open="${esc(it.id)}" tabindex="0">
       <div ${cover(it, "cover")}>${img(it) || g.emoji}
@@ -521,21 +544,22 @@ export function startApp(backend, mount = document.body) {
       const t = travelOf(it);
       return `<div class="swipe-card ${behind ? "behind" : ""}" ${behind ? "" : `id="swipe" data-id="${esc(it.id)}"`}>
         <div ${cover(it, "cover")}>${img(it) || g.emoji}<div class="tl"><span class="tag glass">${esc(g.label)}</span></div>
-          ${behind ? "" : `<span class="stamp yes">行きたい！</span><span class="stamp no">うーん</span>`}</div>
+          ${behind ? "" : `<span class="stamp yes">行きたい！</span><span class="stamp no">まあまあ</span>`}</div>
         <div class="body">
           <span class="who">${av(it.addedBy, "xs")}<span style="display:inline">${esc(pname(it.addedBy))}が ${relativeDate(it.createdAt || new Date().toISOString())}に見つけた</span></span>
+          ${reasked(it) ? `<span class="tag season">もう一度どう？と聞かれています</span>` : ""}
           <h3>${esc(nameOf(it))}</h3>
-          <div class="facts">${it.station || it.city ? `<span>${ic("pin", "sm")}${esc(it.station || it.city)}</span>` : ""}${t ? `<span>${ic("train", "sm")}<b>${formatMinutes(t.best)}</b></span>` : ""}${formatPrice(it) ? `<span>${ic("yen", "sm")}<b>${esc(formatPrice(it))}</b></span>` : ""}</div>
+          <div class="facts">${it.station || it.city ? `<span>${ic("pin", "sm")}${esc(it.station || cityShort(it.city))}</span>` : ""}${t ? `<span>${ic("train", "sm")}<b>${formatMinutes(t.best)}</b></span>` : ""}${formatPrice(it) ? `<span>${ic("yen", "sm")}<b>${esc(formatPrice(it))}</b></span>` : ""}</div>
           ${it.summary || it.memo ? `<p class="sub" style="margin:0">${esc(it.summary || it.memo)}</p>` : ""}
           <div class="tags" style="margin:0">${smartTags(it, { withStatus: false })}${it.url ? `<a class="tag" href="${esc(it.url)}" target="_blank" rel="noopener">${ic("ext", "sm")}${esc(platformLabel(it.platform))}で見る</a>` : ""}</div>
         </div>
       </div>`;
     };
     v.innerHTML = `<div class="section-h"><h2>答え合わせ</h2><span class="sub num">のこり ${queue.length}件</span></div>
-      <p class="sub" style="margin:-4px 2px 0">${esc(pname(cur.addedBy))}が見つけた場所、あなたも行きたい？ 右にスワイプで「行きたい」、左で「うーん」。</p>
+      <p class="sub" style="margin:-4px 2px 0">${esc(pname(cur.addedBy))}が見つけた場所、あなたも行きたい？ 右にスワイプで「行きたい」、左で「まあまあ」。</p>
       <div class="swipe-stage">${next ? swipeCard(next, true) : ""}${swipeCard(cur, false)}</div>
       <div class="swipe-actions">
-        <button class="round" data-vote="no" aria-label="うーん">${ic("x")}</button>
+        <button class="round" data-vote="no" aria-label="まあまあ">${ic("meh")}</button>
         <button class="round skip" data-vote="skip" aria-label="あとで">${ic("skip", "sm")}</button>
         <button class="round yes" data-vote="yes" aria-label="行きたい">${ic("heart")}</button>
       </div>`;
@@ -573,8 +597,40 @@ export function startApp(backend, mount = document.body) {
     if (el) { el.style.transform = `translateX(${choice === "yes" ? 520 : -520}px) rotate(${choice === "yes" ? 24 : -24}deg)`; el.style.opacity = "0"; }
     const value = choice === "yes" ? true : "no";
     const wasMatch = choice === "yes" && yesIds(it).some((id) => id !== me());
-    await vote(it.id, value, { silent: true });
+    const reason = value === "no" ? await mehSheet(it) : null;
+    await vote(it.id, value, { silent: true, reason });
     if (wasMatch) showMatch(it);
+    if (value === "no") toast("「まあまあ」を伝えました。気が変わったらいつでも♡にできます");
+  }
+
+  // 「まあまあ」の理由を選ぶ（任意）。選んだ理由は相手にやさしい一言として伝わる
+  function mehSheet(it) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (r) => { if (done) return; done = true; resolve(r); };
+      const { root, close } = sheet(`${head("まあまあ、ですね")}
+        <p class="sub" style="margin-top:0">理由を選ぶと、${esc(pname(it.addedBy))}にやさしく伝わります。選ばなくても大丈夫です。</p>
+        <div class="meh-grid">${Object.entries(MEH).map(([k, m]) => `<button data-meh="${k}"><span>${m.emoji}</span>${esc(m.label)}</button>`).join("")}</div>
+        <button class="btn line block" style="margin-top:10px" data-meh="">理由は言わない</button>`, { onClose: () => finish(null) });
+      root.addEventListener("click", (e) => { const b = e.target.closest("[data-meh]"); if (!b) return; finish(b.dataset.meh || null); close(); });
+    });
+  }
+
+  // 自分が見つけた場所に「まあまあ」が付いたときの、やさしい一言と次の一手
+  function kindBox(it) {
+    const mehs = Object.entries(votes(it)).filter(([id, v]) => v === "no" && id !== me());
+    if (!mehs.length || it.status === "visited") return "";
+    const mine = it.addedBy === me();
+    const reasons = [...new Set(mehs.map(([id]) => it.reasons?.[id]).filter((r) => MEH[r]))];
+    const seed = [...String(it.id)].reduce((n, c) => n + c.charCodeAt(0), 0);
+    const lines = reasons.length ? reasons.map((r) => `${MEH[r].emoji} ${MEH[r].hint}`) : [KIND_WORDS[seed % KIND_WORDS.length]];
+    const waiting = it.reaskAt && it.reaskAt > todayStr();
+    return `<div class="kind-box">
+      <b>${mine ? "こんなふうに誘ってみては？" : "まあまあの声も、ヒントにしよう"}</b>
+      ${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
+      ${mine ? (waiting ? `<p class="sub">${jpDate(it.reaskAt)}に、もう一度「どう？」と聞きます。</p>`
+        : `<div class="actions" style="margin-top:4px"><button class="btn sm line" data-reask="7">1週間後にもう一度聞く</button><button class="btn sm line" data-reask="30">1か月後にもう一度聞く</button></div>`) : ""}
+    </div>`;
   }
 
   function showMatch(it) {
@@ -749,13 +805,14 @@ export function startApp(backend, mount = document.body) {
   }
 
   // ---------- 投票・書き込み ----------
-  async function vote(id, value, { silent = false } = {}) {
+  async function vote(id, value, { silent = false, reason = null } = {}) {
     const it = S.spots.find((s) => s.id === id);
     if (!it || !me()) return toast("この端末でどちらが使っているかを設定してください");
     it.likes = { ...(it.likes || {}), [me()]: value };
+    it.reasons = { ...(it.reasons || {}), [me()]: value === "no" ? reason : null };
     render();
     refreshDetail(id);
-    await act(() => B.vote(id, value));
+    await act(() => B.vote(id, value, reason));
     if (!silent && value === true && isBoth(it)) toast(`${matchPhrase()}場所になりました`);
   }
   const patch = (id, body, ok) => act(() => B.updateSpot(id, body), ok);
@@ -831,7 +888,7 @@ export function startApp(backend, mount = document.body) {
       <div class="field"><label for="f-address">住所</label><input id="f-address" name="address" value="${esc(d.address)}" placeholder="例: 東京都渋谷区神宮前4-12-10"></div>
       <div class="row2">
         <div class="field"><label for="f-prefecture">都道府県</label><input id="f-prefecture" name="prefecture" value="${esc(d.prefecture)}"></div>
-        <div class="field"><label for="f-city">市区町村</label><input id="f-city" name="city" value="${esc(d.city)}"></div>
+        <div class="field"><label for="f-city">市区町村・番地</label><input id="f-city" name="city" value="${esc(d.city)}"></div>
       </div>
       <div class="field"><label for="f-coords">位置（移動時間・地図・プラン作りに使います）</label>
         <div style="display:flex;gap:6px"><input id="f-coords" name="coords" value="${d.lat != null ? `${Number(d.lat).toFixed(5)}, ${Number(d.lng).toFixed(5)}` : ""}" placeholder="GoogleマップのURLか「35.6672, 139.7087」"><button type="button" class="btn sm line" data-locate>探す</button></div>
@@ -958,6 +1015,59 @@ export function startApp(backend, mount = document.body) {
     });
   }
 
+  // ---------- 移動手段（詳細画面） ----------
+  function travelHtml(it, base) {
+    if (!base) return `<button class="btn sm line" data-act="bases">出発地を登録して移動時間を出す</button>`;
+    if (it.lat == null) return `<span class="sub">位置が未設定なので計算できません。「編集」で位置を入れると出ます。</span>`;
+    const { km, modes } = travelModes(base, it, { fromName: base.label, toName: nameOf(it), toStation: it.station, walkMin: it.walkMin });
+    const row = (m) => {
+      const open = S.openMode === `${it.id}:${m.id}`;
+      const key = `${it.id}:${base.id}:${m.id}`;
+      const ai = S.routeCache?.[key];
+      const toName = it.station || it.placeName || it.address;
+      const fromName = base.address && !/^https?:/.test(base.address) ? base.address : /駅$/.test(base.label) ? base.label : "現在地";
+      return `<div class="mode ${open ? "open" : ""}">
+        <button class="mode-row" data-mode="${m.id}" aria-expanded="${open}">${ic(m.icon, "sm")}<span class="mode-name">${m.label}${m.recommended ? ` <span class="tag open">おすすめ</span>` : ""}</span>
+          <b class="num">${formatMinutes(m.min)}</b><span class="mode-fare num">${m.fare ? `¥${m.fare.toLocaleString("ja-JP")}〜` : "無料"}</span>${ic("chev", "sm")}</button>
+        ${open ? `<div class="mode-detail">
+          <ol class="steps-list">${m.steps.map((x) => `<li>${ic(x.icon, "sm")}<span>${esc(x.text)}</span><span class="num">約${formatMinutes(x.min)}</span></li>`).join("")}</ol>
+          ${m.note ? `<p class="sub" style="margin:4px 0 0">${esc(m.note)}</p>` : ""}
+          ${ai ? `<div class="ai-route"><b>${ic("sparkle", "sm")}AIが調べた具体的な行き方</b>${ai.error ? `<p class="sub">${esc(ai.error)}</p>` : ai.loading ? `<span class="thinking"><span class="spinner"></span>調べています…</span>` : `
+            <ol class="steps-list">${(ai.steps || []).map((x) => `<li>${ic(({ walk: "walk", train: "train", subway: "train", shinkansen: "shinkansen", bus: "bus", highway_bus: "bus", plane: "plane", car: "car", taxi: "taxi" })[x.type] || "route", "sm")}<span>${esc(x.text)}</span><span class="num">${x.minutes ? `約${formatMinutes(Math.round(x.minutes))}` : ""}</span></li>`).join("")}</ol>
+            <p class="sub" style="margin:4px 0 0">${ai.totalMinutes ? `合計 約${formatMinutes(Math.round(ai.totalMinutes))}` : ""}${ai.fareYen ? ` ・ 約¥${Math.round(ai.fareYen).toLocaleString("ja-JP")}` : ""}${ai.note ? `<br>${esc(ai.note)}` : ""}<br>AIの推定です。時刻・運賃は乗換案内で確かめてください。</p>`}</div>` : ""}
+          <div class="actions" style="margin-top:8px">
+            <a class="btn sm line" href="${esc(routeUrl(it, base, m.maps))}" target="_blank" rel="noopener">${ic("map", "sm")}Googleマップで経路</a>
+            ${["train", "shinkansen", "bus", "highwayBus"].includes(m.id) && toName && fromName !== "現在地" ? `<a class="btn sm line" href="${esc(yahooTransitUrl(fromName, toName))}" target="_blank" rel="noopener">${ic("train", "sm")}乗換案内</a>` : ""}
+            ${F.routeAI && m.id !== "walk" && m.id !== "bicycle" && !ai?.steps ? `<button class="btn sm rose" data-route-ai="${m.id}">${ic("sparkle", "sm")}AIに具体的なルートを聞く</button>` : ""}
+          </div></div>` : ""}
+      </div>`;
+    };
+    const pub = modes.filter((m) => m.transit), own = modes.filter((m) => !m.transit);
+    return `<span class="sub">${esc(base.label)}から（直線${km.toFixed(1)}km・すべて目安）</span>
+      ${pub.length ? `<div class="mode-group"><span class="mode-h">公共交通機関</span>${pub.map(row).join("")}</div>` : ""}
+      <div class="mode-group"><span class="mode-h">車・徒歩など</span>${own.map(row).join("")}</div>
+      <p class="sub" style="margin:6px 0 0">手段をタップすると、具体的な行き方が出ます。</p>`;
+  }
+
+  async function askRoute(it, modeId) {
+    const base = activeBase();
+    const key = `${it.id}:${base.id}:${modeId}`;
+    S.routeCache = S.routeCache || {};
+    S.routeCache[key] = { loading: true };
+    openDetail(it.id);
+    try {
+      const r = await B.route({
+        from: { label: base.label, address: base.address || "", lat: base.lat, lng: base.lng },
+        to: { name: nameOf(it), address: it.address || [it.prefecture, it.city].filter(Boolean).join(""), station: it.station || "", lat: it.lat, lng: it.lng },
+        mode: { train: "電車・地下鉄", bus: "路線バス", shinkansen: "新幹線", highwayBus: "高速バス", plane: "飛行機", car: "車", taxi: "タクシー" }[modeId] || modeId,
+      });
+      S.routeCache[key] = r && r.steps?.length ? r : { error: r?.note || "うまく調べられませんでした" };
+    } catch (e) {
+      S.routeCache[key] = { error: e?.message || "うまく調べられませんでした" };
+    }
+    if ($modal.querySelector(`[data-detail="${it.id}"]`)) openDetail(it.id);
+  }
+
   // ---------- 詳細 ----------
   function openDetail(id) {
     const it = S.spots.find((s) => s.id === id);
@@ -989,21 +1099,17 @@ export function startApp(backend, mount = document.body) {
       ${solo() ? "" : (() => {
         const others = ppl.filter((p) => p.id !== me());
         const mv = myVote(it);
-        const mark = (v) => (v === true ? "♡ 行きたい" : v === "no" ? "うーん" : "まだ");
+        const mark = (v, id) => (v === true ? "♡ 行きたい" : v === "no" ? `まあまあ${MEH[it.reasons?.[id]] ? `（${MEH[it.reasons[id]].label}）` : ""}` : "まだ");
         return `<div class="label">行きたい？ <span class="num" style="letter-spacing:0">${yesIds(it).length}/${memberCount()}人</span></div>
         <div class="vote-row">
-          ${me() ? `<div class="vote">${av(me())}<span class="name">あなた</span><div class="seg"><button data-v="yes" class="${mv === true ? "on" : ""}">♡ 行きたい</button><button data-v="no" class="${mv === "no" ? "on" : ""}">うーん</button></div></div>` : ""}
-          ${others.length ? `<div class="chips wrap-chips">${others.map((p) => { const v = votes(it)[p.id]; return `<span class="chip ${v === true ? "on" : ""}">${av(p.id, "xs")}${esc(pname(p.id))}<small>${mark(v)}</small></span>`; }).join("")}</div>` : `<p class="sub" style="margin:0">まだほかのメンバーがいません。設定から招待できます。</p>`}
-        </div>`;
+          ${me() ? `<div class="vote">${av(me())}<span class="name">あなた</span><div class="seg"><button data-v="yes" class="${mv === true ? "on" : ""}">♡ 行きたい</button><button data-v="no" class="${mv === "no" ? "on" : ""}">まあまあ</button></div></div>` : ""}
+          ${others.length ? `<div class="chips wrap-chips">${others.map((p) => { const v = votes(it)[p.id]; return `<span class="chip ${v === true ? "on" : ""}">${av(p.id, "xs")}${esc(pname(p.id))}<small>${mark(v, p.id)}</small></span>`; }).join("")}</div>` : `<p class="sub" style="margin:0">まだほかのメンバーがいません。設定から招待できます。</p>`}
+        </div>${kindBox(it)}`;
       })()}
 
       <div class="info">
         <div class="info-row">${ic("pin")}<div class="val">${esc([it.address || [it.prefecture, it.city].join(""), it.station && `${it.station}${it.walkMin ? ` 徒歩${it.walkMin}分` : ""}`].filter(Boolean).join(" ・ ") || "場所が未設定です")}</div></div>
-        <div class="info-row">${ic("train")}<div class="val">
-          ${t ? `<span class="sub">${esc(base.label)}から（直線${t.km.toFixed(1)}km・目安）</span>
-            <div class="travel">${t.walk ? `<span>徒歩<b>${formatMinutes(t.walk)}</b></span>` : ""}<span>電車<b>${formatMinutes(t.train)}</b></span><span>車<b>${formatMinutes(t.car)}</b></span></div>`
-            : base ? `<span class="sub">位置が未設定なので計算できません。「編集」で入れると出ます。</span>` : `<button class="btn sm line" data-act="bases">出発地を登録して移動時間を出す</button>`}
-        </div></div>
+        <div class="info-row">${ic("train")}<div class="val">${travelHtml(it, base)}</div></div>
         <div class="info-row">${ic("yen")}<div class="val">${formatPrice(it) ? esc(formatPrice(it)) : "値段はわかりません"}${it.priceNote && it.priceNote !== "無料" ? ` <span class="sub">${esc(it.priceNote)}</span>` : ""}</div></div>
         ${it.hours || it.closed ? `<div class="info-row">${ic("clock")}<div class="val">${esc(it.hours)}${it.closed ? `<div class="sub">定休日: ${esc(it.closed)}</div>` : ""}${o ? `<div><span class="tag ${o.state}">${esc(o.label)}</span></div>` : ""}</div></div>` : ""}
         ${it.deadline ? `<div class="info-row">${ic("hourglass")}<div class="val">${esc(it.deadline)} まで${daysUntil(it.deadline) >= 0 ? `（あと${daysUntil(it.deadline)}日）` : "（終了しました）"}</div></div>` : ""}
@@ -1040,7 +1146,20 @@ export function startApp(backend, mount = document.body) {
     root.addEventListener("click", async (e) => {
       const b = e.target.closest("button");
       if (!b || !root.contains(b)) return;
-      if (b.dataset.v) return vote(it.id, b.dataset.v === "yes" ? (myVote(it) === true ? null : true) : myVote(it) === "no" ? null : "no");
+      if (b.dataset.v === "yes") return vote(it.id, myVote(it) === true ? null : true);
+      if (b.dataset.v === "no") {
+        if (myVote(it) === "no") return vote(it.id, null);
+        const reason = await mehSheet(it);
+        await vote(it.id, "no", { reason });
+        return openDetail(it.id);
+      }
+      if (b.dataset.reask) {
+        const d = new Date(); d.setDate(d.getDate() + Number(b.dataset.reask));
+        const at = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        return patch(it.id, { reaskAt: at, reaskBy: me() }, `${jpDate(at)}にもう一度聞いてみます`);
+      }
+      if (b.dataset.mode) { S.openMode = S.openMode === `${it.id}:${b.dataset.mode}` ? "" : `${it.id}:${b.dataset.mode}`; return openDetail(it.id); }
+      if (b.dataset.routeAi) return askRoute(it, b.dataset.routeAi);
       if (b.hasAttribute("data-pin")) return patch(it.id, { pinned: !it.pinned });
       if (b.dataset.status) {
         const body = { status: b.dataset.status };
@@ -1179,7 +1298,7 @@ export function startApp(backend, mount = document.body) {
         </div>`;
       }).join("")}</div>
       ${F.invite && !solo() ? `<button class="btn rose block" style="margin-top:12px" data-act-invite>${ic("users", "sm")}メンバーを招待する</button>` : ""}
-      <p class="sub" style="margin-top:12px">称号は、見つけた場所・投票・コメントから自動で付きます。相性は、ふたりとも答えた場所の「行きたい／うーん」がどれだけ一致したかです。</p>`);
+      <p class="sub" style="margin-top:12px">称号は、見つけた場所・投票・コメントから自動で付きます。相性は、ふたりとも答えた場所の「行きたい／まあまあ」がどれだけ一致したかです。</p>`);
     root.addEventListener("click", (e) => {
       const r = e.target.closest("[data-rename]");
       if (r) return renameSheet(r.dataset.rename);

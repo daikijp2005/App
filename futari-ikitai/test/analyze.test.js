@@ -22,7 +22,7 @@ test("Instagramによくあるキャプションから情報を抜き出す", ()
   assert.equal(r.placeName, "Cafe Lumière 表参道");
   assert.equal(r.address, "東京都渋谷区神宮前4-12-10");
   assert.equal(r.prefecture, "東京都");
-  assert.equal(r.city, "渋谷区");
+  assert.equal(r.city, "渋谷区神宮前4-12-10");
   assert.equal(r.station, "表参道駅");
   assert.equal(r.walkMin, 5);
   assert.equal(r.priceMin, 650);
@@ -109,7 +109,7 @@ test("まとめて入力（手入力のメモ書き）", async () => {
   assert.equal(r.genre, "cafe");
   assert.equal(r.station, "表参道駅");
   assert.equal(r.walkMin, 5);
-  assert.equal(r.city, "渋谷区");
+  assert.equal(r.city, "渋谷区神宮前4-12-10", "市区町村は番地まで");
   assert.equal(r.priceMin, 1500);
   assert.equal(r.hours, "11時〜20時");
   assert.equal(r.closed, "火曜");
@@ -136,4 +136,31 @@ test("まとめて入力（手入力のメモ書き）", async () => {
   assert.equal(extractDeadline("2026年12月25日まで", now), "2026-12-25");
   assert.equal(extractDeadline("11/3(火)まで", now), "2026-11-03");
   assert.equal(extractDeadline("1500円", now), "");
+});
+
+test("市区町村は住所の最後まで（建物名も）", async () => {
+  const { analyzeText, cityShort, cityFromAddress } = await import("../lib/analyze.js");
+  const r = analyzeText("住所：〒150-0001 東京都渋谷区神宮前4-12-10 表参道ヒルズ本館3F");
+  assert.equal(r.prefecture, "東京都");
+  assert.equal(r.city, "渋谷区神宮前4-12-10 表参道ヒルズ本館3F");
+  const r2 = analyzeText("📍大阪府大阪市北区梅田1-1-3 大阪駅前第1ビル 2階");
+  assert.equal(r2.city, "大阪市北区梅田1-1-3 大阪駅前第1ビル");
+  assert.equal(cityShort("渋谷区神宮前4-12-10"), "渋谷区");
+  assert.equal(cityShort("足柄下郡箱根町湯本"), "足柄下郡箱根町");
+  assert.equal(cityFromAddress("神奈川県鎌倉市雪ノ下2-1-31"), "鎌倉市雪ノ下2-1-31");
+  const r3 = analyzeText("住所：京都府京都市右京区嵯峨天龍寺芒ノ馬場町68 嵐山駅から徒歩7分 湯豆腐コース 3,500円");
+  assert.equal(r3.city, "京都市右京区嵯峨天龍寺芒ノ馬場町68", "後ろに続く文は市区町村に入れない");
+});
+
+test("AIの答えのチェック", async () => {
+  const { cleanAiResult } = await import("../lib/analyze.js");
+  const r = cleanAiResult({ placeName: " 焼肉たろう ", address: "東京都新宿区西新宿1-1-1", prefecture: "東京", city: "新宿区", station: "新宿", genre: "yakiniku", priceMin: 6000, priceMax: 3000, deadline: "2026-13-40", walkMin: 5, lat: 10, lng: 10 });
+  assert.equal(r.placeName, "焼肉たろう");
+  assert.equal(r.prefecture, "東京都");
+  assert.equal(r.city, "新宿区西新宿1-1-1");
+  assert.equal(r.station, "新宿駅");
+  assert.equal(r.genre, "other");
+  assert.deepEqual([r.priceMin, r.priceMax], [3000, 6000]);
+  assert.equal(r.deadline, "");
+  assert.equal(r.lat, undefined);
 });

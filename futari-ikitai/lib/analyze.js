@@ -79,12 +79,37 @@ function pickLabeledLine(text, labels) {
   return "";
 }
 
+// 住所の直後に「 2F」「 ○○ビル3階」のような建物名が続いていればつなげる
+function withBuilding(text, end, address) {
+  const m = text.slice(end).match(/^[ 　]?([^\s、。,，\n#]{0,24}(?:ビル|階|[0-9０-９]F|号室|号館|館|タワー|プラザ|ハウス|マンション|ヒルズ|テラス)[^\s、。,，\n#]{0,6})/);
+  return m ? `${address} ${m[1]}` : address;
+}
+
+// 住所から郵便番号と都道府県を外した残り（市区町村〜番地・建物名）
+export function cityFromAddress(address, prefecture = "") {
+  let a = String(address || "").replace(/^〒?\s*\d{3}-?\d{4}\s*/, "").trim();
+  const pref = prefecture || PREF_LIST.find((p) => a.startsWith(p)) || "";
+  if (pref && a.startsWith(pref)) a = a.slice(pref.length);
+  return a.trim().slice(0, 120);
+}
+
+// 一覧やエリア分けで使う短い市区町村名（「渋谷区神宮前4-12-10」→「渋谷区」）
+export function cityShort(city) {
+  const c = String(city || "");
+  return (c.match(/^.*?[市区町村]/) || [c])[0];
+}
+
 export function extractPlace(text) {
   const address = (() => {
     const labeled = pickLabeledLine(text, ["住所", "所在地", "Address", "address", "アクセス"]);
-    if (labeled && new RegExp(PREFS + "|[市区町村]").test(labeled)) return labeled;
+    if (labeled && new RegExp(PREFS + "|[市区町村]").test(labeled)) {
+      // 「住所：〇〇 嵐山駅から徒歩7分」のように後ろに続く文は切り、建物名だけはつなげる
+      const first = labeled.replace(/^〒?\s*\d{3}-?\d{4}[\s　]*/, "").split(/[\s　]/)[0];
+      const at = text.indexOf(first);
+      return at >= 0 ? withBuilding(text, at + first.length, first) : first;
+    }
     const m = text.match(new RegExp(`(?:〒?\\s*\\d{3}-?\\d{4}\\s*)?(?:${PREFS})[^\\s　、。,，\\n#]{2,40}`));
-    if (m) return m[0].trim();
+    if (m) return withBuilding(text, m.index + m[0].length, m[0].trim());
     return "";
   })();
 
@@ -94,9 +119,12 @@ export function extractPlace(text) {
   for (const p of PREF_LIST) {
     if ((address + " " + pin + " " + text).includes(p)) { prefecture = p; break; }
   }
-  let city = "";
-  const cityMatch = (address || pin || text).match(/(?:都|道|府|県)?([^\s　、。,，\n#📍都道府県]{1,6}?(?:市|区|町|村))/);
-  if (cityMatch) city = cityMatch[1];
+  // 市区町村は、住所があれば都道府県より後ろを番地・建物名まで全部入れる
+  let city = address ? cityFromAddress(address, prefecture) : "";
+  if (!city) {
+    const cityMatch = (pin || text).match(/(?:都|道|府|県)?([^\s　、。,，\n#📍都道府県]{1,6}?(?:市|区|町|村))/);
+    if (cityMatch) city = cityMatch[1];
+  }
 
   const stationMatch = text.match(/([^\s　、。,，\n#「」【】()（）📍・]{1,10}駅)(?:から|より)?\s*(?:徒歩|歩いて)?\s*([0-9０-９]+)?\s*分?/);
   const station = stationMatch ? stationMatch[1] : "";
@@ -246,11 +274,41 @@ export function parseFreeform(text, now = new Date()) {
   let address = base.address;
   if (!address) {
     const a = raw.match(/[^\s、,，／/｜|]*?[市区町村][^\s、,，／/｜|]*?\d[\d\-−－‐ー丁目番地号の]*/);
-    if (a) address = a[0];
+    if (a) address = withBuilding(raw, a.index + a[0].length, a[0]);
   }
-  const out = { ...base, address, placeName: placeName || base.placeName, deadline, memo: memo.join(" / ").slice(0, 300), url: url ? normalizeUrl(url) : "" };
+  const city = address ? cityFromAddress(address, base.prefecture) : base.city;
+  const out = { ...base, address, city, placeName: placeName || base.placeName, deadline, memo: memo.join(" / ").slice(0, 300), url: url ? normalizeUrl(url) : "" };
   if (out.url) out.platform = detectPlatform(out.url);
   // 店名からもジャンルを推測する
   if (out.genre === "other" && out.placeName) out.genre = classifyGenre(out.placeName);
+  return out;
+}
+
+// AIの答えを形のうえで確かめる（ありえない都道府県・日付・値段は捨てる、駅名と市区町村をそろえる）
+export function cleanAiResult(ai) {
+  if (!ai || typeof ai !== "object") return null;
+  const out = { ...ai };
+  const str = (v) => (v == null ? "" : String(v).trim());
+  for (const k of ["placeName", "address", "prefecture", "city", "station", "hours", "closed", "deadline", "summary"]) out[k] = str(out[k]);
+  if (out.prefecture && !PREF_LIST.includes(out.prefecture)) out.prefecture = PREF_LIST.find((p) => p.startsWith(out.prefecture.replace(/[都道府県]$/, ""))) || "";
+  if (!out.prefecture && out.address) out.prefecture = PREF_LIST.find((p) => out.address.startsWith(p)) || "";
+  if (out.station) {
+    out.station = out.station.replace(/(駅).*$/, "$1");
+    if (!out.station.endsWith("駅") && out.station.length <= 12) out.station += "駅";
+  }
+  if (out.address && (!out.city || !/\d/.test(out.city))) {
+    const full = cityFromAddress(out.address, out.prefecture);
+    if (full && (!out.city || full.startsWith(out.city))) out.city = full;
+  }
+  const d = out.deadline.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!d || Number.isNaN(new Date(out.deadline).getTime()) || Number(d[2]) > 12) out.deadline = "";
+  const num = (v, max) => (v == null || v === "" || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > max ? null : Math.round(Number(v)));
+  out.priceMin = num(out.priceMin, 500000);
+  out.priceMax = num(out.priceMax, 500000);
+  if (out.priceMin != null && out.priceMax != null && out.priceMax < out.priceMin) [out.priceMin, out.priceMax] = [out.priceMax, out.priceMin];
+  if (out.priceMin == null && out.priceMax != null) out.priceMin = out.priceMax;
+  out.walkMin = num(out.walkMin, 90);
+  if (!GENRES.some((g) => g.id === out.genre)) out.genre = "other";
+  if (out.lat != null) { const lat = Number(out.lat), lng = Number(out.lng); if (!(lat > 20 && lat < 46 && lng > 122 && lng < 154)) { delete out.lat; delete out.lng; } }
   return out;
 }
