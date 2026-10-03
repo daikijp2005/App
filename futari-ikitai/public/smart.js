@@ -132,7 +132,17 @@ function loveScore(spot, required) {
 const fmt = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(Math.round(min % 60)).padStart(2, "0")}`;
 
 // 行きたい場所から、近い場所どうしを組み合わせて回る順番と時間割を作る
-export function buildCourses(spots, { stops = 3, style = "day", budget = null, bothOnly = false, date = null, peopleCount = 2 } = {}) {
+// 1区間の移動手段・時間・1人あたりの交通費（車は人数で割る）
+export function legInfo(a, b, people = 2) {
+  const tr = estimateTravel(a, b);
+  const road = tr.km * 1.3;
+  const mode = tr.walk != null && tr.walk <= 20 ? "徒歩" : tr.train <= tr.car + 10 ? "電車" : "車";
+  const min = mode === "徒歩" ? tr.walk : mode === "電車" ? tr.train : tr.car;
+  const fare = mode === "徒歩" ? 0 : mode === "電車" ? Math.round((140 + road * 17) / 10) * 10 : Math.round(((road * 12 + (road > 30 ? road * 22 : 0)) / Math.max(1, people)) / 10) * 10;
+  return { mode, min, km: tr.km, fare };
+}
+
+export function buildCourses(spots, { stops = 3, style = "day", budget = null, bothOnly = false, date = null, peopleCount = 2, base = null } = {}) {
   const required = requiredYes(peopleCount);
   const day = date ? new Date(date + "T12:00:00") : new Date();
   const pool = spots.filter((s) => {
@@ -164,14 +174,16 @@ export function buildCourses(spots, { stops = 3, style = "day", budget = null, b
       const key = picked.map((p) => p.id).sort().join("|");
       if (seen.has(key)) break;
       seen.add(key);
-      courses.push(timeline(picked, style, day, required));
+      courses.push(timeline(picked, style, day, required, base, peopleCount));
       break;
     }
   }
-  return courses.sort((a, b) => b.score - a.score).slice(0, 3);
+  // 予算は「スポット代＋交通費（行き帰り込み）」の1人あたり合計で判定する
+  const fit = budget == null ? courses : courses.filter((c) => c.total <= budget);
+  return fit.sort((a, b) => b.score - a.score).slice(0, 3);
 }
 
-function timeline(picked, style, day, required) {
+function timeline(picked, style, day, required, base = null, people = 2) {
   // 理想の時間帯順に並べてから、移動が往復にならないよう隣どうしを入れ替えて詰める
   let order = [...picked].sort((a, b) => idealMinute(a.genre, style) - idealMinute(b.genre, style));
   for (let pass = 0; pass < 2; pass++) {
@@ -188,15 +200,14 @@ function timeline(picked, style, day, required) {
   let km = 0;
   let budget = 0;
   let unknownPrice = false;
+  let transport = 0;
   order.forEach((spot, i) => {
     let leg = null;
     if (i > 0) {
-      const tr = estimateTravel(order[i - 1], spot);
-      const mode = tr.walk != null && tr.walk <= 20 ? "徒歩" : tr.train <= tr.car + 10 ? "電車" : "車";
-      const min = mode === "徒歩" ? tr.walk : mode === "電車" ? tr.train : tr.car;
-      leg = { mode, min, km: tr.km };
-      km += tr.km;
-      t = Math.ceil((t + min) / 5) * 5; // 到着時刻は5分単位にそろえる
+      leg = legInfo(order[i - 1], spot, people);
+      km += leg.km;
+      transport += leg.fare;
+      t = Math.ceil((t + leg.min) / 5) * 5; // 到着時刻は5分単位にそろえる
     }
     // ごはんは食事どきまで待つ
     if (spot.genre === "gourmet" && t < idealMinute("gourmet", style) - 30) t = idealMinute("gourmet", style) - 30;
@@ -210,9 +221,12 @@ function timeline(picked, style, day, required) {
     if (spot.priceMin != null) budget += spot.priceMin;
     else unknownPrice = true;
   });
-  const score = order.reduce((s, x) => s + loveScore(x, required), 0) - km * 0.25 - warnings.length;
+  // 出発地からの行きと、最後の場所からの帰り
+  const access = base ? { go: legInfo(base, order[0], people), back: legInfo(order[order.length - 1], base, people) } : null;
+  if (access) transport += access.go.fare + access.back.fare;
+  const score = order.reduce((s, x) => s + loveScore(x, required), 0) - km * 0.25 - warnings.length - transport / 4000;
   const area = order[0].station?.replace(/駅$/, "") || (String(order[0].city || "").match(/^.*?[市区町村]/) || [order[0].city])[0] || order[0].prefecture || "";
-  return { stops, warnings, km, budget, unknownPrice, score, area, start: stops[0].arrive, end: stops[stops.length - 1].leave };
+  return { stops, warnings, km, budget, transport, total: budget + transport, access, unknownPrice, score, area, start: stops[0].arrive, end: stops[stops.length - 1].leave };
 }
 
 // ---------- 外部アプリ ----------

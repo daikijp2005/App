@@ -38,12 +38,27 @@ function roomFile(id) {
   return path.join(DATA, `${id}.json`);
 }
 
+// グループごとの共有コード（読み間違えやすい 0/O・1/I を使わない6文字）
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const codeIndex = new Map(); // code -> room id
+for (const f of (await fs.readdir(DATA).catch(() => [])).filter((x) => x.endsWith(".json"))) {
+  try { const r = JSON.parse(await fs.readFile(path.join(DATA, f), "utf8")); if (r.code) codeIndex.set(r.code, r.id); } catch { /* 壊れたファイルは無視 */ }
+}
+function newCode() {
+  for (;;) {
+    const c = Array.from(crypto.randomBytes(6), (b) => CODE_CHARS[b % CODE_CHARS.length]).join("");
+    if (!codeIndex.has(c)) return c;
+  }
+}
+
 async function loadRoom(id) {
   if (rooms.has(id)) return rooms.get(id);
   const file = roomFile(id);
   if (!file || !existsSync(file)) return null;
   const room = JSON.parse(await fs.readFile(file, "utf8"));
   rooms.set(id, room);
+  // 共有コードがない古いリストには、ここで付ける
+  if (!room.code) { room.code = newCode(); codeIndex.set(room.code, room.id); await saveRoom(room); }
   return room;
 }
 
@@ -109,7 +124,7 @@ async function buildDraft({ url, text, image = null }) {
   if (preview.ld?.address && !rule.address) { rule.address = preview.ld.address; rule.city = cityFromAddress(preview.ld.address); }
 
   let ai = null;
-  if (allText.trim() || image) ai = cleanAiResult(await aiExtract({ url: preview.url, platform: preview.platform, title: preview.title, caption: caption + "\n" + ldText, image, hints: rule }));
+  if (allText.trim() || image) ai = cleanAiResult(await aiExtract({ url: preview.url, platform: preview.platform, title: preview.title, caption: caption + "\n" + ldText, image, hints: rule, memo: !preview.url && !image }));
 
   const pick = (k) => (ai && ai[k] !== "" && ai[k] != null ? ai[k] : rule[k]);
   const draft = {
@@ -266,6 +281,15 @@ async function handleApi(req, res, url) {
     return r ? send(res, 200, r) : send(res, 404, { error: "場所が見つかりませんでした" });
   }
 
+  // 共有コードからグループを探す（大文字小文字・空白・ハイフンは気にしない）
+  if (parts[1] === "join" && method === "GET") {
+    const code = String(parts[2] || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const id = codeIndex.get(code);
+    const room = id && (await loadRoom(id));
+    if (!room) return send(res, 404, { error: "その共有コードのグループは見つかりませんでした。コードを確かめてください" });
+    return send(res, 200, { id: room.id, name: room.name, type: room.type || "couple", members: room.members.length });
+  }
+
   if (parts[1] !== "rooms") return send(res, 404, { error: "not found" });
 
   if (parts.length === 2 && method === "POST") {
@@ -273,7 +297,8 @@ async function handleApi(req, res, url) {
     // 作った人が最初のメンバー。ほかの人は招待リンクから参加する
     const members = (Array.isArray(body.members) && body.members.length ? body.members : [{}]).slice(0, MAX_MEMBERS).map((m, i) => ({ ...sanitizeMember(m, i), id: `m${i + 1}` }));
     const type = GROUP_TYPES.includes(body.type) ? body.type : "friends";
-    const room = { id: newId(12), name: String(body.name || "行きたいリスト").slice(0, 40), type, createdAt: now(), members, bases: [], items: [] };
+    const room = { id: newId(12), code: newCode(), name: String(body.name || "行きたいリスト").slice(0, 40), type, createdAt: now(), members, bases: [], items: [] };
+    codeIndex.set(room.code, room.id);
     rooms.set(room.id, room);
     await saveRoom(room);
     return send(res, 201, room);

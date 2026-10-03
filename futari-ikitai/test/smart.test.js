@@ -143,3 +143,21 @@ test("移動手段ごとの目安", async () => {
   const fukuoka = travelModes(shibuya, { lat: 33.5902, lng: 130.4017 });
   assert.ok(fukuoka.modes.find((m) => m.id === "plane").recommended, "福岡へは飛行機がおすすめ");
 });
+
+test("デートコースの予算は交通費込み", async () => {
+  const { buildCourses, legInfo } = await import("../public/smart.js");
+  const both = { a: true, b: true };
+  const spots = [
+    { id: "1", genre: "cafe", lat: 35.6672, lng: 139.7087, likes: both, priceMin: 1200 },
+    { id: "2", genre: "art", lat: 35.6623, lng: 139.7186, likes: both, priceMin: 1400 },
+  ];
+  const far = { lat: 35.4437, lng: 139.638 }; // 横浜から出発
+  const [c] = buildCourses(spots, { stops: 2, base: far });
+  assert.equal(c.budget, 2600);
+  assert.ok(c.access.go.mode === "電車" && c.access.go.fare > 300, "横浜からは電車代がかかる");
+  assert.equal(c.total, c.budget + c.transport);
+  assert.ok(c.transport >= c.access.go.fare + c.access.back.fare);
+  assert.equal(buildCourses(spots, { stops: 2, base: far, budget: 2700 }).length, 0, "スポット代だけなら収まっても交通費で超える");
+  assert.equal(buildCourses(spots, { stops: 2, base: far, budget: c.total }).length, 1);
+  assert.equal(legInfo({ lat: 35.66, lng: 139.70 }, { lat: 35.661, lng: 139.701 }).fare, 0, "徒歩は0円");
+});

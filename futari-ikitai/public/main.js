@@ -48,7 +48,7 @@ function webBackend(room, meta) {
   const meId = () => { const m = local.get(`me.${id}`); return current.members.some((x) => x.id === m) ? m : null; };
   return {
     kind: "web",
-    features: { map: true, thumbnails: true, aiButton: false, askAI: meta.ai, routeAI: meta.ai, aiImage: meta.ai, ics: true, invite: true, members: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
+    features: { map: true, thumbnails: true, aiButton: meta.ai, aiRead: meta.ai, codes: true, askAI: meta.ai, routeAI: meta.ai, aiImage: meta.ai, ics: true, invite: true, members: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
     readerNote: meta.ai ? "リンク先を開いて読み取り、AI（Claude）で整理しています" : "リンク先を開いてルールで読み取っています（サーバーに ANTHROPIC_API_KEY を設定するとAIで読み取ります）",
     subscribe(fn) {
       listener = fn;
@@ -89,6 +89,12 @@ function webBackend(room, meta) {
     async locate(q) { try { return await api(`/geocode?q=${encodeURIComponent(q)}`); } catch { return null; } },
     lists: () => lists.all().map((l) => ({ ...l, url: `/r/${l.id}`, current: l.id === id })),
     newListUrl: () => "/new",
+    shareCode: async () => current.code || "",
+    async joinByCode(code) {
+      const g = await api(`/join/${encodeURIComponent(code)}`);
+      location.href = `/r/${g.id}`;
+      return g;
+    },
     inviteUrl: () => `${location.origin}/r/${id}`,
     exportUrl: () => `/api/rooms/${id}/export`,
   };
@@ -108,9 +114,21 @@ function createFlow() {
       <h1>誰と使いますか？</h1>
       <p>使う相手ごとにリストを作れます。あとから設定で変えられます。</p>
       <div class="type-grid" style="margin-top:18px">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-type="${k}"><span class="emoji">${t.emoji}</span><b>${esc(t.label)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
+      <form id="join-code" class="panel" style="margin-top:16px;text-align:left">
+        <b>共有コードで参加する</b><p class="sub" style="margin:2px 0 8px">誘ってくれた人から聞いた6文字のコードを入れてください。</p>
+        <div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn rose">参加</button></div>
+        <p class="sub" id="jc-status" style="margin:6px 0 0"></p>
+      </form>
       ${known.length ? `<div class="label" style="text-align:left">開いたことのあるリスト</div><div class="panel" style="text-align:left;padding:4px 14px">${known.map((l) => `<a class="memory" href="/r/${esc(l.id)}" style="text-decoration:none;color:inherit;grid-template-columns:40px 1fr;align-items:center"><span class="ph" style="width:40px;height:40px;font-size:20px">${(GROUP_TYPES[l.type] || GROUP_TYPES.friends).emoji}</span><span><b>${esc(l.name)}</b><div class="sub">${esc((GROUP_TYPES[l.type] || GROUP_TYPES.friends).label)}</div></span></a>`).join("")}</div>` : ""}
       <p class="sub" style="margin-top:18px"><a href="#" data-tour>使い方をもう一度見る</a></p></div>`;
     document.querySelectorAll("[data-type]").forEach((b) => b.addEventListener("click", () => { type = b.dataset.type; stepName(); }));
+    document.getElementById("join-code").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const st = document.getElementById("jc-status");
+      st.textContent = "探しています…";
+      try { const g = await api(`/join/${encodeURIComponent(document.getElementById("jc").value)}`); location.href = `/r/${g.id}`; }
+      catch (err) { st.textContent = err.message; }
+    });
     document.querySelector("[data-tour]").addEventListener("click", (e) => { e.preventDefault(); showOnboarding(() => {}); });
   };
   const stepName = () => {

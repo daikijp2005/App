@@ -491,3 +491,10 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .kind-box { margin-top: 10px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(135deg, var(--ok-soft), var(--surface)); display: grid; gap: 4px; font-size: 13.5px; }
 .kind-box b { font-family: var(--display); font-size: 14px; }
 .kind-box p { margin: 0; }
+
+/* 共有コード */
+.code-box { display: grid; justify-items: center; gap: 6px; padding: 16px; border-radius: 18px; background: var(--rose-soft, var(--surface-2)); text-align: center; }
+.code-box b { font-size: 32px; letter-spacing: .28em; padding-left: .28em; color: var(--rose); font-family: "Zen Maru Gothic", system-ui, sans-serif; min-height: 40px; display: flex; align-items: center; }
+/* コースの費用内訳 */
+.cost-break { margin-top: 6px; line-height: 1.6; }
+.cost-break b { color: var(--ink); }

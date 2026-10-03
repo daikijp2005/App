@@ -164,3 +164,15 @@ test("AIの答えのチェック", async () => {
   assert.equal(r.deadline, "");
   assert.equal(r.lat, undefined);
 });
+
+test("1行のメモ：スペース区切りの店名・座標・値段を取り違えない", async () => {
+  const { parseFreeform } = await import("../lib/analyze.js");
+  const a = parseFreeform("カフェ ルミエール 渋谷区神宮前4-12-10 表参道駅 徒歩5分 1500円くらい 35.6672, 139.7087");
+  assert.equal(a.placeName, "カフェ ルミエール");
+  assert.equal(a.address, "渋谷区神宮前4-12-10");
+  assert.equal(a.walkMin, 5);
+  const b = parseFreeform("パンケーキ屋 ブルーム 原宿駅 1200円");
+  assert.equal(b.placeName, "パンケーキ屋 ブルーム");
+  assert.equal(b.walkMin, null);
+  assert.equal(b.priceMin, 1200);
+});

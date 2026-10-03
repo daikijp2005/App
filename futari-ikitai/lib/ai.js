@@ -2,7 +2,7 @@
 // 読み取り（aiExtract）・うろ覚え検索（aiAsk）・具体的な行き方（aiRoute）の3つ。
 
 import { GENRES } from "./analyze.js";
-import { GENRE_GUIDE, EXTRACT_RULES, ROUTE_RULES, hintsText } from "./prompts.js";
+import { GENRE_GUIDE, EXTRACT_RULES, ROUTE_RULES, MEMO_RULES, hintsText } from "./prompts.js";
 
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
 let clientPromise = null;
@@ -31,7 +31,7 @@ async function format(name, build) {
 }
 
 
-export async function aiExtract({ url, platform, title, caption, image = null, hints = null }) {
+export async function aiExtract({ url, platform, title, caption, image = null, hints = null, memo = false }) {
   if (!aiEnabled()) return null;
   try {
     const { client } = await getClient();
@@ -52,7 +52,8 @@ export async function aiExtract({ url, platform, title, caption, image = null, h
           {
             type: "text",
             text:
-              `SNSの投稿から、行きたいお出かけ先の情報を抜き出してください。今日は ${new Date().toISOString().slice(0, 10)} です。\n` +
+              `${memo ? "メモ" : "SNSの投稿"}から、行きたいお出かけ先の情報を抜き出してください。今日は ${new Date().toISOString().slice(0, 10)} です。\n` +
+              (memo ? `\n${MEMO_RULES}\n` : "") +
               (image ? "添付画像は投稿のスクリーンショットです。写っている文字（店名・住所・価格・営業時間）も読んでください。\n" : "") +
               `\n${EXTRACT_RULES}\n\n<genres>\n${GENRE_GUIDE}\n</genres>\n\n` +
               `<post platform="${platform}" url="${url}">\n<title>${title}</title>\n<caption>${caption}</caption>\n</post>` + hintsText(hints),

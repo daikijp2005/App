@@ -126,9 +126,11 @@ export function extractPlace(text) {
     if (cityMatch) city = cityMatch[1];
   }
 
-  const stationMatch = text.match(/([^\s　、。,，\n#「」【】()（）📍・]{1,10}駅)(?:から|より)?\s*(?:徒歩|歩いて)?\s*([0-9０-９]+)?\s*分?/);
+  // 「駅 1200円」の数字を徒歩分と読まないよう、「徒歩」か「分」がついた数字だけを拾う
+  const stationMatch = text.match(/([^\s　、。,，\n#「」【】()（）📍・]{1,10}駅)(?:から|より)?\s*(?:(?:徒歩|歩いて)\s*([0-9０-９]+)|([0-9０-９]+)\s*分)?/);
   const station = stationMatch ? stationMatch[1] : "";
-  const walkMin = stationMatch && stationMatch[2] ? toNumber(stationMatch[2]) : null;
+  const walkRaw = stationMatch && (stationMatch[2] || stationMatch[3]);
+  const walkMin = walkRaw ? toNumber(walkRaw) : null;
 
   // 📍の行が住所そのものならそれを住所、そうでなければ店名として扱う
   let placeName = "";
@@ -242,11 +244,16 @@ export function parseFreeform(text, now = new Date()) {
   let placeName = "";
   const memo = [];
   // 1行ずつ（1行しかなければ「、」「/」やスペースで区切って）何の情報かを見分ける
-  let parts = raw.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  // 緯度経度（「35.66, 139.70」）は位置として別に読むので、店名などと混ぜない
+  const body = raw.replace(/-?\d{1,3}\.\d{3,}\s*[,，、]\s*-?\d{1,3}\.\d{3,}/g, " ").replace(/https?:\/\/[^\s<>"'「」]+/g, (u) => `\n${u}\n`);
+  let parts = body.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  let spaced = false;
   if (parts.length === 1) parts = parts[0].split(/[、,，／/｜|]|\s{2,}/).map((x) => x.trim()).filter(Boolean);
-  if (parts.length === 1 && /\s/.test(parts[0])) parts = parts[0].split(/\s+/);
+  if (parts.length === 1 && /\s/.test(parts[0])) { parts = parts[0].split(/\s+/); spaced = true; }
   const genreWords = GENRES.flatMap((g) => [g.label, ...g.words]).map((w) => w.toLowerCase());
-  for (const part of parts) {
+  let nameAt = -2;
+  let prevGenre = "";
+  for (const [i, part] of parts.entries()) {
     if (LABELS.placeName.test(part)) { placeName = part.replace(LABELS.placeName, "").trim(); continue; }
     if (LABELS.memo.test(part)) { memo.push(part.replace(LABELS.memo, "").trim()); continue; }
     const info =
@@ -255,19 +262,27 @@ export function parseFreeform(text, now = new Date()) {
       TIME_RANGE.test(part) ||
       /[月火水木金土日](曜日?|曜)?\s*(定休|休み|休業|休館)|不定休|無休/.test(part) ||
       /駅/.test(part) ||
-      new RegExp(`^(${PREFS})|[市区町村]\S*\d`).test(part) ||
+      new RegExp(`^(${PREFS})|[市区町村]\\S*\\d`).test(part) ||
+      /^(徒歩|歩いて)\s*[0-9０-９]+\s*分?$|^[0-9０-９]+\s*分$/.test(part) ||
       /^(住所|営業時間|定休日|アクセス|時間|予算|値段|価格)/.test(part) ||
       /^[#＃]/.test(part) ||
       (extractDeadline(part, now) && /(まで|迄|〆|終了|[〜~～])/.test(part));
     const isGenreWord = genreWords.includes(part.toLowerCase());
-    if (info || isGenreWord) {
+    // スペース区切りの1行（「カフェ ルミエール 表参道駅…」）では、続いている言葉をまとめて店名にする
+    if (spaced && !info && placeName && nameAt === i - 1 && placeName.length + part.length < 30) { placeName += ` ${part}`; nameAt = i; continue; }
+    if (isGenreWord && !info) { prevGenre = part; continue; }
+    if (info) {
       // 「10/31までの限定パフェ」のように、期限の後ろに言葉が続くならメモにも残す（住所の「4-12」は日付とみなさない）
       const hasDeadline = extractDeadline(part, now) && /(まで|迄|〆|終了|[〜~～])/.test(part);
       const rest = !hasDeadline ? part : part.replace(/(?:[〜~～]\s*)?(?:\d{4}\s*[\/年.\-]\s*)?\d{1,2}\s*[\/月.\-]\s*\d{1,2}\s*日?\s*(まで(の)?|迄|〆|終了)?/, "").trim();
       if (deadline && rest && rest !== part && rest.length >= 2 && !/^(まで|限定)$/.test(rest)) memo.push(part);
       continue;
     }
-    if (!placeName && !base.placeName && part.length <= 40) { placeName = part; continue; }
+    if (!placeName && !base.placeName && part.length <= 40) {
+      placeName = spaced && prevGenre && parts[i - 1] === prevGenre ? `${prevGenre} ${part}` : part;
+      nameAt = i;
+      continue;
+    }
     memo.push(part);
   }
   // 都道府県のない住所（「渋谷区神宮前4-12-10」）も拾う

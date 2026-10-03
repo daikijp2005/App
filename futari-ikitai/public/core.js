@@ -2,7 +2,7 @@
 // データの読み書きは backend に任せる。backend の形は README の「しくみ」を参照。
 import { GENRES, analyzeText, parseFreeform, cityShort } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
-import { openState, seasonOf, buildCourses, externalLinks, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
+import { openState, parseHours, seasonOf, buildCourses, externalLinks, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
 
 const TINT = { cafe: "#efd5bd", sweets: "#f8cfdc", gourmet: "#f4cfae", bar: "#ddc8e6", nature: "#c9e3cf", sightseeing: "#eed7c0", art: "#d3d8f2", event: "#fbdfaa", shopping: "#cfe8ee", stay: "#f1cbc3", activity: "#cfe7c9", other: "#e6dfdc" };
 const STATUS = { want: "行きたい", planned: "予定あり", visited: "行った" };
@@ -118,9 +118,9 @@ export function applyAccent(hex) {
 const TOUR = [
   {
     title: "「あれ、どこだっけ？」をなくそう",
-    text: "SNSで見つけた行きたい場所は、リンクを貼るだけでメモ完了。ジャンル・場所・値段・営業時間まで自動で読み取ります。",
+    text: "行きたい場所は、思いつくまま書くだけ。AIが店名・場所・ジャンル・値段・営業時間を整理してくれます。SNSのリンクからも追加できます。",
     art: () => `<div class="tour-mock">
-      <div class="adder" style="margin:0 0 12px;box-shadow:none;border:1.5px solid var(--line)">${ic("insta")}<span class="sub" style="flex:1;padding:8px 4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">instagram.com/p/C9x…</span><span class="btn rose sm">追加</span></div>
+      <div class="adder" style="margin:0 0 12px;box-shadow:none;border:1.5px solid var(--line)">${ic("sparkle")}<span class="sub" style="flex:1;padding:8px 4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">表参道のパンケーキのカフェ</span><span class="btn rose sm">AIで追加</span></div>
       <div class="mini" style="flex:none;width:100%;box-shadow:var(--shadow-sm)"><span class="ph" style="--tint:${TINT.cafe}">☕</span><span class="tx"><b>Cafe Lumière 表参道</b><span class="sub">表参道駅 ・ ¥650〜 ・ 10:00〜19:00</span><span class="tag open">営業中</span></span></div></div>`,
   },
   {
@@ -132,8 +132,8 @@ const TOUR = [
       <div class="mini" style="flex:none;width:100%;box-shadow:var(--shadow-sm)"><span class="ph" style="--tint:${TINT.cafe}">☕</span><span class="tx"><b>シーサイドカフェ</b><span class="sub">はるかが先月見つけた</span></span></div></div>`,
   },
   {
-    title: "誰とでも、ひとつのリストに",
-    text: "恋人・友達・家族・職場など、使う相手ごとにリストを作れます。招待リンクを送れば、相手は名前を入れるだけで参加できます。",
+    title: "相手ごとに、グループを分けて",
+    text: "恋人・友達・家族・職場など、使う相手ごとにリストを作れます。グループごとの共有コードかリンクを送れば、相手は名前を入れるだけで参加できます。",
     art: () => `<div class="tour-mock"><div class="type-grid compact">${Object.values(GROUP_TYPES).map((t) => `<span class="type-tile"><span class="emoji">${t.emoji}</span>${esc(t.label)}</span>`).join("")}</div></div>`,
   },
   {
@@ -192,13 +192,18 @@ export function showOnboarding(onDone) {
   setTimeout(() => track.focus(), 50);
 }
 
+// 絞り込みの初期値
+const freshFilters = () => ({ genres: new Set(), price: "", travel: "", dist: "", area: "", who: "", openNow: false, day: "", added: "", deadlineOnly: false, unvoted: false, meh: false, located: false });
+const DIST = [["d1", "〜1km", 1], ["d3", "〜3km", 3], ["d10", "〜10km", 10], ["d30", "〜30km", 30], ["dfar", "30km〜", Infinity]];
+const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
+
 export function startApp(backend, mount = document.body) {
   const B = backend;
   const F = B.features;
   const S = {
     settings: { name: "行きたいリスト", bases: [] }, spots: [], loaded: false,
     view: local.get("view", "home"), q: "", seg: "all", groupBy: local.get("groupBy", "date"), sortBy: local.get("sortBy", "new"),
-    f: { genres: new Set(), price: "", travel: "", area: "", who: "", openNow: false }, listMode: "grid",
+    f: freshFilters(), listMode: "grid",
     baseId: local.get("baseId", null), plan: { date: nextSaturday(), style: "day", stops: 3, budget: "", bothOnly: false }, courses: null,
     skipped: new Set(), planTab: "calendar", calMonth: "", calDay: "", openMode: "", routeCache: {},
   };
@@ -315,10 +320,18 @@ export function startApp(backend, mount = document.body) {
     if (f.area) items = items.filter((it) => (it.prefecture || "未設定") === f.area);
     if (f.who) items = items.filter((it) => it.addedBy === f.who);
     if (f.openNow) items = items.filter((it) => ["open", "closing"].includes(openState(it)?.state));
+    if (f.dist) { const [, , max] = DIST.find((d) => d[0] === f.dist); const min = DIST[DIST.findIndex((d) => d[0] === f.dist) - 1]?.[2] ?? 0; items = items.filter((it) => { const km = travelOf(it)?.km; return km != null && km <= max && (f.dist !== "dfar" || km > min); }); }
+    if (f.day !== "") { const day = f.day === "today" ? new Date().getDay() : Number(f.day); items = items.filter((it) => !parseHours(it.hours, it.closed).closedDays.has(day)); }
+    if (f.added) items = items.filter((it) => { const d = daysSince(it.createdAt); return f.added === "week" ? d <= 7 : f.added === "month" ? d <= 31 : d > 31; });
+    if (f.deadlineOnly) items = items.filter((it) => it.deadline && daysUntil(it.deadline) >= 0);
+    if (f.unvoted) items = items.filter((it) => myVote(it) == null);
+    if (f.meh) items = items.filter((it) => Object.values(votes(it)).includes("no"));
+    if (f.located) items = items.filter((it) => it.lat != null);
     const by = {
       new: (a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""),
       old: (a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""),
       near: (a, b) => (travelOf(a)?.best ?? 1e9) - (travelOf(b)?.best ?? 1e9),
+      dist: (a, b) => (travelOf(a)?.km ?? 1e9) - (travelOf(b)?.km ?? 1e9),
       cheap: (a, b) => (a.priceMin ?? 1e9) - (b.priceMin ?? 1e9),
       love: (a, b) => yesIds(b).length - yesIds(a).length || (b.createdAt || "").localeCompare(a.createdAt || ""),
       deadline: (a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999"),
@@ -331,7 +344,8 @@ export function startApp(backend, mount = document.body) {
     S.understood = [];
     return items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || by(a, b));
   }
-  const activeFilterCount = () => S.f.genres.size + [S.f.price, S.f.travel, S.f.area, S.f.who, S.f.openNow].filter(Boolean).length;
+  const activeFilterCount = () => S.f.genres.size + [S.f.price, S.f.travel, S.f.dist, S.f.area, S.f.who, S.f.openNow, S.f.day !== "", S.f.added, S.f.deadlineOnly, S.f.unvoted, S.f.meh, S.f.located].filter(Boolean).length;
+  const daysSince = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : 1e9);
 
   function groupKey(it) {
     switch (S.groupBy) {
@@ -419,9 +433,9 @@ export function startApp(backend, mount = document.body) {
     }
     v.innerHTML = `
       <form class="adder" id="adder">
-        ${ic("insta")}
-        <input id="add-url" type="text" inputmode="url" autocomplete="off" placeholder="リンクを貼る・お店の情報を書く" aria-label="投稿のリンクかお店の情報">
-        <button class="btn rose">追加</button>
+        ${ic("sparkle")}
+        <input id="add-url" type="text" autocomplete="off" placeholder="行きたい場所を書く（例: 表参道のパンケーキ 1500円）" aria-label="行きたい場所を自由に書く">
+        <button class="btn rose">${F.aiRead ? "AIで追加" : "追加"}</button>
       </form>
       ${S.spots.length ? `<div class="pulse">
         <button data-seg="all"><b>${live.length}</b><span>行きたい</span></button>
@@ -490,12 +504,12 @@ export function startApp(backend, mount = document.body) {
 
   function welcomeEmpty() {
     const steps = [
-      solo() ? ["1", "SNSで探す", "気になるお店や場所を見つけたら、共有メニューからリンクをコピーします。"]
-        : F.invite ? ["1", `${V().label}を招待`, "右上の設定から招待リンクを送ります。相手はリンクを開いて名前を入れるだけで使えます。"] : ["1", `${V().label}を招待`, "共有メニューから相手を「編集できる」で招待します。"],
+      solo() ? ["1", "SNSで探す", "気になるお店や場所を見つけたら、店名や場所をざっくり覚えておきます。"]
+        : F.invite || F.codes ? ["1", `${V().label}を招待`, "設定の「招待」から共有コードかリンクを送ります。相手は名前を入れるだけで使えます。"] : ["1", `${V().label}を招待`, "共有メニューから相手を「編集できる」で招待します。"],
       ["2", "出発地を登録", "家や職場、よく集まる駅を登録すると、移動時間の目安が出ます。"],
-      ["3", "リンクを貼る", "SNSの共有リンクを貼ると、ジャンル・場所・値段を読み取ります。"],
+      ["3", "書くだけで追加", `「表参道のパンケーキ 1500円」のように書くと、${F.aiRead ? "AIが" : ""}ジャンル・場所・値段を整理します。SNSのリンクからも追加できます。`],
     ];
-    return `<div class="empty"><h3>「どこいく？」の候補はまだゼロです</h3><p>SNSで「ここ行きたい！」と思ったら、上の欄にリンクを貼っておきましょう。次の「どこいく？」で、未来のあなたが感謝します。</p>
+    return `<div class="empty"><h3>「どこいく？」の候補はまだゼロです</h3><p>SNSで「ここ行きたい！」と思ったら、上の欄に思いつくまま書いておきましょう。次の「どこいく？」で、未来のあなたが感謝します。</p>
       <div class="steps">${steps.map(([n, t, d]) => `<div class="step"><i>STEP ${n}</i><b>${t}</b><span class="sub">${d}</span></div>`).join("")}</div></div>`;
   }
 
@@ -725,11 +739,12 @@ export function startApp(backend, mount = document.body) {
         <p class="sub" style="margin:0 0 12px">${esc(V().us)}の「行きたい」から、近い場所どうしを組み合わせて回る順番と時間を考えます。</p>
         <div class="row2">
           <div class="field"><label for="p-date">行く日</label><input id="p-date" type="date" value="${esc(P.date)}"></div>
-          <div class="field"><label for="p-budget">予算（1人）</label><select id="p-budget">${[["", "指定なし"], ["3000", "〜¥3,000"], ["5000", "〜¥5,000"], ["10000", "〜¥10,000"]].map(([v2, l]) => `<option value="${v2}" ${P.budget === v2 ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          <div class="field"><label for="p-budget">予算（1人・交通費込み）</label><select id="p-budget">${[["", "指定なし"], ["3000", "〜¥3,000"], ["5000", "〜¥5,000"], ["10000", "〜¥10,000"], ["20000", "〜¥20,000"]].map(([v2, l]) => `<option value="${v2}" ${P.budget === v2 ? "selected" : ""}>${l}</option>`).join("")}</select></div>
         </div>
         <div class="field"><label>出発する時間</label><div class="seg full">${Object.entries(STYLE_LABEL).map(([k, l]) => `<button data-pstyle="${k}" class="${P.style === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
         <div class="field"><label>回る数</label><div class="seg full">${[2, 3, 4].map((n) => `<button data-pstops="${n}" class="${P.stops === n ? "on" : ""}">${n}か所</button>`).join("")}</div></div>
         ${solo() ? "" : `<button class="chip ${P.bothOnly ? "on" : ""}" data-act="pboth" style="margin-bottom:12px">♡ ${esc(matchPhrase())}場所だけ</button>`}
+        <p class="sub" style="margin:0 0 12px">${activeBase() ? `${esc(activeBase().label)}からの行き帰りと、スポット間の移動の交通費も予算に入れて考えます。` : `出発地を登録すると、行き帰りの交通費も予算に入れて考えます。`}</p>
         <button class="btn rose block" data-act="build">${ic("sparkle")}コースを考える</button>
         ${located < 2 ? `<p class="sub" style="margin:10px 0 0">位置がわかっているスポットが2つ以上必要です（いま${located}件）。スポットの「編集」で場所を入れると使えます。</p>` : ""}
       </div>
@@ -751,19 +766,23 @@ export function startApp(backend, mount = document.body) {
     return `${c.area ? c.area + "で " : ""}${c.stops.map((s) => genreOf(s.spot.genre).label.replace(/・.*/, "")).join(" → ")}`;
   }
   function coursesHtml(courses) {
-    if (!courses.length) return `<div class="empty"><p>条件に合うコースが作れませんでした。条件をゆるめるか、位置のわかるスポットを増やしてください。</p></div>`;
+    if (!courses.length) return `<div class="empty"><p>条件に合うコースが作れませんでした。${S.plan.budget ? "予算には交通費も含まれます。予算を上げるか、" : ""}条件をゆるめるか、位置のわかるスポットを増やしてください。</p></div>`;
+    const yen = (n) => `¥${Math.round(n).toLocaleString("ja-JP")}`;
+    const legIcon = (m) => (m === "徒歩" ? "walk" : m === "電車" ? "train" : "car");
+    const legLi = (l, label = "") => `<li><span></span><div class="leg">${ic(legIcon(l.mode), "sm")}${label}${l.mode} 約${formatMinutes(l.min)}${l.fare ? ` ・ ${yen(l.fare)}` : ""}</div></li>`;
     return courses.map((c, i) => `
       <div class="course">
         <div class="course-head">
           <span class="sub">コース ${i + 1}</span>
           <h3>${esc(courseTitle(c))}</h3>
-          <div class="course-stats"><span>${ic("clock", "sm")} <b>${c.start}〜${c.end}</b></span><span>移動 <b>${c.km.toFixed(1)}km</b></span><span>予算 <b>¥${c.budget.toLocaleString("ja-JP")}${c.unknownPrice ? "〜" : ""}</b>/人</span></div>
+          <div class="course-stats"><span>${ic("clock", "sm")} <b>${c.start}〜${c.end}</b></span><span>移動 <b>${c.km.toFixed(1)}km</b></span><span>合計 <b>${yen(c.total)}${c.unknownPrice ? "〜" : ""}</b>/人</span></div>
+          <div class="cost-break sub">スポット代 ${yen(c.budget)}${c.unknownPrice ? "〜" : ""} ＋ 交通費 ${yen(c.transport)}${c.access ? `（${esc(activeBase()?.label || "出発地")}からの行き帰り込み）` : ""} ＝ <b>${yen(c.total)}${c.unknownPrice ? "〜" : ""}</b>/人</div>
         </div>
         ${c.warnings.length ? `<div class="notice warn" style="margin:6px 16px 0">${c.warnings.map(esc).join("<br>")}</div>` : ""}
-        <ul class="tl">${c.stops.map((s) => `
-          ${s.leg ? `<li><span></span><div class="leg">${ic(s.leg.mode === "徒歩" ? "walk" : s.leg.mode === "電車" ? "train" : "car", "sm")}${s.leg.mode} 約${formatMinutes(s.leg.min)}</div></li>` : ""}
+        <ul class="tl">${c.access ? legLi(c.access.go, `${esc(activeBase()?.label || "出発地")}から `) : ""}${c.stops.map((s) => `
+          ${s.leg ? legLi(s.leg) : ""}
           <li><span class="time">${s.arrive}</span><div class="stop"><button data-open="${esc(s.spot.id)}">${genreOf(s.spot.genre).emoji} ${esc(nameOf(s.spot))}</button>
-            <div class="sub">${s.stay ? `${s.stay}分ほど` : ""}${formatPrice(s.spot) ? ` ・ ${esc(formatPrice(s.spot))}` : ""}${isBoth(s.spot) ? ` ・ ♡${esc(matchText(s.spot))}` : ""}</div></div></li>`).join("")}
+            <div class="sub">${s.stay ? `${s.stay}分ほど` : ""}${formatPrice(s.spot) ? ` ・ ${esc(formatPrice(s.spot))}` : ""}${isBoth(s.spot) ? ` ・ ♡${esc(matchText(s.spot))}` : ""}</div></div></li>`).join("")}${c.access ? legLi(c.access.back, `${esc(activeBase()?.label || "出発地")}へ `) : ""}
         </ul>
         <div class="actions">
           <a class="btn sm line" href="${courseRouteUrl(c.stops)}" target="_blank" rel="noopener">${ic("route", "sm")}地図でルート</a>
@@ -838,24 +857,41 @@ export function startApp(backend, mount = document.body) {
   }
 
   // ---------- 追加・編集 ----------
-  function openAdd(raw = "") {
+  // 追加のメインは「思いつくまま書く → AIが整理」。リンクの読み取りはサブ
+  function openAdd(raw = "", { link = false } = {}) {
     const text = String(raw || "").trim();
     const url = (text.match(/https?:\/\/[^\s<>"'「」]+/) || [""])[0];
     if (url) return readAndEdit({ url, text: text.replace(url, "").trim() });
-    // リンクがない文字だけなら、まとめて入力として読み取る
-    if (text) return openEditor({ genre: "other", caption: text }, { isNew: true, runBulk: true });
+    if (text) return openEditor({ genre: "other", caption: text }, { isNew: true, runBulk: true, autoAI: F.aiRead });
+    if (link) return openLinkAdd();
     const { root } = sheet(`${head("行きたい場所を追加")}
+      <div class="field"><label for="a-memo">どんな場所？ 思いつくまま書いてください</label>
+        <textarea id="a-memo" rows="4" placeholder="例）&#10;表参道のパンケーキのカフェ、1500円くらい&#10;10月末までの限定メニューあり"></textarea></div>
+      <button class="btn rose block" data-go>${ic("sparkle", "sm")}${F.aiRead ? "AIで整理して追加" : "読み取って追加"}</button>
+      <p class="sub">${F.aiRead ? "店名・場所・ジャンル・値段・営業時間・期限をAIが読み取って、項目に入れます。" : "店名・住所・駅・値段・営業時間・期限を見分けて、項目に入れます。"}あいまいでも大丈夫です。</p>
+      <div class="label">ほかの方法</div>
+      <div class="actions" style="margin-top:0">
+        <button class="btn line" data-link>${ic("insta", "sm")}SNSのリンクから</button>
+        ${F.aiImage ? `<label class="btn line" for="a-shot">${ic("image", "sm")}スクショから<input id="a-shot" type="file" accept="image/*" hidden></label>` : ""}
+        <button class="btn line" data-manual>${ic("edit", "sm")}自分で入力</button>
+      </div>`);
+    const go = () => { const v = root.querySelector("#a-memo").value.trim(); if (!v) return toast("行きたい場所を書いてください"); openAdd(v); };
+    root.querySelector("[data-go]").onclick = go;
+    root.querySelector("#a-memo").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) go(); });
+    root.querySelector("[data-link]").onclick = openLinkAdd;
+    root.querySelector("#a-shot")?.addEventListener("change", (e) => { const f = e.target.files?.[0]; if (f) readAndEdit({ image: f, ai: true }); });
+    root.querySelector("[data-manual]").onclick = () => openEditor({ genre: "other" }, { isNew: true, manual: true });
+    setTimeout(() => root.querySelector("#a-memo")?.focus(), 60);
+  }
+
+  function openLinkAdd() {
+    const { root } = sheet(`${head("リンクから追加")}
       <div class="field"><label for="a-url">SNSの投稿・お店のページのリンク</label><input id="a-url" type="text" inputmode="url" placeholder="https://www.instagram.com/p/…" autocomplete="off"></div>
       <div class="actions" style="margin-top:0">
         ${F.clipboardRead ? `<button class="btn line" data-paste>${ic("clip", "sm")}コピーしたリンクを貼る</button>` : ""}
         <button class="btn rose" data-go>読み取る</button>
       </div>
-      <p class="sub">Instagram・TikTok・X・YouTube・食べログ・Googleマップの共有リンクに対応しています。</p>
-      <div class="label">ほかの方法</div>
-      <div class="actions" style="margin-top:0">
-        ${F.aiImage ? `<label class="btn line" for="a-shot">${ic("image", "sm")}スクショから<input id="a-shot" type="file" accept="image/*" hidden></label>` : ""}
-        <button class="btn line" data-manual>${ic("edit", "sm")}まとめて入力で追加</button>
-      </div>`);
+      <p class="sub">Instagram・TikTok・X・YouTube・食べログ・Googleマップの共有リンクに対応しています。読み取れないときは、投稿の本文を貼ってください。</p>`);
     const go = () => { const v = root.querySelector("#a-url").value.trim(); if (!v) return toast("リンクを貼り付けてください"); openAdd(v); };
     root.querySelector("[data-go]").onclick = go;
     root.querySelector("#a-url").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
@@ -863,8 +899,6 @@ export function startApp(backend, mount = document.body) {
       try { const t = await navigator.clipboard.readText(); root.querySelector("#a-url").value = t; if (/https?:\/\//.test(t)) openAdd(t); }
       catch { toast("貼り付けできませんでした。欄を長押しして貼り付けてください"); }
     });
-    root.querySelector("#a-shot")?.addEventListener("change", (e) => { const f = e.target.files?.[0]; if (f) readAndEdit({ image: f, ai: true }); });
-    root.querySelector("[data-manual]").onclick = () => openEditor({ genre: "other" }, { isNew: true });
     setTimeout(() => root.querySelector("#a-url")?.focus(), 60);
   }
 
@@ -913,7 +947,7 @@ export function startApp(backend, mount = document.body) {
     return out;
   }
 
-  function openEditor(draft, { isNew = false, dup = null, id = null, runBulk = false } = {}) {
+  function openEditor(draft, { isNew = false, dup = null, id = null, runBulk = false, autoAI = false, manual = false } = {}) {
     let d = { genre: "other", ...draft };
     const readOk = d.placeName || d.address || d.priceMin != null || (d.genre && d.genre !== "other");
     const { root, close } = sheet(`
@@ -925,7 +959,7 @@ export function startApp(backend, mount = document.body) {
       ${isNew && d.url ? `<div class="notice ${readOk ? "ok" : ""}">${readOk ? `${ic("sparkle", "sm")} 投稿を読み取りました${d.aiUsed ? "（AI）" : ""}。違うところは直してから追加してください。` : "この投稿は自動では読み取れませんでした。投稿の本文を下の欄に貼ると読み取れます。"}</div>` : ""}
       ${isNew || !id ? "" : "<details class=\"bulk-wrap\"><summary class=\"sub\" style=\"cursor:pointer;margin-bottom:8px\">まとめて追記する</summary>"}
       <div class="bulk">
-        <label for="f-caption"><b>${isNew && !d.url ? "まとめて入力" : "本文・メモから読み取る"}</b><span class="sub">${isNew && !d.url ? "思いつくまま書くと、下の項目に自動で入ります" : "投稿の本文などを貼ると、空いている項目に自動で入ります"}</span></label>
+        <label for="f-caption"><b>${isNew && !d.url ? "どんな場所？" : "本文・メモから読み取る"}</b><span class="sub">${isNew && !d.url ? "思いつくまま書くと、下の項目に自動で入ります" : "投稿の本文などを貼ると、空いている項目に自動で入ります"}</span></label>
         <textarea id="f-caption" rows="${isNew && !d.url ? 5 : 3}" placeholder="例）&#10;カフェ ルミエール&#10;渋谷区神宮前4-12-10 表参道駅 徒歩5分&#10;1,500円くらい 11時〜20時 火曜休み&#10;10/31までの限定パフェ">${esc(isNew ? d.caption || "" : "")}</textarea>
         <div class="bulk-foot"><span class="sub" id="bulk-status">${isNew && !d.url ? "店名・住所・駅・値段・営業時間・定休日・期限・リンク・メモを見分けます" : ""}</span>
           <span class="bulk-btns">${F.aiButton || (F.askAI && F.aiImage) ? `<button type="button" class="btn sm line" data-ai>${ic("sparkle", "sm")}AIで整理</button>` : ""}${F.aiImage ? `<label class="btn sm line" for="f-shot">${ic("image", "sm")}スクショ<input id="f-shot" type="file" accept="image/*" hidden></label>` : ""}</span></div>
@@ -973,7 +1007,7 @@ export function startApp(backend, mount = document.body) {
       const caption = root.querySelector("#f-caption").value;
       if (!caption.trim() && !image && !d.url) return toast("上の欄に書くか、スクショを選んでください");
       root.querySelectorAll("[data-ai]").forEach((b) => (b.disabled = true));
-      status.innerHTML = `<span class="thinking"><span class="spinner"></span>AIが整理しています（10〜30秒ほど）</span>`;
+      status.innerHTML = `<span class="thinking"><span class="spinner"></span>AIが場所を調べて整理しています（10〜30秒ほど）</span>`;
       try {
         const res = await B.readPost({ url: d.url, text: caption, image, ai: true });
         fillFrom(res, { overwriteAuto: false });
@@ -982,7 +1016,10 @@ export function startApp(backend, mount = document.body) {
     };
     root.querySelector("[data-ai]")?.addEventListener("click", () => runAI(null));
     root.querySelector("#f-shot")?.addEventListener("change", (e) => { const f = e.target.files?.[0]; if (f) runAI(f); });
-    if (runBulk) fillFrom({ ...parseFreeform(d.caption || ""), ...(coordsFrom(d.caption) || {}) });
+    if (runBulk) {
+      fillFrom({ ...parseFreeform(d.caption || ""), ...(coordsFrom(d.caption) || {}) });
+      if (autoAI) runAI(null);
+    } else if (manual) setTimeout(() => root.querySelector("#f-placeName")?.focus(), 80);
     else if (isNew && !d.url) setTimeout(() => root.querySelector("#f-caption")?.focus(), 80);
     root.addEventListener("click", async (e) => {
       if (!e.target.closest("[data-locate]")) return;
@@ -1200,29 +1237,42 @@ export function startApp(backend, mount = document.body) {
       const f = S.f;
       const { root } = sheet(`${head("絞り込み・並べ替え")}
         <div class="row2">
-          <div class="field"><label for="fl-sort">並べ替え</label><select id="fl-sort">${opt("new", "新しい順", S.sortBy)}${opt("old", "古い順", S.sortBy)}${opt("near", "近い順", S.sortBy)}${opt("cheap", "安い順", S.sortBy)}${opt("love", "♡が多い順", S.sortBy)}${opt("deadline", "期限が近い順", S.sortBy)}</select></div>
+          <div class="field"><label for="fl-sort">並べ替え</label><select id="fl-sort">${opt("new", "新しい順", S.sortBy)}${opt("old", "古い順", S.sortBy)}${opt("near", "移動時間が短い順", S.sortBy)}${opt("dist", "距離が近い順", S.sortBy)}${opt("cheap", "安い順", S.sortBy)}${opt("love", "♡が多い順", S.sortBy)}${opt("deadline", "期限が近い順", S.sortBy)}</select></div>
           <div class="field"><label for="fl-group">グループ分け</label><select id="fl-group">${opt("date", "追加日", S.groupBy)}${opt("genre", "ジャンル", S.groupBy)}${opt("area", "エリア", S.groupBy)}${opt("travel", "移動時間", S.groupBy)}${opt("price", "予算", S.groupBy)}${opt("who", "見つけた人", S.groupBy)}${opt("platform", "共有元（SNS）", S.groupBy)}${opt("none", "分けない", S.groupBy)}</select></div>
         </div>
-        <div class="label">いま</div>
-        <div class="chips wrap-chips"><button class="chip ${f.openNow ? "on" : ""}" data-f="openNow">${ic("clock", "sm")}いま営業中だけ <small>${count((i) => ["open", "closing"].includes(openState(i)?.state))}</small></button></div>
+        <div class="label">いま・条件</div>
+        <div class="chips wrap-chips">
+          <button class="chip ${f.openNow ? "on" : ""}" data-f="openNow">${ic("clock", "sm")}いま営業中 <small>${count((i) => ["open", "closing"].includes(openState(i)?.state))}</small></button>
+          <button class="chip ${f.deadlineOnly ? "on" : ""}" data-f="deadlineOnly">⏳ 期間限定 <small>${count((i) => i.deadline && daysUntil(i.deadline) >= 0)}</small></button>
+          ${solo() ? "" : `<button class="chip ${f.unvoted ? "on" : ""}" data-f="unvoted">まだ答えていない <small>${count((i) => myVote(i) == null)}</small></button>
+          <button class="chip ${f.meh ? "on" : ""}" data-f="meh">まあまあ票あり <small>${count((i) => Object.values(votes(i)).includes("no"))}</small></button>`}
+          <button class="chip ${f.located ? "on" : ""}" data-f="located">${ic("pin", "sm")}位置がわかる <small>${count((i) => i.lat != null)}</small></button>
+        </div>
+        <div class="label">行ける曜日（定休日を除く）</div>
+        <div class="chips wrap-chips"><button class="chip ${f.day === "today" ? "on" : ""}" data-f="day" data-v="today">今日</button>${WEEK.map((w, n) => `<button class="chip ${f.day === String(n) ? "on" : ""}" data-f="day" data-v="${n}">${w}</button>`).join("")}</div>
         <div class="label">ジャンル</div>
         <div class="chips wrap-chips">${GENRES.filter((g) => live.some((i) => i.genre === g.id)).map((g) => `<button class="chip ${f.genres.has(g.id) ? "on" : ""}" data-f="genre" data-v="${g.id}">${g.emoji} ${g.label} <small>${count((i) => i.genre === g.id)}</small></button>`).join("")}</div>
         <div class="label">エリア</div>
         <div class="chips wrap-chips">${areas.map((a) => `<button class="chip ${f.area === a ? "on" : ""}" data-f="area" data-v="${esc(a)}">${esc(a)} <small>${count((i) => (i.prefecture || "未設定") === a)}</small></button>`).join("")}</div>
         <div class="label">予算（1人）</div>
         <div class="chips wrap-chips">${[["free", "無料"], ["p1", "〜¥1,000"], ["p2", "〜¥3,000"], ["p3", "〜¥5,000"], ["p4", "¥5,000〜"]].map(([v, l]) => `<button class="chip ${f.price === v ? "on" : ""}" data-f="price" data-v="${v}">${l}</button>`).join("")}</div>
-        ${activeBase() ? `<div class="label">${esc(activeBase().label)}からの移動時間</div><div class="chips wrap-chips">${[["t30", "30分以内"], ["t60", "1時間以内"], ["t120", "2時間以内"], ["tfar", "遠出"]].map(([v, l]) => `<button class="chip ${f.travel === v ? "on" : ""}" data-f="travel" data-v="${v}">${l}</button>`).join("")}</div>` : ""}
+        ${activeBase() ? `<div class="label">${esc(activeBase().label)}からの距離（直線）</div><div class="chips wrap-chips">${DIST.map(([v, l], n) => `<button class="chip ${f.dist === v ? "on" : ""}" data-f="dist" data-v="${v}">${l} <small>${count((i) => { const km = travelOf(i)?.km; return km != null && km <= DIST[n][2] && km > (v === "dfar" ? DIST[n - 1][2] : -1); })}</small></button>`).join("")}</div>
+          <div class="label">${esc(activeBase().label)}からの移動時間</div><div class="chips wrap-chips">${[["t30", "30分以内"], ["t60", "1時間以内"], ["t120", "2時間以内"], ["tfar", "遠出"]].map(([v, l]) => `<button class="chip ${f.travel === v ? "on" : ""}" data-f="travel" data-v="${v}">${l}</button>`).join("")}</div>`
+          : `<div class="label">距離・移動時間</div><button class="chip" data-act="bases">${ic("home", "sm")}出発地を登録すると距離で絞れます</button>`}
+        <div class="label">追加した時期</div>
+        <div class="chips wrap-chips">${[["week", "今週"], ["month", "今月"], ["older", "それより前"]].map(([v, l]) => `<button class="chip ${f.added === v ? "on" : ""}" data-f="added" data-v="${v}">${l} <small>${count((i) => { const d = daysSince(i.createdAt); return v === "week" ? d <= 7 : v === "month" ? d <= 31 : d > 31; })}</small></button>`).join("")}</div>
         <div class="label">見つけた人</div>
         <div class="chips wrap-chips">${peopleList().map((p) => `<button class="chip ${f.who === p.id ? "on" : ""}" data-f="who" data-v="${esc(p.id)}">${av(p.id, "xs")}${esc(pname(p.id))}</button>`).join("")}</div>
         <div class="actions"><button class="btn line" data-reset>リセット</button><button class="btn rose" data-close>${filtered().length}件を見る</button></div>`, { onClose: render });
       root.addEventListener("click", (e) => {
+        if (e.target.closest('[data-act="bases"]')) return openSettings("bases");
         const b = e.target.closest("[data-f],[data-reset]");
         if (!b) return;
-        if (b.hasAttribute("data-reset")) Object.assign(S.f, { genres: new Set(), price: "", travel: "", area: "", who: "", openNow: false });
+        if (b.hasAttribute("data-reset")) S.f = freshFilters();
         const k = b.dataset.f, v = b.dataset.v;
-        if (k === "openNow") f.openNow = !f.openNow;
+        if (["openNow", "deadlineOnly", "unvoted", "meh", "located"].includes(k)) f[k] = !f[k];
         if (k === "genre") f.genres.has(v) ? f.genres.delete(v) : f.genres.add(v);
-        if (["area", "price", "travel", "who"].includes(k)) f[k] = f[k] === v ? "" : v;
+        if (["area", "price", "travel", "dist", "who", "day", "added"].includes(k)) f[k] = f[k] === v ? "" : v;
         draw();
       });
       root.querySelector("#fl-sort").onchange = (e) => { S.sortBy = e.target.value; local.set("sortBy", S.sortBy); };
@@ -1352,20 +1402,35 @@ export function startApp(backend, mount = document.body) {
     });
   }
 
-  function inviteText() {
-    return `${V().invite || "行きたい場所のリストを作りました"}\n${B.inviteUrl()}`;
+  function inviteText(code = "") {
+    return `${V().invite || "行きたい場所のリストを作りました"}\n${F.invite ? B.inviteUrl() : ""}${code ? `\n共有コード: ${code}` : ""}`.replace(/\n\n/g, "\n");
   }
+  // 招待：リンク（Webアプリ）と、グループごとの共有コード
   function openInvite() {
-    const { root } = sheet(`${head(`${esc(V().label === "ひとりで" ? "メンバー" : V().label)}を招待`)}
-      <p class="sub" style="margin-top:0">このリンクを送るだけで参加できます。相手は名前を入れるだけで、アカウント登録はいりません。</p>
-      <div style="display:flex;gap:6px"><input id="s-invite" readonly value="${esc(B.inviteUrl())}" aria-label="招待リンク" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn sm line" data-copy-invite>コピー</button></div>
+    const who = esc(V().label === "ひとりで" ? "メンバー" : V().label);
+    const { root } = sheet(`${head(`${who}を招待`)}
+      ${F.codes ? `<div class="code-box"><span class="sub">「${esc(S.settings.name)}」の共有コード</span><b class="num" id="s-code"><span class="spinner"></span></b><button class="btn sm line" data-copy-code disabled>コードをコピー</button></div>
+        <p class="sub" style="margin:8px 0 14px">${F.invite ? "相手はアプリの最初の画面で「共有コードで参加する」に入れるだけ。" : "このページのリンクを共有したあと、相手にリストの切り替え →「共有コードで参加」でこのコードを入れてもらいます。"}コードはグループごとに別なので、恋人用・友達用を混ぜずに使えます。</p>` : ""}
+      ${F.invite ? `<div class="label" style="margin-top:0">リンクで招待</div>
+        <div style="display:flex;gap:6px"><input id="s-invite" readonly value="${esc(B.inviteUrl())}" aria-label="招待リンク" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn sm line" data-copy-invite>コピー</button></div>
+        <p class="sub" style="margin-top:6px">リンクを開いて名前を入れるだけで参加できます。アカウント登録はいりません。</p>` : `<div class="notice">${esc(B.shareNote || "画面上部の共有メニューから、このページを共有してください。")}</div>`}
       <div class="actions">
-        <a class="btn rose" href="${esc(lineShareUrl(inviteText()))}" target="_blank" rel="noopener">${ic("send", "sm")}LINEで送る</a>
+        <a class="btn rose" data-line href="${esc(lineShareUrl(inviteText()))}" target="_blank" rel="noopener">${ic("send", "sm")}LINEで送る</a>
         ${navigator.share ? `<button class="btn line" data-share-invite>${ic("share", "sm")}ほかのアプリで送る</button>` : ""}
       </div>
-      <p class="sub" style="margin-top:12px">リンクを知っている人は誰でもリストを見て参加できます。使う人以外には教えないでください。</p>`);
-    root.querySelector("[data-copy-invite]").addEventListener("click", async () => { try { await navigator.clipboard.writeText(B.inviteUrl()); toast("コピーしました"); } catch { root.querySelector("#s-invite").select(); } });
-    root.querySelector("[data-share-invite]")?.addEventListener("click", () => navigator.share({ title: S.settings.name, text: inviteText() }).catch(() => {}));
+      <p class="sub" style="margin-top:12px">リンクやコードを知っている人は誰でも参加できます。使う人以外には教えないでください。</p>`);
+    let code = "";
+    if (F.codes) Promise.resolve(B.shareCode()).then((c) => {
+      code = c || "";
+      const el = root.querySelector("#s-code");
+      if (!el) return;
+      el.textContent = code || "—";
+      root.querySelector("[data-copy-code]").disabled = !code;
+      root.querySelector("[data-line]").href = lineShareUrl(inviteText(code));
+    }).catch(() => { const el = root.querySelector("#s-code"); if (el) el.textContent = "—"; });
+    root.querySelector("[data-copy-code]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); toast("共有コードをコピーしました"); } catch { toast(code); } });
+    root.querySelector("[data-copy-invite]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(B.inviteUrl()); toast("コピーしました"); } catch { root.querySelector("#s-invite").select(); } });
+    root.querySelector("[data-share-invite]")?.addEventListener("click", () => navigator.share({ title: S.settings.name, text: inviteText(code) }).catch(() => {}));
   }
 
   function openSettings(focus = "") {
@@ -1373,7 +1438,7 @@ export function startApp(backend, mount = document.body) {
     const ppl = peopleList();
     const mine = person(me());
     const { root, close } = sheet(`${head("設定")}
-      ${solo() ? "" : F.invite ? `<button class="btn rose block" data-invite>${ic("users", "sm")}${esc(V().label)}を招待する</button>`
+      ${solo() ? "" : F.invite || F.codes ? `<button class="btn rose block" data-invite>${ic("users", "sm")}${esc(V().label)}を招待する（共有コード）</button>`
         : `<div class="notice">一緒に使う人は、画面上部の共有メニューから「編集できる」で招待してください。${esc(B.shareNote || "")}</div>`}
 
       <div class="label">このリスト</div>
@@ -1505,15 +1570,54 @@ export function startApp(backend, mount = document.body) {
     });
   }
 
+  // グループ（リスト）の切り替え・新規作成・共有コードで参加
   function openLists() {
     const lists = B.lists();
-    const { root } = sheet(`${head("リスト")}
-      <div class="panel" style="padding:6px 14px">${lists.map((l) => `<a class="memory" href="${esc(l.url)}" style="text-decoration:none;color:inherit;grid-template-columns:44px 1fr auto;align-items:center">
-        <span class="ph" style="width:44px;height:44px;font-size:22px;--tint:${TINT.other}">${(GROUP_TYPES[l.type] || GROUP_TYPES.friends).emoji}</span>
-        <span style="min-width:0"><b>${esc(l.name)}</b><div class="sub">${esc((GROUP_TYPES[l.type] || GROUP_TYPES.friends).label)}${l.count != null ? ` ・ ${l.count}件` : ""}</div></span>
-        ${l.current ? `<span class="tag plan">表示中</span>` : ""}</a>`).join("")}</div>
-      <a class="btn rose block" style="margin-top:12px" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しいリストを作る</a>
-      <p class="sub">恋人用・友達用・家族用など、使う相手ごとにリストを分けられます。</p>`);
+    const row = (l) => {
+      const t = GROUP_TYPES[l.type] || GROUP_TYPES.friends;
+      const inner = `<span class="ph" style="width:44px;height:44px;font-size:22px;--tint:${TINT.other}">${t.emoji}</span>
+        <span style="min-width:0"><b>${esc(l.name)}</b><div class="sub">${esc(t.label)}${l.count != null ? ` ・ ${l.count}件` : ""}</div></span>
+        ${l.current ? `<span class="tag plan">表示中</span>` : ""}`;
+      const style = "text-decoration:none;color:inherit;grid-template-columns:44px 1fr auto;align-items:center;width:100%;border:0;background:none;text-align:left;font:inherit";
+      return l.url ? `<a class="memory" href="${esc(l.url)}" style="${style}">${inner}</a>` : `<button class="memory" data-gid="${esc(l.id)}" style="${style}">${inner}</button>`;
+    };
+    const { root, close } = sheet(`${head("グループ")}
+      <p class="sub" style="margin-top:0">恋人用・友達用・家族用など、相手ごとにグループを分けられます。共有コードはグループごとに別です。</p>
+      <div class="panel" style="padding:6px 14px">${lists.map(row).join("")}</div>
+      <div class="label">新しいグループを作る</div>
+      ${B.kind === "artifact" ? `<div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-newtype="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
+        <form id="new-group" hidden style="margin-top:8px"><div style="display:flex;gap:6px"><input id="ng-name" maxlength="40" required style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn rose">作る</button></div></form>`
+        : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しいグループを作る</a>`}
+      ${F.codes ? `<div class="label">共有コードで参加する</div>
+        <form id="join-code"><div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn line">参加</button></div>
+        <p class="sub" id="jc-status" style="margin:6px 0 0">誘ってくれた人から聞いた6文字のコードを入れてください。</p></form>` : ""}`);
+    let newType = null;
+    root.addEventListener("click", async (e) => {
+      const g = e.target.closest("[data-gid]");
+      if (g) { if (g.dataset.gid !== lists.find((l) => l.current)?.id) { close(); await act(() => B.openList(g.dataset.gid)); } return; }
+      const t = e.target.closest("[data-newtype]");
+      if (t) {
+        newType = t.dataset.newtype;
+        root.querySelectorAll("[data-newtype]").forEach((b) => b.classList.toggle("on", b === t));
+        const f = root.querySelector("#new-group"); f.hidden = false;
+        const inp = root.querySelector("#ng-name"); inp.value = GROUP_TYPES[newType].listName; inp.focus(); inp.select();
+      }
+    });
+    root.querySelector("#new-group")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = root.querySelector("#ng-name").value.trim();
+      if (!name || !newType) return;
+      e.submitter && (e.submitter.disabled = true);
+      close();
+      if (await act(() => B.createList({ type: newType, name }))) toast(`「${name}」を作りました。設定の「招待」から共有コードを送れます`);
+    });
+    root.querySelector("#join-code")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const st = root.querySelector("#jc-status");
+      st.innerHTML = `<span class="thinking"><span class="spinner"></span>探しています…</span>`;
+      try { const g = await B.joinByCode(root.querySelector("#jc").value); close(); if (g?.name) toast(`「${g.name}」に参加しました`); }
+      catch (err) { st.textContent = err?.message || "参加できませんでした"; }
+    });
     return root;
   }
 
@@ -1570,13 +1674,13 @@ export function startApp(backend, mount = document.body) {
     if (a === "filters") openFilters();
     if (a === "gacha") openGacha();
     if (a === "mode") { S.listMode = S.listMode === "map" ? "grid" : "map"; renderView(); }
-    if (a === "clear") { Object.assign(S.f, { genres: new Set(), price: "", travel: "", area: "", who: "", openNow: false }); S.q = ""; S.seg = "all"; renderView(); }
+    if (a === "clear") { S.f = freshFilters(); S.q = ""; S.seg = "all"; renderView(); }
     if (a === "unskip") { S.skipped.clear(); renderView(); }
     if (a === "pboth") { S.plan.bothOnly = !S.plan.bothOnly; renderView(); }
     if (a === "build") {
       S.plan.date = $("p-date").value || S.plan.date;
       S.plan.budget = $("p-budget").value;
-      S.courses = buildCourses(S.spots, { stops: S.plan.stops, style: S.plan.style, budget: S.plan.budget ? Number(S.plan.budget) : null, bothOnly: S.plan.bothOnly, date: S.plan.date, peopleCount: Math.max(2, peopleList().length) });
+      S.courses = buildCourses(S.spots, { stops: S.plan.stops, style: S.plan.style, budget: S.plan.budget ? Number(S.plan.budget) : null, bothOnly: S.plan.bothOnly, date: S.plan.date, peopleCount: Math.max(2, peopleList().length), base: activeBase() });
       renderView();
       document.getElementById("courses")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -1622,9 +1726,14 @@ export function startApp(backend, mount = document.body) {
   if (theme) document.documentElement.dataset.theme = theme;
   applyAccent(local.get("accent", ""));
   render();
-  B.subscribe(({ settings, spots }) => {
+  B.subscribe(({ settings, spots, reset }) => {
+    // グループを切り替えたときは、前のグループの状態を持ち越さない
+    if (reset) {
+      Object.assign(S, { spots: [], q: "", f: freshFilters(), seg: "all", courses: null, openMode: "", calDay: "", skipped: new Set(), routeCache: {} });
+      $modal.innerHTML = "";
+    }
     const before = new Set(S.spots.map((s) => s.id));
-    const wasLoaded = S.loaded;
+    const wasLoaded = S.loaded && !reset;
     if (settings) S.settings = { name: "行きたいリスト", bases: [], ...settings };
     if (spots) S.spots = spots;
     S.loaded = true;
