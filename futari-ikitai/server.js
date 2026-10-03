@@ -1,4 +1,4 @@
-// あれどこ — サーバー
+// どこいく — サーバー
 // 依存パッケージなしで動く Node.js サーバー（AI解析だけ任意で @anthropic-ai/sdk を使う）。
 // データは data/<部屋ID>.json に保存し、変更は SSE で相手の画面にすぐ反映する。
 
@@ -438,5 +438,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`あれどこ: http://localhost:${PORT}  (AI解析: ${aiEnabled() ? "ON" : "OFF"})`);
+  console.log(`どこいく: http://localhost:${PORT}  (AI解析: ${aiEnabled() ? "ON" : "OFF"})`);
 });

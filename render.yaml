@@ -1,7 +1,7 @@
-# あれどこ（Webアプリ版）の Render Blueprint。リポジトリをつなぐと、この設定でサーバーと保存用ディスクが作られる。
+# どこいく（Webアプリ版）の Render Blueprint。リポジトリをつなぐと、この設定でサーバーと保存用ディスクが作られる。
 services:
   - type: web
-    name: aredoko
+    name: dokoiku
     runtime: docker
     dockerfilePath: ./futari-ikitai/Dockerfile
     dockerContext: ./futari-ikitai

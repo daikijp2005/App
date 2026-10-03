@@ -1,4 +1,4 @@
-<title>あれどこ</title>
+<title>どこいく</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Maru+Gothic:wght@700;900&display=swap" rel="stylesheet">
@@ -1473,7 +1473,7 @@ function yahooTransitUrl(fromName, toName) {
   return `https://transit.yahoo.co.jp/search/result?from=${encodeURIComponent(fromName)}&to=${encodeURIComponent(toName)}`;
 }
 
-// あれどこ — 画面（Webアプリとアーティファクトで共通）
+// どこいく — 画面（Webアプリとアーティファクトで共通）
 // データの読み書きは backend に任せる。backend の形は README の「しくみ」を参照。
 
 
@@ -1639,7 +1639,7 @@ function showOnboarding(onDone) {
   el.setAttribute("aria-modal", "true");
   el.setAttribute("aria-label", "使い方");
   el.innerHTML = `
-    <div class="tour-top"><span class="brand">${LOGO}<b>あれどこ</b></span><button class="btn sm line" data-skip>スキップ</button></div>
+    <div class="tour-top"><span class="brand">${LOGO}<b>どこいく</b></span><button class="btn sm line" data-skip>スキップ</button></div>
     <div class="tour-track" tabindex="0">${TOUR.map((t, i) => `<section class="tour-slide" aria-label="${i + 1} / ${TOUR.length}">${t.art()}<h2>${esc(t.title)}</h2><p>${esc(t.text)}</p></section>`).join("")}</div>
     <div class="tour-bottom"><div class="tour-dots">${TOUR.map((_, i) => `<button aria-label="${i + 1}枚目" data-dot="${i}"></button>`).join("")}</div><button class="btn rose" data-next>次へ</button></div>`;
   document.body.append(el);
@@ -1746,7 +1746,7 @@ function startApp(backend, mount = document.body) {
 
   // ---------- 骨組み ----------
   function render() {
-    document.title = `${S.settings.name} | あれどこ`;
+    document.title = `${S.settings.name} | どこいく`;
     const pend = pending().length;
     const ppl = peopleList();
     $app.innerHTML = `
@@ -1970,7 +1970,7 @@ function startApp(backend, mount = document.body) {
       ["2", "出発地を登録", "家や職場、よく集まる駅を登録すると、移動時間の目安が出ます。"],
       ["3", "リンクを貼る", "SNSの共有リンクを貼ると、ジャンル・場所・値段を読み取ります。"],
     ];
-    return `<div class="empty"><h3>まだ「あれどこ？」はゼロです</h3><p>SNSで「ここ行きたい！」と思ったら、上の欄にリンクを貼っておきましょう。未来のあなたが感謝します。</p>
+    return `<div class="empty"><h3>「どこいく？」の候補はまだゼロです</h3><p>SNSで「ここ行きたい！」と思ったら、上の欄にリンクを貼っておきましょう。次の「どこいく？」で、未来のあなたが感謝します。</p>
       <div class="steps">${steps.map(([n, t, d]) => `<div class="step"><i>STEP ${n}</i><b>${t}</b><span class="sub">${d}</span></div>`).join("")}</div></div>`;
   }
 
@@ -2276,7 +2276,7 @@ function startApp(backend, mount = document.body) {
           <div style="min-width:0"><b>${esc(nameOf(it))}</b> ${it.rating ? `<span class="stars-ro">${"★".repeat(it.rating)}</span>` : ""}
           <div class="sub">${it.visitedAt ? jpDate(it.visitedAt) : ""}${it.city ? ` ・ ${esc(it.city)}` : ""}</div>
           ${it.review ? `<div style="font-size:13.5px;margin-top:2px">${esc(it.review)}</div>` : ""}</div></div>`).join("")}</div>`).join("")
-        : `<div class="empty"><p>行った場所は、★と感想つきでここに残ります。「あれどこだっけ？」が「あれ良かったね」に変わる場所です。</p></div>`}`;
+        : `<div class="empty"><p>行った場所は、★と感想つきでここに残ります。「どこいく？」が「あそこ良かったね」に変わる場所です。</p></div>`}`;
   }
 
   // ---------- 投票・書き込み ----------
@@ -2483,7 +2483,7 @@ function startApp(backend, mount = document.body) {
       for (const k of ["url", "platform", "title", "caption", "image", "author", "genre", "placeName", "address", "prefecture", "city", "station", "walkMin", "priceMin", "priceMax", "priceNote", "hours", "closed", "deadline", "tags", "summary", "memo", "lat", "lng"]) if (data[k] !== undefined) body[k] = data[k];
       if (isNew) {
         const created = await act(() => B.addSpot(body));
-        if (created) { close(); toast("メモしました。もう「あれどこ？」とは言わせません"); }
+        if (created) { close(); toast("メモしました。次の「どこいく？」はこれで決まりかも"); }
         else e.target.disabled = false;
       } else if (await patch(id, body, "保存しました")) openDetail(id);
       else e.target.disabled = false;
