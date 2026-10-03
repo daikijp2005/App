@@ -1,5 +1,5 @@
 // Webアプリ版の入り口：リストの作成・参加・切り替えと、サーバーとの同期を受け持ち、画面は core.js に任せる
-import { startApp, showOnboarding } from "./core.js";
+import { startApp, showOnboarding, applyAccent } from "./core.js";
 import { GROUP_TYPES } from "./smart.js";
 
 const local = {
@@ -58,7 +58,9 @@ function webBackend(room, meta) {
     },
     me: meId,
     setMe: (m) => local.set(`me.${id}`, m),
-    people: () => current.members.map((m) => ({ id: m.id, name: m.name, color: m.color })),
+    people: () => current.members.map((m) => ({ id: m.id, name: m.name, color: m.color, avatar: m.avatar || "" })),
+    renameMember: (memberId, name) => api(`/rooms/${id}`, { method: "PATCH", body: { members: [{ id: memberId, name }] } }).then(refresh),
+    setAvatar: (memberId, avatar) => api(`/rooms/${id}`, { method: "PATCH", body: { members: [{ id: memberId, avatar }] } }).then(refresh),
     async join(name) { const m = await api(`/rooms/${id}/members`, { method: "POST", body: { name } }); local.set(`me.${id}`, m.id); await refresh(); return m; },
     async leave() {
       await api(`/rooms/${id}/members/${meId()}`, { method: "DELETE" });
@@ -147,6 +149,7 @@ async function boot() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   const theme = local.get("theme");
   if (theme) document.documentElement.dataset.theme = theme;
+  applyAccent(local.get("accent", ""));
   const params = new URLSearchParams(location.search);
 
   // スマホの共有メニュー（PWA）から来たとき

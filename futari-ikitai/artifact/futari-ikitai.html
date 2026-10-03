@@ -381,6 +381,79 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .brand-line { display: grid; gap: 2px; margin: -4px 0 18px; color: var(--muted); font-size: 13px; }
 .brand-line b { font-family: var(--display); font-size: 22px; font-weight: 900; color: var(--rose); letter-spacing: .06em; }
 
+/* ---------- 自分で選んだメインカラー ---------- */
+:root[style*="--user-accent"] { --rose: var(--user-accent); --rose-ink: var(--user-accent-ink); --rose-soft: color-mix(in srgb, var(--user-accent) 15%, var(--surface)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[style*="--user-accent"] { --rose: color-mix(in srgb, var(--user-accent) 72%, white); --rose-ink: #1d1416; --rose-soft: color-mix(in srgb, var(--user-accent) 28%, var(--surface)); }
+}
+:root[data-theme="dark"][style*="--user-accent"] { --rose: color-mix(in srgb, var(--user-accent) 72%, white); --rose-ink: #1d1416; --rose-soft: color-mix(in srgb, var(--user-accent) 28%, var(--surface)); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; }
+.swatch { border: 0; background: none; padding: 0; display: grid; justify-items: center; gap: 4px; cursor: pointer; color: var(--ink); }
+.swatch i { width: 40px; height: 40px; border-radius: 50%; background: var(--sw); box-shadow: inset 0 0 0 2px rgba(255,255,255,.35); }
+.swatch.on i { outline: 3px solid var(--sw); outline-offset: 3px; }
+.swatch small { font-size: 11px; color: var(--muted); }
+.swatch.custom input { width: 40px; height: 40px; border: 0; padding: 0; border-radius: 50%; overflow: hidden; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); cursor: pointer; }
+.swatch.custom input::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch.custom input::-webkit-color-swatch { border: 0; border-radius: 50%; }
+
+/* ---------- ジャンルの色 ---------- */
+.tag.genre { background: var(--tint); color: #2a2124; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.genre-row { margin: 2px 0 4px; }
+.g-chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--tint); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.g-chip.on { background: color-mix(in srgb, var(--tint) 70%, var(--surface)); border-color: color-mix(in srgb, var(--tint) 60%, var(--ink)); color: var(--ink); }
+
+/* ---------- アイコン ---------- */
+.av.is-emoji { background: var(--surface-2) !important; }
+.av .emo { font-size: 1.15em; line-height: 1; }
+.av.lg { width: 56px; height: 56px; font-size: 22px; border-width: 0; }
+.av.lg .emo { font-size: 30px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.emoji-grid button { aspect-ratio: 1; border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; font-size: 22px; padding: 0; }
+.emoji-grid button:hover { border-color: var(--rose); }
+@media (max-width: 420px) { .emoji-grid { grid-template-columns: repeat(6, 1fr); } }
+
+/* ---------- メンバー図鑑 ---------- */
+.best-combo { display: grid; justify-items: center; gap: 4px; padding: 16px; margin-bottom: 12px; border-radius: var(--r-lg); background: linear-gradient(135deg, var(--rose-soft), var(--surface)); text-align: center; }
+.best-combo .duo .av { width: 44px; height: 44px; font-size: 18px; }
+.best-combo b { font-family: var(--display); font-size: 18px; }
+.best-combo .num { color: var(--rose); font-weight: 800; }
+.member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.member-card { background: var(--surface); border-radius: var(--r-lg); padding: 14px; box-shadow: var(--shadow-sm); display: grid; gap: 10px; min-width: 0; }
+.mc-top { display: flex; gap: 12px; align-items: center; }
+.mc-name { font-family: var(--display); font-size: 18px; font-weight: 900; }
+.tag.title { background: var(--rose-soft); color: var(--rose); }
+.mc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+.mc-stats span { background: var(--surface-2); border-radius: 12px; padding: 6px 4px; font-size: 11px; color: var(--muted); display: grid; }
+.mc-stats b { font-family: var(--display); font-size: 18px; color: var(--ink); }
+.compat { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; }
+.compat > .sub:last-child { grid-column: 1 / -1; }
+.meter { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--rose-soft), var(--rose)); }
+.compat b { color: var(--rose); }
+
+/* ---------- カレンダー ---------- */
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-head h2 { font-size: 18px; font-weight: 900; }
+.cal-head .ghost-icon { font-size: 24px; line-height: 1; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-w { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding-bottom: 2px; }
+.cal-w.sun, .cal-d.sun .n { color: var(--danger); }
+.cal-w.sat, .cal-d.sat .n { color: var(--plan); }
+.cal-d { border: 0; background: var(--bg); border-radius: 12px; min-height: 58px; padding: 5px 2px 4px; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 1px; color: var(--ink); }
+.cal-d .n { font-size: 13px; font-weight: 700; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; }
+.cal-d.today .n { background: var(--rose); color: var(--rose-ink) !important; }
+.cal-d.on { box-shadow: inset 0 0 0 2px var(--rose); background: var(--rose-soft); }
+.cal-d .mk { font-size: 15px; line-height: 1.1; letter-spacing: -2px; }
+.cal-d .dots { display: flex; gap: 3px; min-height: 6px; }
+.cal-d .dots i { width: 6px; height: 6px; border-radius: 50%; }
+.cal-d .dots .p { background: var(--plan); } .cal-d .dots .d { background: var(--warn); } .cal-d .dots .v { background: var(--ok); }
+.pick { position: relative; }
+.pick .check { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); }
+.pick.on { box-shadow: 0 0 0 2px var(--rose); }
+.pick.on .check { background: var(--rose); border-color: var(--rose); }
+.pick.on .check::after { content: "✓"; color: var(--rose-ink); font-size: 14px; font-weight: 900; display: grid; place-items: center; height: 100%; }
+@media (max-width: 420px) { .cal-d { min-height: 50px; } .cal-d .mk { font-size: 13px; } }
+
 </style>
 <div id="boot" class="empty" style="padding-top:30vh"><span class="thinking"><span class="spinner"></span>記憶をたどっています…</span></div>
 <script>
@@ -1029,6 +1102,82 @@ function fuzzySearch(spots, query, ctx = {}) {
   return { results, understood: [...understood] };
 }
 
+// ---------- メンバー図鑑（称号と相性） ----------
+const GENRE_TITLES = {
+  gourmet: "グルメハンター🍽️", cafe: "カフェ巡り隊☕", sweets: "甘党代表🍰", bar: "夜の案内人🍷", nature: "絶景ハンター🌅",
+  sightseeing: "観光ガイド⛩️", art: "アート通🎨", event: "イベント番長🎪", shopping: "買い物マスター🛍️", stay: "温泉大臣♨️", activity: "アクティブ担当🎢",
+};
+
+// ふたりの「行きたい／うーん」がどれだけ一致したか。両方答えたスポットが2つ未満なら null
+function compatibility(spots, a, b) {
+  let both = 0, same = 0;
+  for (const s of spots) {
+    const va = s.likes?.[a], vb = s.likes?.[b];
+    const ra = va === true ? 1 : va === "no" || va === false ? 0 : null;
+    const rb = vb === true ? 1 : vb === "no" || vb === false ? 0 : null;
+    if (ra == null || rb == null) continue;
+    both++;
+    if (ra === rb) same++;
+  }
+  return both >= 2 ? Math.round((same / both) * 100) : null;
+}
+
+function memberStats(spots, ids) {
+  const base = ids.map((id) => {
+    const added = spots.filter((s) => s.addedBy === id);
+    const votes = spots.map((s) => s.likes?.[id]).filter((v) => v !== undefined && v !== null);
+    const yes = votes.filter((v) => v === true).length;
+    const no = votes.filter((v) => v === "no").length;
+    const comments = spots.reduce((n, s) => n + (s.comments || []).filter((c) => c.by === id).length, 0);
+    const byGenre = {};
+    for (const s of added) byGenre[s.genre] = (byGenre[s.genre] || 0) + 1;
+    const [topGenre, topGenreCount] = Object.entries(byGenre).sort((x, y) => y[1] - x[1])[0] || [null, 0];
+    const visited = added.filter((s) => s.status === "visited").length;
+    return { id, added: added.length, yes, no, votes: votes.length, comments, topGenre, topGenreCount, visited };
+  });
+  const maxAdded = Math.max(0, ...base.map((m) => m.added));
+  const topAdders = base.filter((m) => m.added === maxAdded);
+  const maxComments = Math.max(0, ...base.map((m) => m.comments));
+  for (const m of base) {
+    const titles = [];
+    if (maxAdded >= 3 && topAdders.length === 1 && topAdders[0] === m) titles.push("発見王👑");
+    if (m.topGenre && m.topGenreCount >= 2 && GENRE_TITLES[m.topGenre]) titles.push(GENRE_TITLES[m.topGenre]);
+    if (m.votes >= 5 && m.yes / m.votes >= 0.8) titles.push("なんでも行きたい人🙌");
+    if (m.votes >= 5 && m.no / m.votes >= 0.4) titles.push("こだわり審査員🧐");
+    if (maxComments >= 3 && m.comments === maxComments) titles.push("おしゃべり隊長💬");
+    if (!m.added && m.votes) titles.push("見る専門👀");
+    if (!titles.length) titles.push("ゆるっと参加🌱");
+    m.titles = titles;
+  }
+  // いちばん相性のいい組み合わせ
+  let best = null;
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    const c = compatibility(spots, ids[i], ids[j]);
+    if (c != null && (!best || c > best.score)) best = { a: ids[i], b: ids[j], score: c };
+  }
+  return { members: base, best };
+}
+
+// カレンダー用：月の日付マス（月曜はじまりではなく日曜はじまり）
+function monthGrid(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  const first = new Date(y, m - 1, 1);
+  const days = new Date(y, m, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first.getDay(); i++) cells.push(null);
+  for (let d = 1; d <= days; d++) cells.push(`${ym}-${String(d).padStart(2, "0")}`);
+  while (cells.length % 7) cells.push(null);
+  return cells;
+}
+
+function eventsOn(spots, date) {
+  return {
+    planned: spots.filter((s) => s.status === "planned" && s.plannedDate === date),
+    deadline: spots.filter((s) => s.status !== "visited" && s.deadline === date),
+    visited: spots.filter((s) => s.status === "visited" && s.visitedAt === date),
+  };
+}
+
 // あれどこ — 画面（Webアプリとアーティファクトで共通）
 // データの読み書きは backend に任せる。backend の形は README の「しくみ」を参照。
 
@@ -1090,7 +1239,9 @@ const local = {
 };
 const genreOf = (id) => GENRES.find((g) => g.id === id) || GENRES[GENRES.length - 1];
 const nameOf = (it) => it.placeName || it.title || "名前未設定のスポット";
-const daysUntil = (d) => (d ? Math.ceil((new Date(d + "T23:59:59") - Date.now()) / 86400000) : null);
+// 今日=0、明日=1（日付だけで数える）
+const daysUntil = (d) => { if (!d) return null; const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((new Date(d + "T00:00:00") - t) / 86400000); };
+const untilLabel = (d) => { const n = daysUntil(d); return n === 0 ? "今日" : n === 1 ? "明日" : `あと${n}日`; };
 const todayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const nextSaturday = () => { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const jpDate = (s) => { if (!s) return ""; const d = new Date(s + "T12:00:00"); return `${d.getMonth() + 1}/${d.getDate()}(${"日月火水木金土"[d.getDay()]})`; };
@@ -1104,6 +1255,22 @@ function coordsFrom(text) {
   if (!m) return null;
   const lat = Number(m[1]), lng = Number(m[2]);
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+
+// ---------- メインカラー（端末ごとに選べる） ----------
+const ACCENTS = [["#df4a72", "ローズ"], ["#e8643c", "サンセット"], ["#c98a00", "マスタード"], ["#2e9e6b", "ミント"], ["#1f8fb0", "オーシャン"], ["#3b6fd8", "ブルー"], ["#7c5ad6", "ラベンダー"], ["#3a3236", "チャコール"]];
+function applyAccent(hex) {
+  const root = document.documentElement;
+  if (!/^#[0-9a-f]{6}$/i.test(hex || "")) {
+    root.style.removeProperty("--user-accent");
+    root.style.removeProperty("--user-accent-ink");
+    return;
+  }
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  root.style.setProperty("--user-accent", hex);
+  root.style.setProperty("--user-accent-ink", lum > 0.62 ? "#1d1416" : "#ffffff");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", hex);
 }
 
 // ---------- 使い方スライド（最初に1回。設定からいつでも見られる） ----------
@@ -1192,7 +1359,7 @@ function startApp(backend, mount = document.body) {
     view: local.get("view", "home"), q: "", seg: "all", groupBy: local.get("groupBy", "date"), sortBy: local.get("sortBy", "new"),
     f: { genres: new Set(), price: "", travel: "", area: "", who: "", openNow: false }, listMode: "grid",
     baseId: local.get("baseId", null), plan: { date: nextSaturday(), style: "day", stops: 3, budget: "", bothOnly: false }, courses: null,
-    skipped: new Set(),
+    skipped: new Set(), planTab: "calendar", calMonth: "", calDay: "",
   };
 
   mount.insertAdjacentHTML("beforeend", `<div class="app" id="app"></div><div id="modal-root"></div><div id="toast" aria-live="polite"></div>`);
@@ -1206,7 +1373,9 @@ function startApp(backend, mount = document.body) {
   const pname = (id) => (id && id === me() ? "あなた" : person(id).name || "メンバー");
   const av = (id, cls = "") => {
     const p = person(id);
-    return `<span class="av ${cls}" style="background:${esc(p.color || "#9a8a8f")}" title="${esc(p.name)}">${p.avatar ? `<img src="${esc(p.avatar)}" alt="">` : esc([...(p.name || "?")][0])}</span>`;
+    const a = p.avatar || "";
+    const inner = a.startsWith("emoji:") ? `<span class="emo">${esc(a.slice(6))}</span>` : a ? `<img src="${esc(a)}" alt="">` : esc([...(p.name || "?")][0]);
+    return `<span class="av ${cls}${a.startsWith("emoji:") ? " is-emoji" : ""}" style="background:${esc(p.color || "#9a8a8f")}" title="${esc(p.name)}">${inner}</span>`;
   };
   const votes = (it) => it.likes || {};
   const yesIds = (it) => Object.keys(votes(it)).filter((k) => votes(it)[k] === true);
@@ -1266,7 +1435,7 @@ function startApp(backend, mount = document.body) {
       <header class="topbar"><div class="wrap">
         ${F.lists ? `<button class="brand" data-act="lists" aria-label="リストを切り替える" style="border:0;background:none;padding:0;text-align:left;color:inherit">${LOGO}<h1>${esc(S.settings.name)}</h1>${ic("chev", "sm")}</button>`
           : `<div class="brand">${LOGO}<h1>${esc(S.settings.name)}</h1></div>`}
-        <div class="duo">${ppl.slice(0, 4).map((p) => av(p.id)).join("")}${ppl.length > 4 ? `<span class="av" style="background:var(--surface-2);color:var(--ink)">+${ppl.length - 4}</span>` : ""}</div>
+        <button class="duo" data-act="members" aria-label="メンバー図鑑" style="border:0;background:none;padding:0">${ppl.slice(0, 4).map((p) => av(p.id)).join("")}${ppl.length > 4 ? `<span class="av" style="background:var(--surface-2);color:var(--ink)">+${ppl.length - 4}</span>` : ""}</button>
         <button class="ghost-icon" data-act="settings" aria-label="設定">${ic("sliders")}</button>
       </div></header>
       <main class="wrap" id="view"></main>
@@ -1328,6 +1497,7 @@ function startApp(backend, mount = document.body) {
       case "travel": { const b = travelBucket(travelOf(it)); return { key: b.id, label: b.label.replace(/^\S+\s/, ""), order: b.order }; }
       case "price": { const b = priceBucket(it); return { key: b.id, label: b.label.replace(/^\S+\s/, ""), order: b.order }; }
       case "who": return { key: it.addedBy || "?", label: `${pname(it.addedBy)}が見つけた`, order: it.addedBy === me() ? 0 : 1 };
+      case "platform": { const k = it.url ? it.platform || "web" : "manual"; return { key: k, label: it.url ? `${platformLabel(it.platform)}から` : "手入力・メモ", order: ["instagram", "tiktok", "x", "youtube", "threads", "lemon8", "tabelog", "googlemaps", "web", "manual"].indexOf(k) }; }
       case "date": {
         const d = new Date(it.createdAt || Date.now());
         const days = (Date.now() - d) / 86400000;
@@ -1347,7 +1517,7 @@ function startApp(backend, mount = document.body) {
     const liked = myVote(it) === true;
     return `<article class="card" data-open="${esc(it.id)}" tabindex="0">
       <div ${cover(it, "cover")}>${img(it) || g.emoji}
-        <div class="tl"><span class="tag glass">${esc(g.label)}</span></div>
+        <div class="tl"><span class="tag genre" style="--tint:${TINT[g.id]}">${g.emoji} ${esc(g.label)}</span></div>
         <div class="tr">${isBoth(it) ? `<span class="tag match">♡ ${esc(matchText(it))}</span>` : it.pinned ? `<span class="tag glass">📌</span>` : ""}</div>
       </div>
       <div class="body">
@@ -1431,8 +1601,9 @@ function startApp(backend, mount = document.body) {
         </div>
         <div class="controls" style="justify-content:space-between">
           <div class="chips" style="padding:0">${S.settings.bases.length ? `<label class="chip">${ic("home", "sm")}<select id="base-select" style="border:0;background:none;font-weight:700;padding:0" aria-label="出発地">${S.settings.bases.map((b) => `<option value="${esc(b.id)}" ${activeBase()?.id === b.id ? "selected" : ""}>${esc(b.label)}から</option>`).join("")}</select></label>` : `<button class="chip" data-act="bases">${ic("home", "sm")}出発地を登録して移動時間を表示</button>`}</div>
-          <label class="sub">並び <select id="group" style="border:0;background:none;font-weight:700;color:var(--ink)" aria-label="グループ分け">${opt("date", "追加日ごと", S.groupBy)}${opt("genre", "ジャンルごと", S.groupBy)}${opt("area", "エリアごと", S.groupBy)}${opt("travel", "移動時間ごと", S.groupBy)}${opt("price", "予算ごと", S.groupBy)}${opt("who", "見つけた人ごと", S.groupBy)}${opt("none", "分けない", S.groupBy)}</select></label>
-        </div>` : ""}
+          <label class="sub">並び <select id="group" style="border:0;background:none;font-weight:700;color:var(--ink)" aria-label="グループ分け">${opt("date", "追加日ごと", S.groupBy)}${opt("genre", "ジャンルごと", S.groupBy)}${opt("area", "エリアごと", S.groupBy)}${opt("travel", "移動時間ごと", S.groupBy)}${opt("price", "予算ごと", S.groupBy)}${opt("who", "見つけた人ごと", S.groupBy)}${opt("platform", "共有元ごと", S.groupBy)}${opt("none", "分けない", S.groupBy)}</select></label>
+        </div>
+        ${genreRow()}` : ""}
       ${list}`;
     if (S.listMode === "map" && items.length) renderMap(items);
   }
@@ -1460,6 +1631,18 @@ function startApp(backend, mount = document.body) {
       out.innerHTML = `<div class="notice warn">${esc(e?.message || "うまく聞けませんでした")}</div>`;
     }
     out.addEventListener("click", (e) => { const b = e.target.closest("[data-ask-open]"); if (b) openDetail(b.dataset.askOpen); });
+  }
+
+  // ジャンルの色つきボタン（1つ押すとそのジャンルだけ表示）
+  function genreRow() {
+    const live = S.spots.filter((i) => (i.status || "want") !== "visited");
+    const gs = GENRES.filter((g) => live.some((i) => i.genre === g.id));
+    if (gs.length < 2) return "";
+    const one = S.f.genres.size === 1 ? [...S.f.genres][0] : "";
+    return `<div class="chips genre-row" role="toolbar" aria-label="ジャンル">
+      <button class="chip ${!S.f.genres.size ? "on" : ""}" data-genre="">すべて <small class="num">${live.length}</small></button>
+      ${gs.map((g) => `<button class="chip g-chip ${one === g.id ? "on" : ""}" style="--tint:${TINT[g.id]}" data-genre="${g.id}"><i></i>${g.emoji} ${esc(g.label)} <small class="num">${live.filter((i) => i.genre === g.id).length}</small></button>`).join("")}
+    </div>`;
   }
 
   function welcomeEmpty() {
@@ -1591,6 +1774,70 @@ function startApp(backend, mount = document.body) {
 
   // ---------- デート（コース作り・予定） ----------
   function renderPlan(v) {
+    const tabs = `<div class="seg full" style="margin:8px 0 2px" role="tablist">${[["calendar", "カレンダー"], ["course", V().plan === "デート" ? "デートコース" : "プラン作り"]].map(([k, l]) => `<button data-ptab="${k}" class="${S.planTab === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
+    if (S.planTab === "course") { renderCourse(v); v.insertAdjacentHTML("afterbegin", tabs); }
+    else renderCalendar(v, tabs);
+  }
+
+  function renderCalendar(v, tabs) {
+    const today = todayStr();
+    const ym = S.calMonth || today.slice(0, 7);
+    const sel = S.calDay || today;
+    const [y, m] = ym.split("-").map(Number);
+    const ev = eventsOn(S.spots, sel);
+    const upcoming = S.spots.filter((i) => i.status === "planned" && i.plannedDate && i.plannedDate >= today).sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || (a.planTime || "").localeCompare(b.planTime || "")).slice(0, 6);
+    const undated = S.spots.filter((i) => i.status === "planned" && !i.plannedDate);
+    const cell = (d) => {
+      if (!d) return `<span></span>`;
+      const e = eventsOn(S.spots, d);
+      const dow = new Date(d + "T12:00:00").getDay();
+      const marks = [...e.planned.slice(0, 2).map((i) => genreOf(i.genre).emoji)].join("");
+      return `<button class="cal-d ${d === today ? "today" : ""} ${d === sel ? "on" : ""} ${dow === 0 ? "sun" : dow === 6 ? "sat" : ""}" data-day="${d}" aria-label="${jpDate(d)}${e.planned.length ? ` 予定${e.planned.length}件` : ""}">
+        <span class="n num">${Number(d.slice(8))}</span><span class="mk">${marks}</span>
+        <span class="dots">${e.planned.length > 2 ? `<i class="p"></i>` : ""}${e.deadline.length ? `<i class="d"></i>` : ""}${e.visited.length ? `<i class="v"></i>` : ""}</span></button>`;
+    };
+    const agendaItem = (it, kind) => `<button class="mini" data-open="${esc(it.id)}" style="flex:none;width:100%;margin-bottom:8px"><span ${cover(it, "ph")}>${img(it) || genreOf(it.genre).emoji}</span><span class="tx"><b>${esc(nameOf(it))}</b>
+      ${kind === "planned" ? `<span class="tag plan">${it.planTime ? esc(it.planTime) + " " : ""}予定</span>` : kind === "deadline" ? `<span class="tag soon">この日で終了</span>` : `<span class="tag done">行った${it.rating ? " " + "★".repeat(it.rating) : ""}</span>`}</span></button>`;
+    v.innerHTML = `${tabs}
+      <div class="panel cal" style="margin-top:12px">
+        <div class="cal-head"><button class="ghost-icon" data-cal="-1" aria-label="前の月">‹</button><h2 class="num">${y}年${m}月</h2><button class="ghost-icon" data-cal="1" aria-label="次の月">›</button></div>
+        <div class="cal-grid">${["日", "月", "火", "水", "木", "金", "土"].map((w, i) => `<span class="cal-w ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}${monthGrid(ym).map(cell).join("")}</div>
+        <div class="legend"><span><i style="background:var(--plan)"></i>予定</span><span><i style="background:var(--warn)"></i>締め切り</span><span><i style="background:var(--ok)"></i>行った</span>${ym !== today.slice(0, 7) ? `<button class="link" data-cal="today" style="border:0;background:none;color:var(--plan);font-weight:700;padding:0">今月に戻る</button>` : ""}</div>
+      </div>
+      <div class="section-h"><h2>${jpDate(sel)}${sel === today ? `<span class="sub" style="font-weight:500">　今日</span>` : ""}</h2><button class="btn sm rose" data-act="addday">${ic("plus", "sm")}この日に予定を入れる</button></div>
+      ${ev.planned.length + ev.deadline.length + ev.visited.length ? [...ev.planned.sort((a, b) => (a.planTime || "").localeCompare(b.planTime || "")).map((i) => agendaItem(i, "planned")), ...ev.deadline.map((i) => agendaItem(i, "deadline")), ...ev.visited.map((i) => agendaItem(i, "visited"))].join("")
+        : `<p class="sub" style="margin:0 2px">${sel < today ? "この日の記録はありません。" : "まだ何もありません。行きたい場所から予定を入れてみましょう。"}</p>`}
+      ${ev.planned.length > 1 && ev.planned.every((i) => i.lat != null) ? `<div class="actions" style="margin-top:4px"><a class="btn sm line" href="${courseRouteUrl(ev.planned)}" target="_blank" rel="noopener">${ic("route", "sm")}この日のルート</a><a class="btn sm line" href="${lineShareUrl(`${jpDate(sel)}の${V().plan}\n${ev.planned.map((i) => `${i.planTime ? i.planTime + " " : ""}${nameOf(i)}`).join("\n")}`)}" target="_blank" rel="noopener">${ic("send", "sm")}LINEで共有</a></div>` : ""}
+      ${upcoming.length ? `<div class="section-h"><h2>これからの予定</h2></div><div class="panel" style="padding:4px 14px">${upcoming.map((i) => `<div class="memory" data-open="${esc(i.id)}" style="grid-template-columns:64px 1fr;align-items:center"><span class="num" style="font-family:var(--display);font-weight:900">${jpDate(i.plannedDate)}</span><span><b>${esc(nameOf(i))}</b><div class="sub">${i.planTime ? esc(i.planTime) + " ・ " : ""}${untilLabel(i.plannedDate)}</div></span></div>`).join("")}</div>` : ""}
+      ${undated.length ? `<div class="section-h"><h2>日にち未定の予定</h2><span class="sub num">${undated.length}件</span></div><div class="grid">${undated.map(card).join("")}</div>` : ""}`;
+  }
+
+  // カレンダーの日付に、行きたい場所から予定を入れる
+  function openAddDay() {
+    const day = S.calDay || todayStr();
+    const pool = S.spots.filter((i) => (i.status || "want") !== "visited" && !(i.status === "planned" && i.plannedDate === day))
+      .sort((a, b) => (isBoth(b) ? 1 : 0) - (isBoth(a) ? 1 : 0) || yesIds(b).length - yesIds(a).length);
+    if (!pool.length) return toast("予定に入れられる行きたい場所がありません");
+    const picked = new Set();
+    const { root, close } = sheet(`${head(`${jpDate(day)}に行く場所`)}
+      <p class="sub" style="margin-top:0">選んだ場所をこの日の予定にします。${solo() ? "" : "♡が多い順に並んでいます。"}</p>
+      <div class="pick-list">${pool.map((i) => `<button class="mini pick" data-pick="${esc(i.id)}" style="flex:none;width:100%;margin-bottom:8px"><span ${cover(i, "ph")}>${img(i) || genreOf(i.genre).emoji}</span><span class="tx"><b>${esc(nameOf(i))}</b><span class="sub">${esc(genreOf(i.genre).label)}${isBoth(i) ? ` ・ ♡${esc(matchText(i))}` : ""}${i.status === "planned" && i.plannedDate ? ` ・ いまは${jpDate(i.plannedDate)}` : ""}</span></span><span class="check" aria-hidden="true"></span></button>`).join("")}</div>
+      <div class="row2" style="margin-top:6px"><div class="field"><label for="ad-time">時間（任意）</label><input id="ad-time" type="time"></div><div></div></div>
+      <div class="actions"><button class="btn line" data-course>${ic("sparkle", "sm")}この日のコースを作る</button><button class="btn rose" data-save disabled>予定に入れる</button></div>`);
+    root.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-pick]");
+      if (b) { picked.has(b.dataset.pick) ? picked.delete(b.dataset.pick) : picked.add(b.dataset.pick); b.classList.toggle("on"); root.querySelector("[data-save]").disabled = !picked.size; root.querySelector("[data-save]").textContent = picked.size ? `${picked.size}件を予定に入れる` : "予定に入れる"; return; }
+      if (e.target.closest("[data-course]")) { close(); S.plan.date = day; S.planTab = "course"; return renderView(); }
+      if (e.target.closest("[data-save]")) {
+        const t = root.querySelector("#ad-time").value;
+        for (const id of picked) await B.updateSpot(id, { status: "planned", plannedDate: day, ...(t ? { planTime: t } : {}) }).catch(() => null);
+        close();
+        toast(`${jpDate(day)}の予定に入れました`);
+      }
+    });
+  }
+
+  function renderCourse(v) {
     const P = S.plan;
     const planned = S.spots.filter((i) => i.status === "planned").sort((a, b) => (a.plannedDate || "9999").localeCompare(b.plannedDate || "9999") || (a.planOrder ?? 99) - (b.planOrder ?? 99));
     const byDate = new Map();
@@ -1614,7 +1861,7 @@ function startApp(backend, mount = document.body) {
       <div class="section-h"><h2>決まっている予定</h2><span class="sub num">${planned.length}件</span></div>
       ${planned.length ? [...byDate].map(([d, list]) => `
         <div class="course">
-          <div class="course-head"><h3>${d ? `${jpDate(d)}${daysUntil(d) >= 0 ? `<span class="sub" style="font-weight:500">　あと${daysUntil(d)}日</span>` : ""}` : "日にち未定"}</h3></div>
+          <div class="course-head"><h3>${d ? `${jpDate(d)}${daysUntil(d) >= 0 ? `<span class="sub" style="font-weight:500">　${untilLabel(d)}</span>` : ""}` : "日にち未定"}</h3></div>
           <ul class="tl">${list.map((it) => `<li><span class="time">${esc(it.planTime || "")}</span><div class="stop"><button data-open="${esc(it.id)}">${esc(nameOf(it))}</button><div class="sub">${esc(genreOf(it.genre).label)}${it.station ? ` ・ ${esc(it.station)}` : ""}</div></div></li>`).join("")}</ul>
           <div class="actions">
             ${list.length > 1 && list.every((i) => i.lat != null) ? `<a class="btn sm line" href="${courseRouteUrl(list)}" target="_blank" rel="noopener">${ic("route", "sm")}ルート</a>` : ""}
@@ -1997,7 +2244,7 @@ function startApp(backend, mount = document.body) {
       const { root } = sheet(`${head("絞り込み・並べ替え")}
         <div class="row2">
           <div class="field"><label for="fl-sort">並べ替え</label><select id="fl-sort">${opt("new", "新しい順", S.sortBy)}${opt("old", "古い順", S.sortBy)}${opt("near", "近い順", S.sortBy)}${opt("cheap", "安い順", S.sortBy)}${opt("love", "♡が多い順", S.sortBy)}${opt("deadline", "期限が近い順", S.sortBy)}</select></div>
-          <div class="field"><label for="fl-group">グループ分け</label><select id="fl-group">${opt("date", "追加日", S.groupBy)}${opt("genre", "ジャンル", S.groupBy)}${opt("area", "エリア", S.groupBy)}${opt("travel", "移動時間", S.groupBy)}${opt("price", "予算", S.groupBy)}${opt("who", "見つけた人", S.groupBy)}${opt("none", "分けない", S.groupBy)}</select></div>
+          <div class="field"><label for="fl-group">グループ分け</label><select id="fl-group">${opt("date", "追加日", S.groupBy)}${opt("genre", "ジャンル", S.groupBy)}${opt("area", "エリア", S.groupBy)}${opt("travel", "移動時間", S.groupBy)}${opt("price", "予算", S.groupBy)}${opt("who", "見つけた人", S.groupBy)}${opt("platform", "共有元（SNS）", S.groupBy)}${opt("none", "分けない", S.groupBy)}</select></div>
         </div>
         <div class="label">いま</div>
         <div class="chips wrap-chips"><button class="chip ${f.openNow ? "on" : ""}" data-f="openNow">${ic("clock", "sm")}いま営業中だけ <small>${count((i) => ["open", "closing"].includes(openState(i)?.state))}</small></button></div>
@@ -2067,6 +2314,87 @@ function startApp(backend, mount = document.body) {
   }
 
   // ---------- 設定 ----------
+  const COMPAT_WORDS = [[80, "ほぼ以心伝心💞"], [60, "けっこう気が合う😊"], [40, "ほどよく違う🤝"], [0, "好みは真逆タイプ⚡"]];
+  function openMembers() {
+    const ppl = peopleList();
+    const ids = ppl.map((p) => p.id);
+    const { members, best } = memberStats(S.spots, ids);
+    const statOf = Object.fromEntries(members.map((m) => [m.id, m]));
+    const meId = me();
+    const sorted = [...ppl].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : (statOf[b.id]?.added || 0) - (statOf[a.id]?.added || 0)));
+    const { root } = sheet(`${head(`メンバー図鑑 <span class="sub" style="font-family:var(--body)">${ppl.length}人</span>`)}
+      ${best && ppl.length >= 3 ? `<div class="best-combo"><span class="sub">ベストコンビ</span><div class="duo">${av(best.a)}${av(best.b)}</div><b>${esc(pname(best.a))} × ${esc(pname(best.b))}</b><span class="num">相性 ${best.score}%</span></div>` : ""}
+      <div class="member-grid">${sorted.map((p) => {
+        const st = statOf[p.id] || { titles: [], added: 0, yes: 0, visited: 0 };
+        const c = meId && p.id !== meId && !solo() ? compatibility(S.spots, meId, p.id) : null;
+        const g = st.topGenre ? genreOf(st.topGenre) : null;
+        return `<div class="member-card">
+          <div class="mc-top">${av(p.id, "lg")}<div style="min-width:0"><b class="mc-name">${esc(p.name || "メンバー")}</b>${p.id === meId ? ` <span class="tag">あなた</span>` : ""}
+            <div class="tags" style="margin:4px 0 0">${st.titles.map((t) => `<span class="tag title">${esc(t)}</span>`).join("")}</div></div></div>
+          <div class="mc-stats"><span><b class="num">${st.added}</b>見つけた</span><span><b class="num">${st.yes}</b>行きたい♡</span><span><b class="num">${st.visited}</b>行けた</span></div>
+          ${g ? `<p class="sub" style="margin:0">よく見つけるのは ${g.emoji} ${esc(g.label)}</p>` : ""}
+          ${p.id !== meId && !solo() ? `<div class="compat"><span class="sub">あなたとの相性</span>${c == null ? `<span class="sub">投票が増えるとわかります</span>` : `<div class="meter"><i style="width:${c}%"></i></div><b class="num">${c}%</b><span class="sub">${COMPAT_WORDS.find(([n]) => c >= n)[1]}</span>`}</div>` : ""}
+          <div class="actions" style="margin-top:2px">
+            ${B.renameMember ? `<button class="btn sm line" data-rename="${esc(p.id)}">${ic("edit", "sm")}名前を変える</button>` : ""}
+            ${p.id === meId && B.setAvatar ? `<button class="btn sm line" data-avatar>${ic("image", "sm")}アイコン</button>` : ""}
+          </div>
+        </div>`;
+      }).join("")}</div>
+      ${F.invite && !solo() ? `<button class="btn rose block" style="margin-top:12px" data-act-invite>${ic("users", "sm")}メンバーを招待する</button>` : ""}
+      <p class="sub" style="margin-top:12px">称号は、見つけた場所・投票・コメントから自動で付きます。相性は、ふたりとも答えた場所の「行きたい／うーん」がどれだけ一致したかです。</p>`);
+    root.addEventListener("click", (e) => {
+      const r = e.target.closest("[data-rename]");
+      if (r) return renameSheet(r.dataset.rename);
+      if (e.target.closest("[data-avatar]")) return avatarSheet();
+      if (e.target.closest("[data-act-invite]")) return openInvite();
+    });
+  }
+
+  function renameSheet(id) {
+    const p = person(id);
+    const isMe = id === me();
+    const { root } = sheet(`${head(isMe ? "あなたの名前" : `${esc(p.name || "メンバー")}さんの名前`)}
+      <p class="sub" style="margin-top:0">${isMe ? "" : "ニックネームに変えられます。変えた名前はメンバー全員に表示されます。"}</p>
+      <form id="rn-form"><div class="field"><label for="rn-name">名前</label><input id="rn-name" required maxlength="20" value="${esc(p.name)}"></div>
+      <div class="actions"><button type="button" class="btn line" data-back>戻る</button><button class="btn rose">保存</button></div></form>`);
+    root.querySelector("[data-back]").addEventListener("click", openMembers);
+    root.querySelector("#rn-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = root.querySelector("#rn-name").value.trim();
+      if (name && (await act(() => B.renameMember(id, name), "名前を変えました"))) openMembers();
+    });
+    setTimeout(() => root.querySelector("#rn-name")?.select(), 60);
+  }
+
+  const AVATAR_EMOJI = ["🐻", "🐰", "🐱", "🐶", "🦊", "🐼", "🐨", "🐯", "🦁", "🐸", "🐧", "🐥", "🐙", "🦄", "🐳", "🦖", "🍓", "🍑", "🍙", "🍣", "☕", "🍰", "🌸", "🌻", "⭐", "🔥", "🌈", "🎈", "🎧", "⚽", "🚲", "📸"];
+  async function shrinkPhoto(file) {
+    const bmp = await createImageBitmap(file);
+    const size = 128, c = document.createElement("canvas");
+    c.width = c.height = size;
+    const k = Math.min(bmp.width, bmp.height);
+    c.getContext("2d").drawImage(bmp, (bmp.width - k) / 2, (bmp.height - k) / 2, k, k, 0, 0, size, size);
+    return c.toDataURL("image/jpeg", 0.82);
+  }
+  function avatarSheet() {
+    const { root } = sheet(`${head("アイコンを変える")}
+      <div class="mc-top" style="margin-bottom:12px">${av(me(), "lg")}<span class="sub">絵文字を選ぶか、写真を使えます。</span></div>
+      <div class="emoji-grid">${AVATAR_EMOJI.map((e) => `<button data-emo="${e}" aria-label="${e}">${e}</button>`).join("")}</div>
+      <div class="actions"><label class="btn line" for="av-file">${ic("image", "sm")}写真を選ぶ<input id="av-file" type="file" accept="image/*" hidden></label><button class="btn line" data-reset-av>元に戻す</button></div>
+      <button class="btn line block" style="margin-top:8px" data-back>メンバー図鑑に戻る</button>`);
+    const save = async (v) => { if (await act(() => B.setAvatar(me(), v), "アイコンを変えました")) avatarSheet(); };
+    root.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-emo]");
+      if (b) return save(`emoji:${b.dataset.emo}`);
+      if (e.target.closest("[data-reset-av]")) return save("");
+      if (e.target.closest("[data-back]")) return openMembers();
+    });
+    root.querySelector("#av-file").addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      try { save(await shrinkPhoto(f)); } catch { toast("この写真は使えませんでした"); }
+    });
+  }
+
   function inviteText() {
     return `${V().invite || "行きたい場所のリストを作りました"}\n${B.inviteUrl()}`;
   }
@@ -2099,7 +2427,7 @@ function startApp(backend, mount = document.body) {
           <span class="sub">選んだ相手に合わせて、言葉づかいやタブの名前が変わります。</span></div>
       </div>
 
-      ${F.members ? `<div class="label">メンバー（${ppl.length}人）</div>
+      ${F.members ? `<div class="label">メンバー（${ppl.length}人）<button class="link" data-members style="border:0;background:none;color:var(--plan);font-weight:700;float:right;letter-spacing:0">メンバー図鑑を見る</button></div>
         <div class="panel">
           ${ppl.map((p) => `<div class="base-item" style="padding:6px 0;margin:0;background:none">${av(p.id)}<div class="val"><b>${esc(p.name)}</b>${p.id === me() ? ` <span class="tag">あなた</span>` : ""}</div></div>`).join("")}
           ${mine && me() ? `<form id="me-form" style="margin-top:10px"><div class="row2"><div class="field"><label for="me-name">あなたの名前</label><input id="me-name" value="${esc(mine.name)}" maxlength="20"></div><div class="field"><label for="me-color">あなたの色</label><input id="me-color" type="color" value="${esc(mine.color)}" style="height:46px;padding:4px"></div></div>
@@ -2114,6 +2442,12 @@ function startApp(backend, mount = document.body) {
         <p class="sub" id="b-status" style="margin:0 0 10px"></p>
         <div class="actions" style="margin-top:0">${F.geolocation ? `<button type="button" class="btn line" data-here>${ic("pin", "sm")}現在地</button>` : ""}<button class="btn rose">出発地を追加</button></div>
       </form>
+
+      <div class="label">メインカラー（この端末）</div>
+      <div class="panel">
+        <div class="swatches">${ACCENTS.map(([hex, label]) => `<button class="swatch ${(local.get("accent", "") || "#df4a72") === hex ? "on" : ""}" style="--sw:${hex}" data-accent="${hex}" aria-label="${label}"><i></i><small>${label}</small></button>`).join("")}
+          <label class="swatch custom" aria-label="好きな色"><input type="color" id="accent-custom" value="${esc(local.get("accent", "") || "#df4a72")}"><small>好きな色</small></label></div>
+      </div>
 
       <div class="label">アプリ</div>
       <div class="actions" style="margin-top:0">
@@ -2162,8 +2496,12 @@ function startApp(backend, mount = document.body) {
       if (await act(() => B.saveMembers([{ id: me(), name, color }]), "保存しました")) { render(); openSettings(); }
     });
     root.querySelector("[data-switch]")?.addEventListener("click", () => joinSheet(true));
+    root.querySelector("[data-members]")?.addEventListener("click", openMembers);
     root.querySelector("[data-invite]")?.addEventListener("click", openInvite);
     root.querySelector("[data-tour]").addEventListener("click", () => { close(); showOnboarding(() => {}); });
+    const setAccent = (hex) => { local.set("accent", hex === "#df4a72" ? "" : hex); applyAccent(hex === "#df4a72" ? "" : hex); root.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b.dataset.accent === hex)); };
+    root.querySelectorAll("[data-accent]").forEach((b) => b.addEventListener("click", () => setAccent(b.dataset.accent)));
+    root.querySelector("#accent-custom").addEventListener("input", (e) => setAccent(e.target.value));
     root.querySelector("[data-leave]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = false));
     root.querySelector("[data-leave-cancel]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = true));
     root.querySelector("[data-leave-do]")?.addEventListener("click", () => act(() => B.leave()));
@@ -2236,11 +2574,21 @@ function startApp(backend, mount = document.body) {
   function go(view) { S.view = view; local.set("view", view); render(); window.scrollTo({ top: 0 }); }
 
   $app.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-act],[data-view],[data-seg],[data-like],[data-open],[data-vote],[data-pstyle],[data-pstops],[data-take]");
+    const t = e.target.closest("[data-act],[data-view],[data-seg],[data-like],[data-open],[data-vote],[data-pstyle],[data-pstops],[data-take],[data-genre],[data-ptab],[data-cal],[data-day]");
     if (!t) return;
     if (t.dataset.like) { e.stopPropagation(); const it = S.spots.find((s) => s.id === t.dataset.like); return vote(it.id, myVote(it) === true ? null : true); }
     if (t.dataset.vote) { const it = S.spots.find((s) => s.id === $("swipe")?.dataset.id); return it && decide(it, t.dataset.vote); }
     if (t.dataset.open) return openDetail(t.dataset.open);
+    if (t.dataset.genre !== undefined) { S.f.genres = t.dataset.genre ? new Set([t.dataset.genre]) : new Set(); return renderView(); }
+    if (t.dataset.ptab) { S.planTab = t.dataset.ptab; return renderView(); }
+    if (t.dataset.day) { S.calDay = t.dataset.day; return renderView(); }
+    if (t.dataset.cal) {
+      if (t.dataset.cal === "today") { S.calMonth = ""; S.calDay = ""; return renderView(); }
+      const [y, m] = (S.calMonth || todayStr().slice(0, 7)).split("-").map(Number);
+      const d = new Date(y, m - 1 + Number(t.dataset.cal), 1);
+      S.calMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return renderView();
+    }
     if (t.dataset.view) return go(t.dataset.view);
     if (t.dataset.seg) { S.seg = t.dataset.seg; if (S.view !== "home") return go("home"); return renderView(); }
     if (t.dataset.pstyle) { S.plan.style = t.dataset.pstyle; return renderView(); }
@@ -2258,6 +2606,8 @@ function startApp(backend, mount = document.body) {
     if (a === "lists") openLists();
     if (a === "invite") openInvite();
     if (a === "ask") openAsk();
+    if (a === "members") openMembers();
+    if (a === "addday") openAddDay();
     if (a === "bases") openSettings("bases");
     if (a === "add") openAdd();
     if (a === "filters") openFilters();
@@ -2313,6 +2663,7 @@ function startApp(backend, mount = document.body) {
   // ---------- データの受け取り ----------
   const theme = local.get("theme", null);
   if (theme) document.documentElement.dataset.theme = theme;
+  applyAccent(local.get("accent", ""));
   render();
   B.subscribe(({ settings, spots }) => {
     const before = new Set(S.spots.map((s) => s.id));
@@ -2383,7 +2734,10 @@ async function artifactBackend() {
     me: () => meId,
     setMe() {},
     needsPick: () => false,
-    people: () => idsInUse().map((id) => ({ id, name: profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: profiles[id]?.avatarUrl || "" })),
+    // ニックネームとアイコンはリストの設定に保存し、claude.ai の名前・写真より優先する
+    people: () => idsInUse().map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "" })),
+    renameMember: (id, name) => wrap(db.doc("meta/settings").set({ name: "行きたいリスト", bases: [], ...(settings || {}), nicknames: { ...(settings?.nicknames || {}), [id]: name } })),
+    setAvatar: (id, avatar) => wrap(db.doc("meta/settings").set({ name: "行きたいリスト", bases: [], ...(settings || {}), avatars: { ...(settings?.avatars || {}), [id]: avatar } })),
     addSpot: (body) => wrap(db.collection("spots").add({ ...body, status: "want", likes: meId ? { [meId]: true } : {}, comments: [], addedBy: meId, createdAt: new Date().toISOString() })),
     updateSpot: (id, patch) => wrap(db.collection("spots").doc(id).update({ ...patch, updatedAt: new Date().toISOString() })),
     deleteSpot: (id) => wrap(db.collection("spots").doc(id).delete()),

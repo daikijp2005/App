@@ -181,7 +181,16 @@ function sanitizeMember(m, i) {
     id: String(m.id || `m${i + 1}`).slice(0, 20),
     name: String(m.name || "メンバー").trim().slice(0, 20) || "メンバー",
     color: /^#[0-9a-f]{6}$/i.test(m.color) ? m.color : MEMBER_COLORS[i % MEMBER_COLORS.length],
+    avatar: cleanAvatar(m.avatar),
   };
+}
+
+// アイコン：絵文字（"emoji:🐻"）か、画面で小さく縮めた写真（data URL、80KBまで）
+function cleanAvatar(v) {
+  const s = String(v || "");
+  if (/^emoji:.{1,16}$/u.test(s)) return s;
+  if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s) && s.length <= 80_000) return s;
+  return "";
 }
 
 function sanitizeBase(b) {
@@ -276,6 +285,7 @@ async function handleApi(req, res, url) {
           const clean = sanitizeMember({ ...cur, ...m }, room.members.indexOf(cur));
           cur.name = clean.name;
           cur.color = clean.color;
+          if ("avatar" in m) cur.avatar = clean.avatar;
         }
       }
       if (Array.isArray(body.bases)) room.bases = body.bases.slice(0, 10).map(sanitizeBase).filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng));

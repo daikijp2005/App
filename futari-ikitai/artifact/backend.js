@@ -50,7 +50,10 @@ async function artifactBackend() {
     me: () => meId,
     setMe() {},
     needsPick: () => false,
-    people: () => idsInUse().map((id) => ({ id, name: profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: profiles[id]?.avatarUrl || "" })),
+    // ニックネームとアイコンはリストの設定に保存し、claude.ai の名前・写真より優先する
+    people: () => idsInUse().map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "" })),
+    renameMember: (id, name) => wrap(db.doc("meta/settings").set({ name: "行きたいリスト", bases: [], ...(settings || {}), nicknames: { ...(settings?.nicknames || {}), [id]: name } })),
+    setAvatar: (id, avatar) => wrap(db.doc("meta/settings").set({ name: "行きたいリスト", bases: [], ...(settings || {}), avatars: { ...(settings?.avatars || {}), [id]: avatar } })),
     addSpot: (body) => wrap(db.collection("spots").add({ ...body, status: "want", likes: meId ? { [meId]: true } : {}, comments: [], addedBy: meId, createdAt: new Date().toISOString() })),
     updateSpot: (id, patch) => wrap(db.collection("spots").doc(id).update({ ...patch, updatedAt: new Date().toISOString() })),
     deleteSpot: (id) => wrap(db.collection("spots").doc(id).delete()),

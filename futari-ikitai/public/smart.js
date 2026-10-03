@@ -389,3 +389,79 @@ export function fuzzySearch(spots, query, ctx = {}) {
   results.sort((a, b) => b.score - a.score || (b.spot.createdAt || "").localeCompare(a.spot.createdAt || ""));
   return { results, understood: [...understood] };
 }
+
+// ---------- メンバー図鑑（称号と相性） ----------
+const GENRE_TITLES = {
+  gourmet: "グルメハンター🍽️", cafe: "カフェ巡り隊☕", sweets: "甘党代表🍰", bar: "夜の案内人🍷", nature: "絶景ハンター🌅",
+  sightseeing: "観光ガイド⛩️", art: "アート通🎨", event: "イベント番長🎪", shopping: "買い物マスター🛍️", stay: "温泉大臣♨️", activity: "アクティブ担当🎢",
+};
+
+// ふたりの「行きたい／うーん」がどれだけ一致したか。両方答えたスポットが2つ未満なら null
+export function compatibility(spots, a, b) {
+  let both = 0, same = 0;
+  for (const s of spots) {
+    const va = s.likes?.[a], vb = s.likes?.[b];
+    const ra = va === true ? 1 : va === "no" || va === false ? 0 : null;
+    const rb = vb === true ? 1 : vb === "no" || vb === false ? 0 : null;
+    if (ra == null || rb == null) continue;
+    both++;
+    if (ra === rb) same++;
+  }
+  return both >= 2 ? Math.round((same / both) * 100) : null;
+}
+
+export function memberStats(spots, ids) {
+  const base = ids.map((id) => {
+    const added = spots.filter((s) => s.addedBy === id);
+    const votes = spots.map((s) => s.likes?.[id]).filter((v) => v !== undefined && v !== null);
+    const yes = votes.filter((v) => v === true).length;
+    const no = votes.filter((v) => v === "no").length;
+    const comments = spots.reduce((n, s) => n + (s.comments || []).filter((c) => c.by === id).length, 0);
+    const byGenre = {};
+    for (const s of added) byGenre[s.genre] = (byGenre[s.genre] || 0) + 1;
+    const [topGenre, topGenreCount] = Object.entries(byGenre).sort((x, y) => y[1] - x[1])[0] || [null, 0];
+    const visited = added.filter((s) => s.status === "visited").length;
+    return { id, added: added.length, yes, no, votes: votes.length, comments, topGenre, topGenreCount, visited };
+  });
+  const maxAdded = Math.max(0, ...base.map((m) => m.added));
+  const topAdders = base.filter((m) => m.added === maxAdded);
+  const maxComments = Math.max(0, ...base.map((m) => m.comments));
+  for (const m of base) {
+    const titles = [];
+    if (maxAdded >= 3 && topAdders.length === 1 && topAdders[0] === m) titles.push("発見王👑");
+    if (m.topGenre && m.topGenreCount >= 2 && GENRE_TITLES[m.topGenre]) titles.push(GENRE_TITLES[m.topGenre]);
+    if (m.votes >= 5 && m.yes / m.votes >= 0.8) titles.push("なんでも行きたい人🙌");
+    if (m.votes >= 5 && m.no / m.votes >= 0.4) titles.push("こだわり審査員🧐");
+    if (maxComments >= 3 && m.comments === maxComments) titles.push("おしゃべり隊長💬");
+    if (!m.added && m.votes) titles.push("見る専門👀");
+    if (!titles.length) titles.push("ゆるっと参加🌱");
+    m.titles = titles;
+  }
+  // いちばん相性のいい組み合わせ
+  let best = null;
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    const c = compatibility(spots, ids[i], ids[j]);
+    if (c != null && (!best || c > best.score)) best = { a: ids[i], b: ids[j], score: c };
+  }
+  return { members: base, best };
+}
+
+// カレンダー用：月の日付マス（月曜はじまりではなく日曜はじまり）
+export function monthGrid(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  const first = new Date(y, m - 1, 1);
+  const days = new Date(y, m, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first.getDay(); i++) cells.push(null);
+  for (let d = 1; d <= days; d++) cells.push(`${ym}-${String(d).padStart(2, "0")}`);
+  while (cells.length % 7) cells.push(null);
+  return cells;
+}
+
+export function eventsOn(spots, date) {
+  return {
+    planned: spots.filter((s) => s.status === "planned" && s.plannedDate === date),
+    deadline: spots.filter((s) => s.status !== "visited" && s.deadline === date),
+    visited: spots.filter((s) => s.status === "visited" && s.visitedAt === date),
+  };
+}

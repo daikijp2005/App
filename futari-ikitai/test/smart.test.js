@@ -101,3 +101,24 @@ test("うろ覚え検索", async () => {
   assert.deepEqual(ids("存在しないもの"), []);
   assert.deepEqual(ids("夜ごはん"), [], "「夜」ではなく「夜ごはん（ディナー）」として読む");
 });
+
+test("メンバーの称号と相性", async () => {
+  const { memberStats, compatibility, monthGrid, eventsOn } = await import("../public/smart.js");
+  const spots = [
+    { id: "1", genre: "sweets", addedBy: "a", likes: { a: true, b: true, c: "no" }, comments: [{ by: "c" }, { by: "c" }, { by: "c" }] },
+    { id: "2", genre: "sweets", addedBy: "a", likes: { a: true, b: true, c: "no" } },
+    { id: "3", genre: "gourmet", addedBy: "a", likes: { a: true, b: "no", c: true } },
+    { id: "4", genre: "cafe", addedBy: "b", likes: { a: true, b: true } },
+  ];
+  assert.equal(compatibility(spots, "a", "b"), 75);
+  assert.equal(compatibility(spots, "a", "c"), 33);
+  const { members, best } = memberStats(spots, ["a", "b", "c"]);
+  const t = Object.fromEntries(members.map((m) => [m.id, m.titles]));
+  assert.ok(t.a.includes("発見王👑") && t.a.includes("甘党代表🍰"));
+  assert.ok(t.c.includes("おしゃべり隊長💬") && t.c.includes("見る専門👀"));
+  assert.deepEqual([best.a, best.b, best.score], ["a", "b", 75]);
+  const g = monthGrid("2026-10");
+  assert.equal(g.length % 7, 0);
+  assert.equal(g.indexOf("2026-10-01"), 4, "2026年10月1日は木曜日");
+  assert.equal(eventsOn([{ status: "planned", plannedDate: "2026-10-10" }, { deadline: "2026-10-10" }], "2026-10-10").deadline.length, 1);
+});

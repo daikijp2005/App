@@ -375,3 +375,76 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .search-info .btn { margin-left: auto; }
 .brand-line { display: grid; gap: 2px; margin: -4px 0 18px; color: var(--muted); font-size: 13px; }
 .brand-line b { font-family: var(--display); font-size: 22px; font-weight: 900; color: var(--rose); letter-spacing: .06em; }
+
+/* ---------- 自分で選んだメインカラー ---------- */
+:root[style*="--user-accent"] { --rose: var(--user-accent); --rose-ink: var(--user-accent-ink); --rose-soft: color-mix(in srgb, var(--user-accent) 15%, var(--surface)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[style*="--user-accent"] { --rose: color-mix(in srgb, var(--user-accent) 72%, white); --rose-ink: #1d1416; --rose-soft: color-mix(in srgb, var(--user-accent) 28%, var(--surface)); }
+}
+:root[data-theme="dark"][style*="--user-accent"] { --rose: color-mix(in srgb, var(--user-accent) 72%, white); --rose-ink: #1d1416; --rose-soft: color-mix(in srgb, var(--user-accent) 28%, var(--surface)); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; }
+.swatch { border: 0; background: none; padding: 0; display: grid; justify-items: center; gap: 4px; cursor: pointer; color: var(--ink); }
+.swatch i { width: 40px; height: 40px; border-radius: 50%; background: var(--sw); box-shadow: inset 0 0 0 2px rgba(255,255,255,.35); }
+.swatch.on i { outline: 3px solid var(--sw); outline-offset: 3px; }
+.swatch small { font-size: 11px; color: var(--muted); }
+.swatch.custom input { width: 40px; height: 40px; border: 0; padding: 0; border-radius: 50%; overflow: hidden; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); cursor: pointer; }
+.swatch.custom input::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch.custom input::-webkit-color-swatch { border: 0; border-radius: 50%; }
+
+/* ---------- ジャンルの色 ---------- */
+.tag.genre { background: var(--tint); color: #2a2124; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.genre-row { margin: 2px 0 4px; }
+.g-chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--tint); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.g-chip.on { background: color-mix(in srgb, var(--tint) 70%, var(--surface)); border-color: color-mix(in srgb, var(--tint) 60%, var(--ink)); color: var(--ink); }
+
+/* ---------- アイコン ---------- */
+.av.is-emoji { background: var(--surface-2) !important; }
+.av .emo { font-size: 1.15em; line-height: 1; }
+.av.lg { width: 56px; height: 56px; font-size: 22px; border-width: 0; }
+.av.lg .emo { font-size: 30px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.emoji-grid button { aspect-ratio: 1; border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; font-size: 22px; padding: 0; }
+.emoji-grid button:hover { border-color: var(--rose); }
+@media (max-width: 420px) { .emoji-grid { grid-template-columns: repeat(6, 1fr); } }
+
+/* ---------- メンバー図鑑 ---------- */
+.best-combo { display: grid; justify-items: center; gap: 4px; padding: 16px; margin-bottom: 12px; border-radius: var(--r-lg); background: linear-gradient(135deg, var(--rose-soft), var(--surface)); text-align: center; }
+.best-combo .duo .av { width: 44px; height: 44px; font-size: 18px; }
+.best-combo b { font-family: var(--display); font-size: 18px; }
+.best-combo .num { color: var(--rose); font-weight: 800; }
+.member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.member-card { background: var(--surface); border-radius: var(--r-lg); padding: 14px; box-shadow: var(--shadow-sm); display: grid; gap: 10px; min-width: 0; }
+.mc-top { display: flex; gap: 12px; align-items: center; }
+.mc-name { font-family: var(--display); font-size: 18px; font-weight: 900; }
+.tag.title { background: var(--rose-soft); color: var(--rose); }
+.mc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+.mc-stats span { background: var(--surface-2); border-radius: 12px; padding: 6px 4px; font-size: 11px; color: var(--muted); display: grid; }
+.mc-stats b { font-family: var(--display); font-size: 18px; color: var(--ink); }
+.compat { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; }
+.compat > .sub:last-child { grid-column: 1 / -1; }
+.meter { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--rose-soft), var(--rose)); }
+.compat b { color: var(--rose); }
+
+/* ---------- カレンダー ---------- */
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-head h2 { font-size: 18px; font-weight: 900; }
+.cal-head .ghost-icon { font-size: 24px; line-height: 1; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-w { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding-bottom: 2px; }
+.cal-w.sun, .cal-d.sun .n { color: var(--danger); }
+.cal-w.sat, .cal-d.sat .n { color: var(--plan); }
+.cal-d { border: 0; background: var(--bg); border-radius: 12px; min-height: 58px; padding: 5px 2px 4px; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 1px; color: var(--ink); }
+.cal-d .n { font-size: 13px; font-weight: 700; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; }
+.cal-d.today .n { background: var(--rose); color: var(--rose-ink) !important; }
+.cal-d.on { box-shadow: inset 0 0 0 2px var(--rose); background: var(--rose-soft); }
+.cal-d .mk { font-size: 15px; line-height: 1.1; letter-spacing: -2px; }
+.cal-d .dots { display: flex; gap: 3px; min-height: 6px; }
+.cal-d .dots i { width: 6px; height: 6px; border-radius: 50%; }
+.cal-d .dots .p { background: var(--plan); } .cal-d .dots .d { background: var(--warn); } .cal-d .dots .v { background: var(--ok); }
+.pick { position: relative; }
+.pick .check { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); }
+.pick.on { box-shadow: 0 0 0 2px var(--rose); }
+.pick.on .check { background: var(--rose); border-color: var(--rose); }
+.pick.on .check::after { content: "✓"; color: var(--rose-ink); font-size: 14px; font-weight: 900; display: grid; place-items: center; height: 100%; }
+@media (max-width: 420px) { .cal-d { min-height: 50px; } .cal-d .mk { font-size: 13px; } }
