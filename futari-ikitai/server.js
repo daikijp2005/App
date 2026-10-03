@@ -1,0 +1,361 @@
+// ふたりの行きたいリスト — サーバー
+// 依存パッケージなしで動く Node.js サーバー（AI解析だけ任意で @anthropic-ai/sdk を使う）。
+// データは data/<部屋ID>.json に保存し、変更は SSE で相手の画面にすぐ反映する。
+
+import http from "node:http";
+import fs from "node:fs/promises";
+import { createReadStream, existsSync, mkdirSync } from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { analyzeText, GENRES } from "./lib/analyze.js";
+import { fetchPreview, cleanCaption, normalizeUrl } from "./lib/preview.js";
+import { geocode, geocodePlace } from "./lib/geo.js";
+import { aiEnabled, aiExtract } from "./lib/ai.js";
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC = path.join(ROOT, "public");
+const DATA = process.env.DATA_DIR || path.join(ROOT, "data");
+const IMAGES = path.join(DATA, "images");
+const PORT = Number(process.env.PORT) || 3000;
+mkdirSync(IMAGES, { recursive: true });
+
+const MIME = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8", ".webmanifest": "application/manifest+json", ".svg": "image/svg+xml",
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".ico": "image/x-icon",
+};
+
+const newId = (n = 10) => crypto.randomBytes(n).toString("base64url").slice(0, n);
+const now = () => new Date().toISOString();
+
+// ---------- 保存 ----------
+const rooms = new Map(); // id -> room（メモリキャッシュ）
+const locks = new Map();
+
+function roomFile(id) {
+  if (!/^[A-Za-z0-9_-]{8,32}$/.test(id)) return null;
+  return path.join(DATA, `${id}.json`);
+}
+
+async function loadRoom(id) {
+  if (rooms.has(id)) return rooms.get(id);
+  const file = roomFile(id);
+  if (!file || !existsSync(file)) return null;
+  const room = JSON.parse(await fs.readFile(file, "utf8"));
+  rooms.set(id, room);
+  return room;
+}
+
+async function saveRoom(room) {
+  room.version = (room.version || 0) + 1;
+  room.updatedAt = now();
+  const file = roomFile(room.id);
+  const tmp = `${file}.${process.pid}.tmp`;
+  // 同じ部屋への書き込みは順番に
+  const prev = locks.get(room.id) || Promise.resolve();
+  const next = prev.then(async () => {
+    await fs.writeFile(tmp, JSON.stringify(room, null, 1));
+    await fs.rename(tmp, file);
+  });
+  locks.set(room.id, next.catch(() => {}));
+  await next;
+  broadcast(room.id, { type: "changed", version: room.version });
+  return room;
+}
+
+// ---------- リアルタイム同期（SSE） ----------
+const listeners = new Map(); // roomId -> Set<res>
+function broadcast(roomId, payload) {
+  for (const res of listeners.get(roomId) || []) res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+setInterval(() => {
+  for (const set of listeners.values()) for (const res of set) res.write(": ping\n\n");
+}, 25000).unref();
+
+// ---------- 画像の保存 ----------
+// SNS の画像URLは時間が経つと切れるので、登録時にサーバーへ保存しておく
+async function cacheImage(roomId, itemId, imageUrl) {
+  if (!imageUrl || !/^https?:/.test(imageUrl)) return "";
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(imageUrl, { signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0" } });
+    clearTimeout(t);
+    const type = res.headers.get("content-type") || "";
+    if (!res.ok || !type.startsWith("image/")) return imageUrl;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > 5_000_000) return imageUrl;
+    const ext = type.includes("png") ? ".png" : type.includes("webp") ? ".webp" : type.includes("gif") ? ".gif" : ".jpg";
+    const name = `${roomId}_${itemId}_${newId(4)}${ext}`;
+    await fs.writeFile(path.join(IMAGES, name), buf);
+    return `/img/${name}`;
+  } catch {
+    return imageUrl;
+  }
+}
+
+// ---------- 解析 ----------
+async function buildDraft({ url, text }) {
+  let preview = { url: normalizeUrl(url), platform: "web", title: "", description: "", image: "", warnings: [] };
+  if (url) {
+    try { preview = await fetchPreview(url); } catch (e) { preview.warnings = [e.message]; if (e.status === 400) throw e; }
+  }
+  const caption = [cleanCaption(preview.platform, preview.description), text].filter(Boolean).join("\n");
+  const ldText = [preview.ld?.name, preview.ld?.address, preview.ld?.priceRange, preview.ld?.cuisine].filter(Boolean).join("\n");
+  const allText = [preview.title, caption, ldText].filter(Boolean).join("\n");
+  const rule = analyzeText(allText);
+
+  let ai = null;
+  if (allText.trim()) ai = await aiExtract({ url: preview.url, platform: preview.platform, title: preview.title, caption: caption + "\n" + ldText });
+
+  const pick = (k) => (ai && ai[k] !== "" && ai[k] != null ? ai[k] : rule[k]);
+  const draft = {
+    url: preview.url,
+    platform: preview.platform,
+    title: (preview.ld?.name || preview.title || "").slice(0, 120),
+    caption: caption.slice(0, 2000),
+    image: preview.image || "",
+    author: preview.author || "",
+    genre: pick("genre"),
+    placeName: pick("placeName") || preview.ld?.name || "",
+    address: pick("address") || preview.ld?.address || "",
+    prefecture: pick("prefecture"),
+    city: pick("city"),
+    station: pick("station"),
+    walkMin: rule.walkMin,
+    priceMin: ai ? ai.priceMin : rule.priceMin,
+    priceMax: ai ? ai.priceMax : rule.priceMax,
+    priceNote: rule.priceNote || preview.ld?.priceRange || "",
+    hours: pick("hours"),
+    closed: rule.closed,
+    tags: rule.tags,
+    summary: ai?.summary || "",
+    lat: preview.lat || null,
+    lng: preview.lng || null,
+    autoRead: Boolean(preview.ok),
+    aiUsed: Boolean(ai),
+    warnings: preview.warnings || [],
+  };
+  if (draft.priceMin != null && draft.priceMax == null) draft.priceMax = draft.priceMin;
+
+  if (draft.lat == null) {
+    const g = await geocodePlace(draft);
+    if (g) { draft.lat = g.lat; draft.lng = g.lng; draft.geoMatched = g.matched; }
+  }
+  return draft;
+}
+
+// ---------- 入力の整形 ----------
+const ITEM_FIELDS = {
+  url: "s", platform: "s", title: "s", caption: "s", image: "s", author: "s", genre: "s", placeName: "s", address: "s",
+  prefecture: "s", city: "s", station: "s", walkMin: "n", priceMin: "n", priceMax: "n", priceNote: "s", hours: "s", closed: "s",
+  tags: "a", summary: "s", lat: "n", lng: "n", memo: "s", status: "s", plannedDate: "s", visitedAt: "s", rating: "n", review: "s",
+  deadline: "s", pinned: "b",
+};
+
+function sanitizeItem(input) {
+  const out = {};
+  for (const [k, type] of Object.entries(ITEM_FIELDS)) {
+    if (!(k in input)) continue;
+    const v = input[k];
+    if (type === "s") out[k] = v == null ? "" : String(v).slice(0, k === "caption" || k === "review" || k === "memo" ? 3000 : 300);
+    else if (type === "n") out[k] = v === "" || v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+    else if (type === "a") out[k] = Array.isArray(v) ? v.map(String).slice(0, 20) : [];
+    else if (type === "b") out[k] = Boolean(v);
+  }
+  if (out.status && !["want", "planned", "visited"].includes(out.status)) delete out.status;
+  if (out.genre && !GENRES.some((g) => g.id === out.genre)) out.genre = "other";
+  if (out.image && !/^(https?:|\/img\/)/.test(out.image)) out.image = "";
+  if (out.url && !/^https?:/.test(out.url)) out.url = "";
+  return out;
+}
+
+function sanitizeMember(m, i) {
+  return {
+    id: String(m.id || `m${i + 1}`).slice(0, 20),
+    name: String(m.name || (i ? "あいて" : "わたし")).slice(0, 20),
+    color: /^#[0-9a-f]{6}$/i.test(m.color) ? m.color : i ? "#4f8cff" : "#ff6b8b",
+  };
+}
+
+function sanitizeBase(b) {
+  return {
+    id: String(b.id || newId(6)).slice(0, 20),
+    label: String(b.label || "出発地").slice(0, 30),
+    lat: Number(b.lat),
+    lng: Number(b.lng),
+    address: String(b.address || "").slice(0, 200),
+  };
+}
+
+// ---------- HTTP ----------
+async function readJson(req) {
+  let size = 0;
+  const chunks = [];
+  for await (const c of req) {
+    size += c.length;
+    if (size > 1_000_000) throw Object.assign(new Error("リクエストが大きすぎます"), { status: 413 });
+    chunks.push(c);
+  }
+  if (!chunks.length) return {};
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw Object.assign(new Error("JSONが不正です"), { status: 400 }); }
+}
+
+function send(res, status, body) {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+  res.end(JSON.stringify(body));
+}
+
+async function serveFile(res, file, cache = "no-cache") {
+  try {
+    const stat = await fs.stat(file);
+    if (!stat.isFile()) throw new Error();
+    res.writeHead(200, { "content-type": MIME[path.extname(file).toLowerCase()] || "application/octet-stream", "content-length": stat.size, "cache-control": cache });
+    createReadStream(file).pipe(res);
+  } catch {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end("Not found");
+  }
+}
+
+async function handleApi(req, res, url) {
+  const parts = url.pathname.split("/").filter(Boolean); // ["api", ...]
+  const method = req.method;
+
+  if (parts[1] === "meta" && method === "GET") {
+    return send(res, 200, { genres: GENRES.map(({ id, label, emoji }) => ({ id, label, emoji })), ai: aiEnabled() });
+  }
+
+  // URL（またはキャプション）から下書きを作る。保存はしない
+  if (parts[1] === "preview" && method === "POST") {
+    const body = await readJson(req);
+    if (!body.url && !body.text) return send(res, 400, { error: "URLかテキストを入れてください" });
+    return send(res, 200, await buildDraft({ url: body.url, text: body.text }));
+  }
+
+  if (parts[1] === "geocode" && method === "GET") {
+    const r = await geocode(url.searchParams.get("q"));
+    return r ? send(res, 200, r) : send(res, 404, { error: "場所が見つかりませんでした" });
+  }
+
+  if (parts[1] !== "rooms") return send(res, 404, { error: "not found" });
+
+  if (parts.length === 2 && method === "POST") {
+    const body = await readJson(req);
+    const members = (Array.isArray(body.members) && body.members.length ? body.members : [{}, {}]).slice(0, 2).map(sanitizeMember);
+    while (members.length < 2) members.push(sanitizeMember({}, members.length));
+    members[0].id = "m1"; members[1].id = "m2";
+    const room = { id: newId(12), name: String(body.name || "ふたりの行きたいリスト").slice(0, 40), createdAt: now(), members, bases: [], items: [] };
+    rooms.set(room.id, room);
+    await saveRoom(room);
+    return send(res, 201, room);
+  }
+
+  const room = await loadRoom(parts[2] || "");
+  if (!room) return send(res, 404, { error: "リストが見つかりません。リンクを確認してください" });
+
+  if (parts.length === 3) {
+    if (method === "GET") return send(res, 200, room);
+    if (method === "PATCH") {
+      const body = await readJson(req);
+      if (body.name) room.name = String(body.name).slice(0, 40);
+      if (Array.isArray(body.members)) room.members = body.members.slice(0, 2).map((m, i) => ({ ...sanitizeMember(m, i), id: room.members[i]?.id || `m${i + 1}` }));
+      if (Array.isArray(body.bases)) room.bases = body.bases.slice(0, 10).map(sanitizeBase).filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng));
+      await saveRoom(room);
+      return send(res, 200, room);
+    }
+  }
+
+  if (parts[3] === "events" && method === "GET") {
+    res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
+    res.write(`data: ${JSON.stringify({ type: "hello", version: room.version })}\n\n`);
+    if (!listeners.has(room.id)) listeners.set(room.id, new Set());
+    listeners.get(room.id).add(res);
+    req.on("close", () => listeners.get(room.id)?.delete(res));
+    return;
+  }
+
+  if (parts[3] === "export" && method === "GET") {
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "content-disposition": `attachment; filename="ikitai-${room.id}.json"` });
+    return res.end(JSON.stringify(room, null, 2));
+  }
+
+  if (parts[3] === "items") {
+    const itemId = parts[4];
+    if (!itemId && method === "POST") {
+      const body = await readJson(req);
+      const fields = sanitizeItem(body);
+      if (fields.url) {
+        const dup = room.items.find((i) => i.url && normalizeUrl(i.url) === normalizeUrl(fields.url));
+        if (dup && !body.allowDuplicate) return send(res, 409, { error: "この投稿はもう登録されています", item: dup });
+      }
+      const id = newId(8);
+      const memberId = room.members.some((m) => m.id === body.addedBy) ? body.addedBy : room.members[0].id;
+      const item = {
+        id, status: "want", genre: "other", tags: [], memo: "", comments: [], likes: { [memberId]: true },
+        ...fields,
+        addedBy: memberId, createdAt: now(), updatedAt: now(),
+      };
+      if (item.image && !item.image.startsWith("/img/")) item.image = await cacheImage(room.id, id, item.image);
+      room.items.unshift(item);
+      await saveRoom(room);
+      return send(res, 201, item);
+    }
+
+    const item = room.items.find((i) => i.id === itemId);
+    if (!item) return send(res, 404, { error: "見つかりません" });
+
+    if (parts.length === 5 && method === "PATCH") {
+      const body = await readJson(req);
+      Object.assign(item, sanitizeItem(body), { updatedAt: now() });
+      if (body.status === "visited" && !item.visitedAt) item.visitedAt = now().slice(0, 10);
+      await saveRoom(room);
+      return send(res, 200, item);
+    }
+    if (parts.length === 5 && method === "DELETE") {
+      room.items = room.items.filter((i) => i.id !== itemId);
+      if (item.image?.startsWith("/img/")) fs.unlink(path.join(IMAGES, path.basename(item.image))).catch(() => {});
+      await saveRoom(room);
+      return send(res, 200, { ok: true });
+    }
+    if (parts[5] === "like" && method === "POST") {
+      const { memberId, on } = await readJson(req);
+      if (!room.members.some((m) => m.id === memberId)) return send(res, 400, { error: "メンバーが不正です" });
+      item.likes = { ...(item.likes || {}), [memberId]: Boolean(on) };
+      if (!on) delete item.likes[memberId];
+      await saveRoom(room);
+      return send(res, 200, item);
+    }
+    if (parts[5] === "comments" && method === "POST") {
+      const { memberId, text } = await readJson(req);
+      const t = String(text || "").trim().slice(0, 500);
+      if (!t) return send(res, 400, { error: "コメントが空です" });
+      item.comments = [...(item.comments || []), { id: newId(6), by: memberId, text: t, at: now() }];
+      await saveRoom(room);
+      return send(res, 201, item);
+    }
+  }
+
+  return send(res, 404, { error: "not found" });
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, "http://localhost");
+  try {
+    if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
+    if (url.pathname.startsWith("/img/")) return serveFile(res, path.join(IMAGES, path.basename(url.pathname)), "public, max-age=31536000, immutable");
+    // それ以外は静的ファイル。/r/xxxx や /share などは SPA の index.html を返す
+    const safe = path.normalize(url.pathname).replace(/^(\.\.[/\\])+/, "");
+    const file = path.join(PUBLIC, safe);
+    if (file.startsWith(PUBLIC) && existsSync(file) && path.extname(file)) return serveFile(res, file);
+    return serveFile(res, path.join(PUBLIC, "index.html"));
+  } catch (e) {
+    console.error(e);
+    if (!res.headersSent) send(res, e.status || 500, { error: e.status ? e.message : "サーバーでエラーが起きました" });
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`ふたりの行きたいリスト: http://localhost:${PORT}  (AI解析: ${aiEnabled() ? "ON" : "OFF"})`);
+});
