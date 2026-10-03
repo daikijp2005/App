@@ -96,7 +96,7 @@ async function cacheImage(roomId, itemId, imageUrl) {
 }
 
 // ---------- 解析 ----------
-async function buildDraft({ url, text }) {
+async function buildDraft({ url, text, image = null }) {
   let preview = { url: normalizeUrl(url), platform: "web", title: "", description: "", image: "", warnings: [] };
   if (url) {
     try { preview = await fetchPreview(url); } catch (e) { preview.warnings = [e.message]; if (e.status === 400) throw e; }
@@ -107,7 +107,7 @@ async function buildDraft({ url, text }) {
   const rule = analyzeText(allText);
 
   let ai = null;
-  if (allText.trim()) ai = await aiExtract({ url: preview.url, platform: preview.platform, title: preview.title, caption: caption + "\n" + ldText });
+  if (allText.trim() || image) ai = await aiExtract({ url: preview.url, platform: preview.platform, title: preview.title, caption: caption + "\n" + ldText, image });
 
   const pick = (k) => (ai && ai[k] !== "" && ai[k] != null ? ai[k] : rule[k]);
   const draft = {
@@ -129,6 +129,7 @@ async function buildDraft({ url, text }) {
     priceNote: rule.priceNote || preview.ld?.priceRange || "",
     hours: pick("hours"),
     closed: rule.closed,
+    deadline: ai?.deadline || "",
     tags: rule.tags,
     summary: ai?.summary || "",
     lat: preview.lat || null,
@@ -151,7 +152,7 @@ const ITEM_FIELDS = {
   url: "s", platform: "s", title: "s", caption: "s", image: "s", author: "s", genre: "s", placeName: "s", address: "s",
   prefecture: "s", city: "s", station: "s", walkMin: "n", priceMin: "n", priceMax: "n", priceNote: "s", hours: "s", closed: "s",
   tags: "a", summary: "s", lat: "n", lng: "n", memo: "s", status: "s", plannedDate: "s", visitedAt: "s", rating: "n", review: "s",
-  deadline: "s", pinned: "b",
+  deadline: "s", pinned: "b", planTime: "s", planOrder: "n",
 };
 
 function sanitizeItem(input) {
@@ -195,7 +196,7 @@ async function readJson(req) {
   const chunks = [];
   for await (const c of req) {
     size += c.length;
-    if (size > 1_000_000) throw Object.assign(new Error("リクエストが大きすぎます"), { status: 413 });
+    if (size > 8_000_000) throw Object.assign(new Error("リクエストが大きすぎます"), { status: 413 });
     chunks.push(c);
   }
   if (!chunks.length) return {};
@@ -230,8 +231,10 @@ async function handleApi(req, res, url) {
   // URL（またはキャプション）から下書きを作る。保存はしない
   if (parts[1] === "preview" && method === "POST") {
     const body = await readJson(req);
-    if (!body.url && !body.text) return send(res, 400, { error: "URLかテキストを入れてください" });
-    return send(res, 200, await buildDraft({ url: body.url, text: body.text }));
+    if (!body.url && !body.text && !body.image) return send(res, 400, { error: "リンクか本文を入れてください" });
+    if (body.image && !aiEnabled()) return send(res, 400, { error: "スクリーンショットの読み取りにはAIの設定が必要です" });
+    const image = body.image ? { data: String(body.image), mediaType: /^image\/(png|jpeg|webp|gif)$/.test(body.mediaType) ? body.mediaType : "image/jpeg" } : null;
+    return send(res, 200, await buildDraft({ url: body.url, text: body.text, image }));
   }
 
   if (parts[1] === "geocode" && method === "GET") {
@@ -320,10 +323,14 @@ async function handleApi(req, res, url) {
       return send(res, 200, { ok: true });
     }
     if (parts[5] === "like" && method === "POST") {
-      const { memberId, on } = await readJson(req);
-      if (!room.members.some((m) => m.id === memberId)) return send(res, 400, { error: "メンバーが不正です" });
-      item.likes = { ...(item.likes || {}), [memberId]: Boolean(on) };
-      if (!on) delete item.likes[memberId];
+      const body = await readJson(req);
+      const { memberId } = body;
+      if (!room.members.some((m) => m.id === memberId)) return send(res, 400, { error: "この端末を使っている人を設定から選んでください" });
+      // true = 行きたい / "no" = うーん / false = 答えたけど♡なし / null = まだ答えていない
+      const value = "value" in body ? body.value : body.on ? true : null;
+      item.likes = { ...(item.likes || {}) };
+      if (value === true || value === false || value === "no") item.likes[memberId] = value;
+      else delete item.likes[memberId];
       await saveRoom(room);
       return send(res, 200, item);
     }
@@ -345,6 +352,8 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
     if (url.pathname.startsWith("/img/")) return serveFile(res, path.join(IMAGES, path.basename(url.pathname)), "public, max-age=31536000, immutable");
+    // 解析ロジックは画面側とも共有する
+    if (url.pathname === "/lib/analyze.js") return serveFile(res, path.join(ROOT, "lib", "analyze.js"));
     // それ以外は静的ファイル。/r/xxxx や /share などは SPA の index.html を返す
     const safe = path.normalize(url.pathname).replace(/^(\.\.[/\\])+/, "");
     const file = path.join(PUBLIC, safe);

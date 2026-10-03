@@ -1,7 +1,7 @@
 // ホーム画面に追加できるようにするための最小限の Service Worker。
 // 画面のファイルだけキャッシュし、API は常にネットワークから取る。
-const CACHE = "ikitai-v1";
-const SHELL = ["/", "/style.css", "/app.js", "/util.js", "/icon.svg", "/manifest.webmanifest"];
+const CACHE = "ikitai-v2";
+const SHELL = ["/", "/style.css", "/main.js", "/core.js", "/smart.js", "/util.js", "/lib/analyze.js", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

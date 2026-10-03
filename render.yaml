@@ -1,0 +1,18 @@
+# Render の Blueprint。リポジトリをつなぐと、この設定でサーバーと保存用ディスクが作られる。
+services:
+  - type: web
+    name: futari-ikitai
+    runtime: docker
+    dockerfilePath: ./futari-ikitai/Dockerfile
+    dockerContext: ./futari-ikitai
+    plan: starter # 保存用ディスクは有料プランで使える
+    healthCheckPath: /api/meta
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: ANTHROPIC_API_KEY
+        sync: false # 入れるとAIで読み取る（空でも動く）
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

@@ -25,6 +25,7 @@ async function getClient() {
         priceMin: z.number().nullable().describe("1人あたりの最低価格（円）。無料なら0、不明ならnull"),
         priceMax: z.number().nullable(),
         hours: z.string().describe("営業時間・開催期間。不明なら空文字"),
+        deadline: z.string().describe("期間限定なら終了日 YYYY-MM-DD。なければ空文字"),
         summary: z.string().describe("どんな場所か、ふたりで行く目線で40字以内の要約"),
       });
       return { client: new Anthropic(), format: zodOutputFormat(schema) };
@@ -33,7 +34,7 @@ async function getClient() {
   return clientPromise;
 }
 
-export async function aiExtract({ url, platform, title, caption }) {
+export async function aiExtract({ url, platform, title, caption, image = null }) {
   if (!aiEnabled()) return null;
   try {
     const { client, format } = await getClient();
@@ -45,10 +46,17 @@ export async function aiExtract({ url, platform, title, caption }) {
       messages: [
         {
           role: "user",
-          content:
-            `SNSの投稿から、行ってみたいお出かけ先の情報を抜き出してください。ジャンルは次から1つ選びます: ${genreList}\n` +
-            `投稿に書かれていないことは推測で埋めず、空文字かnullにしてください。\n\n` +
-            `<post platform="${platform}" url="${url}">\n<title>${title}</title>\n<caption>${caption}</caption>\n</post>`,
+          content: [
+            ...(image ? [{ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } }] : []),
+            {
+              type: "text",
+              text:
+                `SNSの投稿から、行ってみたいお出かけ先の情報を抜き出してください。ジャンルは次から1つ選びます: ${genreList}\n` +
+                (image ? "添付画像は投稿のスクリーンショットです。写っている文字も読んでください。\n" : "") +
+                `投稿に書かれていないことは推測で埋めず、空文字かnullにしてください。今日は ${new Date().toISOString().slice(0, 10)} です。\n\n` +
+                `<post platform="${platform}" url="${url}">\n<title>${title}</title>\n<caption>${caption}</caption>\n</post>`,
+            },
+          ],
         },
       ],
     });
