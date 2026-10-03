@@ -448,3 +448,16 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .pick.on .check { background: var(--rose); border-color: var(--rose); }
 .pick.on .check::after { content: "✓"; color: var(--rose-ink); font-size: 14px; font-weight: 900; display: grid; place-items: center; height: 100%; }
 @media (max-width: 420px) { .cal-d { min-height: 50px; } .cal-d .mk { font-size: 13px; } }
+
+/* ---------- まとめて入力 ---------- */
+.bulk { background: var(--surface); border: 1.5px dashed color-mix(in srgb, var(--rose) 45%, var(--line)); border-radius: var(--r-lg); padding: 12px; margin-bottom: 14px; display: grid; gap: 8px; }
+.bulk label { display: grid; gap: 2px; }
+.bulk label b { font-family: var(--display); font-size: 15px; }
+.bulk textarea { border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); width: 100%; resize: vertical; line-height: 1.7; font-size: 15px; }
+.bulk textarea:focus { outline: none; border-color: var(--rose); }
+.bulk-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.bulk-foot .sub { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.bulk-btns { display: flex; gap: 6px; }
+.bulk-wrap { margin-bottom: 8px; }
+.field .autofilled { animation: autofill 1.4s ease; border-color: color-mix(in srgb, var(--rose) 55%, var(--line)); }
+@keyframes autofill { 0% { background: var(--rose-soft); } 100% { background: var(--surface); } }

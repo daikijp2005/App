@@ -1,6 +1,6 @@
 // あれどこ — 画面（Webアプリとアーティファクトで共通）
 // データの読み書きは backend に任せる。backend の形は README の「しくみ」を参照。
-import { GENRES, analyzeText } from "/lib/analyze.js";
+import { GENRES, analyzeText, parseFreeform } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
 import { openState, seasonOf, buildCourses, externalLinks, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn } from "./smart.js";
 
@@ -397,7 +397,7 @@ export function startApp(backend, mount = document.body) {
     v.innerHTML = `
       <form class="adder" id="adder">
         ${ic("insta")}
-        <input id="add-url" type="text" inputmode="url" autocomplete="off" placeholder="行きたい投稿のリンクを貼り付け" aria-label="投稿のリンク">
+        <input id="add-url" type="text" inputmode="url" autocomplete="off" placeholder="リンクを貼る・お店の情報を書く" aria-label="投稿のリンクかお店の情報">
         <button class="btn rose">追加</button>
       </form>
       ${S.spots.length ? `<div class="pulse">
@@ -785,7 +785,8 @@ export function startApp(backend, mount = document.body) {
     const text = String(raw || "").trim();
     const url = (text.match(/https?:\/\/[^\s<>"'「」]+/) || [""])[0];
     if (url) return readAndEdit({ url, text: text.replace(url, "").trim() });
-    if (text) return readAndEdit({ text });
+    // リンクがない文字だけなら、まとめて入力として読み取る
+    if (text) return openEditor({ genre: "other", caption: text }, { isNew: true, runBulk: true });
     const { root } = sheet(`${head("行きたい場所を追加")}
       <div class="field"><label for="a-url">SNSの投稿・お店のページのリンク</label><input id="a-url" type="text" inputmode="url" placeholder="https://www.instagram.com/p/…" autocomplete="off"></div>
       <div class="actions" style="margin-top:0">
@@ -796,7 +797,7 @@ export function startApp(backend, mount = document.body) {
       <div class="label">ほかの方法</div>
       <div class="actions" style="margin-top:0">
         ${F.aiImage ? `<label class="btn line" for="a-shot">${ic("image", "sm")}スクショから<input id="a-shot" type="file" accept="image/*" hidden></label>` : ""}
-        <button class="btn line" data-manual>${ic("edit", "sm")}手入力で追加</button>
+        <button class="btn line" data-manual>${ic("edit", "sm")}まとめて入力で追加</button>
       </div>`);
     const go = () => { const v = root.querySelector("#a-url").value.trim(); if (!v) return toast("リンクを貼り付けてください"); openAdd(v); };
     root.querySelector("[data-go]").onclick = go;
@@ -855,7 +856,7 @@ export function startApp(backend, mount = document.body) {
     return out;
   }
 
-  function openEditor(draft, { isNew = false, dup = null, id = null } = {}) {
+  function openEditor(draft, { isNew = false, dup = null, id = null, runBulk = false } = {}) {
     let d = { genre: "other", ...draft };
     const readOk = d.placeName || d.address || d.priceMin != null || (d.genre && d.genre !== "other");
     const { root, close } = sheet(`
@@ -864,53 +865,68 @@ export function startApp(backend, mount = document.body) {
       ${d.error ? `<div class="notice warn">${esc(d.error)}</div>` : ""}
       ${F.thumbnails && d.image ? `<div class="hero" style="--tint:${TINT[d.genre] || TINT.other}"><img src="${esc(d.image)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></div>` : ""}
       ${d.url ? `<p class="sub" style="margin:0 0 10px"><a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(platformLabel(d.platform))}の元の投稿を開く</a></p>` : ""}
-      ${isNew ? `<div class="notice ${readOk ? "ok" : ""}">${readOk ? `${ic("sparkle", "sm")} 読み取りました${d.aiUsed ? "（AI）" : ""}。違うところは直してから追加してください。` : d.url ? "この投稿は自動では読み取れませんでした。投稿の本文を下に貼ると読み取れます。" : "わかる範囲で入れてください。あとから編集できます。"}</div>
-        <details ${!readOk && d.url ? "open" : ""} style="margin-bottom:12px"><summary class="sub" style="cursor:pointer">投稿の本文・スクショから読み取る</summary>
-          <div class="field" style="margin-top:8px"><textarea id="f-caption" placeholder="投稿の本文をコピーして貼り付け（📍や住所・値段の書いてあるところ）">${esc(d.caption || "")}</textarea></div>
-          <div class="actions" style="margin-top:0">
-            <button type="button" class="btn sm line" data-rules>本文から読み取る</button>
-            ${F.aiButton ? `<button type="button" class="btn sm rose" data-ai>${ic("sparkle", "sm")}AIで読み取る</button>` : ""}
-            ${F.aiImage ? `<label class="btn sm line" for="f-shot">${ic("image", "sm")}スクショ<input id="f-shot" type="file" accept="image/*" hidden></label>` : ""}
-          </div>
-          <p class="sub" id="ai-status" style="margin:8px 0 0">${F.aiButton ? "AIで読み取ると、本文が短くても店名・ジャンル・位置まで推定します（使う人のClaudeの利用枠を使います）。" : ""}</p>
-        </details>` : ""}
+      ${isNew && d.url ? `<div class="notice ${readOk ? "ok" : ""}">${readOk ? `${ic("sparkle", "sm")} 投稿を読み取りました${d.aiUsed ? "（AI）" : ""}。違うところは直してから追加してください。` : "この投稿は自動では読み取れませんでした。投稿の本文を下の欄に貼ると読み取れます。"}</div>` : ""}
+      ${isNew || !id ? "" : "<details class=\"bulk-wrap\"><summary class=\"sub\" style=\"cursor:pointer;margin-bottom:8px\">まとめて追記する</summary>"}
+      <div class="bulk">
+        <label for="f-caption"><b>${isNew && !d.url ? "まとめて入力" : "本文・メモから読み取る"}</b><span class="sub">${isNew && !d.url ? "思いつくまま書くと、下の項目に自動で入ります" : "投稿の本文などを貼ると、空いている項目に自動で入ります"}</span></label>
+        <textarea id="f-caption" rows="${isNew && !d.url ? 5 : 3}" placeholder="例）&#10;カフェ ルミエール&#10;渋谷区神宮前4-12-10 表参道駅 徒歩5分&#10;1,500円くらい 11時〜20時 火曜休み&#10;10/31までの限定パフェ">${esc(isNew ? d.caption || "" : "")}</textarea>
+        <div class="bulk-foot"><span class="sub" id="bulk-status">${isNew && !d.url ? "店名・住所・駅・値段・営業時間・定休日・期限・リンク・メモを見分けます" : ""}</span>
+          <span class="bulk-btns">${F.aiButton || (F.askAI && F.aiImage) ? `<button type="button" class="btn sm line" data-ai>${ic("sparkle", "sm")}AIで整理</button>` : ""}${F.aiImage ? `<label class="btn sm line" for="f-shot">${ic("image", "sm")}スクショ<input id="f-shot" type="file" accept="image/*" hidden></label>` : ""}</span></div>
+      </div>
+      ${isNew || !id ? "" : "</details>"}
       <form>${editorFields(d)}</form>
       <div class="actions"><button class="btn line" data-close>キャンセル</button><button class="btn rose" data-save>${isNew ? "リストに追加" : "保存"}</button></div>`);
 
     root.querySelector("[data-dup]")?.addEventListener("click", (e) => { e.preventDefault(); openDetail(dup.id); });
-    const refill = (res) => {
-      const cur = readForm(root, d);
-      const merged = { ...cur };
-      for (const k of ["placeName", "address", "prefecture", "city", "station", "hours", "closed", "deadline", "summary", "title"]) if (!merged[k] && res[k]) merged[k] = String(res[k]);
-      if (merged.priceMin == null && res.priceMin != null && Number.isFinite(Number(res.priceMin))) { merged.priceMin = Number(res.priceMin); merged.priceMax = res.priceMax != null ? Number(res.priceMax) : Number(res.priceMin); }
-      if ((!merged.genre || merged.genre === "other") && GENRES.some((g) => g.id === res.genre)) merged.genre = res.genre;
-      if (merged.lat == null && res.lat != null && Number.isFinite(Number(res.lat))) { merged.lat = Number(res.lat); merged.lng = Number(res.lng); merged.geoNote = res.geoNote || ""; }
-      if (res.tags) merged.tags = [...new Set([...(cur.tags || []), ...res.tags])];
-      if (res.aiUsed) merged.aiUsed = true;
-      merged.caption = root.querySelector("#f-caption")?.value || cur.caption;
-      d = merged;
-      root.querySelector("form").innerHTML = editorFields(d);
+    // まとめて入力：書いた内容を読み取り、空いている項目（と自動で入れた項目）だけを埋める。自分で直した項目は上書きしない
+    const LABEL = { placeName: "店名", genre: "ジャンル", address: "住所", prefecture: "都道府県", city: "市区町村", station: "駅", priceMin: "値段", priceMax: "値段", hours: "営業時間", closed: "定休日", deadline: "期限", memo: "メモ", coords: "位置" };
+    const auto = new Set();
+    const touched = new Set();
+    const field = (k) => root.querySelector(`form [name="${k}"]`);
+    root.querySelector("form").addEventListener("input", (e) => { if (e.target.name) { touched.add(e.target.name); auto.delete(e.target.name); } });
+    const fillFrom = (res, { overwriteAuto = true } = {}) => {
+      const vals = { ...res };
+      if (res.lat != null && Number.isFinite(Number(res.lat))) vals.coords = `${Number(res.lat).toFixed(5)}, ${Number(res.lng).toFixed(5)}`;
+      for (const k of Object.keys(LABEL)) {
+        const el = field(k);
+        if (!el || touched.has(k)) continue;
+        const v = vals[k];
+        const empty = v == null || v === "" || (k === "genre" && v === "other");
+        if (el.value && el.value !== "other" && !auto.has(k)) continue;
+        if (empty) { if (auto.has(k) && overwriteAuto) { el.value = k === "genre" ? "other" : ""; auto.delete(k); } continue; }
+        if (el.value !== String(v)) { el.value = String(v); el.classList.remove("autofilled"); void el.offsetWidth; el.classList.add("autofilled"); }
+        auto.add(k);
+      }
+      if (res.url && !d.url) { d.url = res.url; d.platform = res.platform; }
+      if (res.tags?.length) d.tags = [...new Set([...(d.tags || []), ...res.tags])];
+      if (res.walkMin != null) d.walkMin = res.walkMin;
+      if (res.summary && !d.summary) d.summary = res.summary;
+      if (res.aiUsed) d.aiUsed = true;
+      const names = [...new Set([...auto].map((k) => LABEL[k]))];
+      root.querySelector("#bulk-status").innerHTML = names.length ? `${ic("sparkle", "sm")} 自動で入れました：${names.map((n) => `<span class="tag">${n}</span>`).join("")}` : "まだ読み取れる情報がありません";
     };
-    root.querySelector("[data-rules]")?.addEventListener("click", () => {
-      const text = root.querySelector("#f-caption").value;
-      if (!text.trim()) return toast("投稿の本文を貼り付けてください");
-      refill({ ...analyzeText(text), ...(coordsFrom(text) || {}) });
-      toast("本文から読み取りました");
+    let bulkTimer;
+    root.querySelector("#f-caption")?.addEventListener("input", (e) => {
+      clearTimeout(bulkTimer);
+      bulkTimer = setTimeout(() => fillFrom({ ...parseFreeform(e.target.value), ...(coordsFrom(e.target.value) || {}) }), 250);
     });
+    root.querySelector("#f-caption")?.addEventListener("paste", () => setTimeout(() => root.querySelector("#f-caption").dispatchEvent(new Event("input")), 0));
     const runAI = async (image) => {
-      const status = root.querySelector("#ai-status");
+      const status = root.querySelector("#bulk-status");
       const caption = root.querySelector("#f-caption").value;
-      root.querySelectorAll("[data-ai],[data-rules]").forEach((b) => (b.disabled = true));
-      status.innerHTML = `<span class="thinking"><span class="spinner"></span>読み取っています（10〜30秒ほど）</span>`;
+      if (!caption.trim() && !image && !d.url) return toast("上の欄に書くか、スクショを選んでください");
+      root.querySelectorAll("[data-ai]").forEach((b) => (b.disabled = true));
+      status.innerHTML = `<span class="thinking"><span class="spinner"></span>AIが整理しています（10〜30秒ほど）</span>`;
       try {
         const res = await B.readPost({ url: d.url, text: caption, image, ai: true });
-        refill(res);
-        status.textContent = "読み取りました。位置がずれていたら、GoogleマップのURLを貼って直せます。";
+        fillFrom(res, { overwriteAuto: false });
       } catch (e) { status.textContent = e?.message || "読み取れませんでした"; }
-      finally { root.querySelectorAll("[data-ai],[data-rules]").forEach((b) => (b.disabled = false)); }
+      finally { root.querySelectorAll("[data-ai]").forEach((b) => (b.disabled = false)); }
     };
     root.querySelector("[data-ai]")?.addEventListener("click", () => runAI(null));
     root.querySelector("#f-shot")?.addEventListener("change", (e) => { const f = e.target.files?.[0]; if (f) runAI(f); });
+    if (runBulk) fillFrom({ ...parseFreeform(d.caption || ""), ...(coordsFrom(d.caption) || {}) });
+    else if (isNew && !d.url) setTimeout(() => root.querySelector("#f-caption")?.focus(), 80);
     root.addEventListener("click", async (e) => {
       if (!e.target.closest("[data-locate]")) return;
       const cur = readForm(root, d);
@@ -920,13 +936,15 @@ export function startApp(backend, mount = document.body) {
       st.innerHTML = `<span class="thinking"><span class="spinner"></span>位置を探しています</span>`;
       for (const q of queries) {
         const r = await B.locate(q).catch(() => null);
-        if (r) { d = { ...cur, lat: r.lat, lng: r.lng, geoNote: `「${q}」の位置${r.estimated ? "（AIの推定）" : ""}` }; root.querySelector("form").innerHTML = editorFields(d); return; }
+        if (r) { field("coords").value = `${Number(r.lat).toFixed(5)}, ${Number(r.lng).toFixed(5)}`; touched.add("coords"); st.textContent = `「${q}」の位置${r.estimated ? "（AIの推定）" : ""}を入れました`; return; }
       }
       st.textContent = "見つかりませんでした。Googleマップでその場所を開き、URLを貼ってください";
     });
     root.querySelector("[data-save]").addEventListener("click", async (e) => {
       const data = readForm(root, d);
-      if (isNew && root.querySelector("#f-caption")) data.caption = root.querySelector("#f-caption").value;
+      const bulk = root.querySelector("#f-caption")?.value || "";
+      if (isNew) data.caption = bulk;
+      else if (bulk.trim()) data.caption = [d.caption, bulk].filter(Boolean).join("\n");
       if (!data.placeName && !data.url) return toast("スポット名かリンクを入れてください");
       e.target.disabled = true;
       const body = {};

@@ -9,18 +9,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(here, "..", p), "utf8");
 // import 行を消し、export を外して1つのスクリプトにつなげる（import は1行で書く決まり）
 const flatten = (src) => src.replace(/^import .* from .*;$/gm, "").replace(/^export (?=(async )?function|const|let|class)/gm, "");
-const pickFunction = (src, name) => {
-  const start = src.indexOf(`export function ${name}(`);
-  const end = src.indexOf("\n}\n", start);
-  if (start < 0 || end < 0) throw new Error(`${name} が見つかりません`);
-  return flatten(src.slice(start, end + 3));
-};
 
-const preview = read("lib/preview.js");
 const bundle = [
   flatten(read("lib/analyze.js")),
-  pickFunction(preview, "detectPlatform"),
-  pickFunction(preview, "normalizeUrl"),
   flatten(read("public/util.js")),
   flatten(read("public/smart.js")),
   flatten(read("public/core.js")),

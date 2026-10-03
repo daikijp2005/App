@@ -97,3 +97,43 @@ test("表示用フォーマット", () => {
   assert.equal(formatMinutes(45), "45分");
   assert.equal(formatMinutes(95), "1時間35分");
 });
+
+test("まとめて入力（手入力のメモ書き）", async () => {
+  const { parseFreeform, extractDeadline } = await import("../lib/analyze.js");
+  const now = new Date("2026-10-03T12:00:00");
+  const r = parseFreeform(`カフェ ルミエール
+渋谷区神宮前4-12-10 表参道駅 徒歩5分
+1,500円くらい 11時〜20時 火曜休み
+10/31までの限定パフェ`, now);
+  assert.equal(r.placeName, "カフェ ルミエール");
+  assert.equal(r.genre, "cafe");
+  assert.equal(r.station, "表参道駅");
+  assert.equal(r.walkMin, 5);
+  assert.equal(r.city, "渋谷区");
+  assert.equal(r.priceMin, 1500);
+  assert.equal(r.hours, "11時〜20時");
+  assert.equal(r.closed, "火曜");
+  assert.equal(r.deadline, "2026-10-31");
+  assert.equal(r.address, "渋谷区神宮前4-12-10");
+  assert.equal(r.memo, "10/31までの限定パフェ", "住所の行はメモに入れない");
+
+  const one = parseFreeform("焼肉たろう、新宿駅、5000円、17:00-23:00、日曜定休、記念日に行きたい", now);
+  assert.equal(one.placeName, "焼肉たろう");
+  assert.equal(one.genre, "gourmet");
+  assert.equal(one.station, "新宿駅");
+  assert.equal(one.priceMin, 5000);
+  assert.equal(one.hours, "17:00-23:00");
+  assert.equal(one.closed, "日曜");
+  assert.equal(one.memo, "記念日に行きたい");
+
+  const labeled = parseFreeform("店名：パーラー苺\nメモ：苺のパフェが有名\nhttps://www.instagram.com/p/ABC/?igsh=x", now);
+  assert.equal(labeled.placeName, "パーラー苺");
+  assert.equal(labeled.memo, "苺のパフェが有名");
+  assert.equal(labeled.url, "https://www.instagram.com/p/ABC/");
+  assert.equal(labeled.platform, "instagram");
+
+  assert.equal(extractDeadline("〜1/15", now), "2027-01-15", "過ぎた月日は来年");
+  assert.equal(extractDeadline("2026年12月25日まで", now), "2026-12-25");
+  assert.equal(extractDeadline("11/3(火)まで", now), "2026-11-03");
+  assert.equal(extractDeadline("1500円", now), "");
+});

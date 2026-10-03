@@ -1,39 +1,13 @@
+import { detectPlatform, normalizeUrl } from "./analyze.js";
+export { detectPlatform, normalizeUrl };
+
 // URL から投稿の中身（タイトル・キャプション・画像）を取ってくる。
 // SNSごとに公開の oEmbed があればそれを使い、なければ HTML の OGP / JSON-LD を読む。
 
 const TIMEOUT_MS = 8000;
 const MAX_HTML = 1_500_000;
 
-export function detectPlatform(url) {
-  let host = "";
-  try { host = new URL(url).hostname.replace(/^www\.|^m\./, ""); } catch { return "web"; }
-  if (/instagram\.com$/.test(host)) return "instagram";
-  if (/tiktok\.com$/.test(host)) return "tiktok";
-  if (/(^|\.)x\.com$|twitter\.com$/.test(host)) return "x";
-  if (/youtube\.com$|youtu\.be$/.test(host)) return "youtube";
-  if (/threads\.(net|com)$/.test(host)) return "threads";
-  if (/tabelog\.com$/.test(host)) return "tabelog";
-  if (/maps\.app\.goo\.gl$|google\.[a-z.]+$|goo\.gl$/.test(host)) return "googlemaps";
-  if (/lemon8-app\.com$/.test(host)) return "lemon8";
-  if (/facebook\.com$|fb\.watch$/.test(host)) return "facebook";
-  return "web";
-}
 
-export function normalizeUrl(raw) {
-  const m = String(raw || "").match(/https?:\/\/[^\s<>"'「」]+/);
-  if (!m) return "";
-  try {
-    const u = new URL(m[0]);
-    // 追跡用パラメータは重複判定の邪魔なので落とす
-    for (const k of [...u.searchParams.keys()]) {
-      if (/^(utm_|igsh|igshid|si$|is_from_webapp|sender_device|_r$|_t$|s$|t$|ref)/.test(k)) u.searchParams.delete(k);
-    }
-    u.hash = "";
-    return u.toString().replace(/\?$/, "");
-  } catch {
-    return "";
-  }
-}
 
 async function fetchWithTimeout(url, opts = {}) {
   const ctrl = new AbortController();

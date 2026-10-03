@@ -120,11 +120,19 @@ export function extractPlace(text) {
   };
 }
 
+const TIME_RANGE = /\d{1,2}(?:[:：]\d{2}|時(?:\d{1,2}分?)?)\s*[〜~～\-－ー―]\s*(?:翌)?\d{1,2}(?:[:：]\d{2}|時(?:\d{1,2}分?)?)/;
+
 export function extractHours(text) {
-  return {
-    hours: pickLabeledLine(text, ["営業時間", "OPEN", "Open", "open", "時間", "⏰", "🕐"]).slice(0, 60),
-    closed: pickLabeledLine(text, ["定休日", "休み", "CLOSE", "Closed"]).slice(0, 40),
-  };
+  // 「営業時間 11:00〜20:00」のようなラベル付きを優先し、なければ時刻の範囲そのものを拾う
+  let hours = pickLabeledLine(text, ["営業時間", "OPEN", "Open", "open", "時間", "⏰", "🕐"]);
+  if (!hours || !TIME_RANGE.test(hours)) hours = (text.match(TIME_RANGE) || [hours || ""])[0];
+  // 「火曜休み」「水・木曜定休」「定休日：月曜」
+  let closed = "";
+  const strict = text.match(/((?:毎週)?[月火水木金土日](?:曜日?|曜)?(?:[・、,と][月火水木金土日](?:曜日?|曜)?)*)\s*(?:定休日?|休み|休業|休館|お休み)/);
+  if (strict) closed = strict[1];
+  else if (/不定休|年中無休|無休/.test(text)) closed = text.match(/不定休|年中無休|無休/)[0];
+  else closed = pickLabeledLine(text, ["定休日", "CLOSE", "Closed"]);
+  return { hours: String(hours || "").slice(0, 60), closed: String(closed || "").slice(0, 40) };
 }
 
 export function extractTags(text) {
@@ -144,4 +152,105 @@ export function analyzeText(text) {
     ...extractHours(t),
     tags: extractTags(t),
   };
+}
+
+export function detectPlatform(url) {
+  let host = "";
+  try { host = new URL(url).hostname.replace(/^www\.|^m\./, ""); } catch { return "web"; }
+  if (/instagram\.com$/.test(host)) return "instagram";
+  if (/tiktok\.com$/.test(host)) return "tiktok";
+  if (/(^|\.)x\.com$|twitter\.com$/.test(host)) return "x";
+  if (/youtube\.com$|youtu\.be$/.test(host)) return "youtube";
+  if (/threads\.(net|com)$/.test(host)) return "threads";
+  if (/tabelog\.com$/.test(host)) return "tabelog";
+  if (/maps\.app\.goo\.gl$|google\.[a-z.]+$|goo\.gl$/.test(host)) return "googlemaps";
+  if (/lemon8-app\.com$/.test(host)) return "lemon8";
+  if (/facebook\.com$|fb\.watch$/.test(host)) return "facebook";
+  return "web";
+}
+
+export function normalizeUrl(raw) {
+  const m = String(raw || "").match(/https?:\/\/[^\s<>"'「」]+/);
+  if (!m) return "";
+  try {
+    const u = new URL(m[0]);
+    // 追跡用パラメータは重複判定の邪魔なので落とす
+    for (const k of [...u.searchParams.keys()]) {
+      if (/^(utm_|igsh|igshid|si$|is_from_webapp|sender_device|_r$|_t$|s$|t$|ref)/.test(k)) u.searchParams.delete(k);
+    }
+    u.hash = "";
+    return u.toString().replace(/\?$/, "");
+  } catch {
+    return "";
+  }
+}
+
+// ---------- まとめて入力（手入力のメモ書きから項目を埋める） ----------
+// 「10/31まで」「11月3日まで」「〜2026/12/25」→ YYYY-MM-DD。年がなければ、過ぎていれば来年とみなす
+export function extractDeadline(text, now = new Date()) {
+  const t = String(text || "").replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+  const m = t.match(/(?:[〜~～]\s*)?(?:(\d{4})\s*[\/年.\-]\s*)?(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})\s*日?\s*(?:\([^)]*\)|（[^）]*）)?\s*(まで|迄|〆|終了|までの|限定)/)
+    || t.match(/[〜~～]\s*(?:(\d{4})\s*[\/年.\-]\s*)?(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})\s*日?/);
+  if (!m) return "";
+  const mo = Number(m[2]), d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+  let y = m[1] ? Number(m[1]) : now.getFullYear();
+  const pad = (n) => String(n).padStart(2, "0");
+  if (!m[1]) {
+    const cand = new Date(y, mo - 1, d);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (cand < today - 30 * 86400000) y += 1;
+  }
+  return `${y}-${pad(mo)}-${pad(d)}`;
+}
+
+const LABELS = { placeName: /^(?:店名|店舗名|名前|スポット名|施設名|場所名)\s*[:：]?\s*/, memo: /^(?:メモ|memo|備考|ひとこと|コメント)\s*[:：]?\s*/i };
+
+export function parseFreeform(text, now = new Date()) {
+  const raw = String(text || "").trim();
+  const base = analyzeText(raw);
+  const url = (raw.match(/https?:\/\/[^\s<>"'「」]+/) || [""])[0];
+  const deadline = extractDeadline(raw, now);
+  let placeName = "";
+  const memo = [];
+  // 1行ずつ（1行しかなければ「、」「/」やスペースで区切って）何の情報かを見分ける
+  let parts = raw.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  if (parts.length === 1) parts = parts[0].split(/[、,，／/｜|]|\s{2,}/).map((x) => x.trim()).filter(Boolean);
+  if (parts.length === 1 && /\s/.test(parts[0])) parts = parts[0].split(/\s+/);
+  const genreWords = GENRES.flatMap((g) => [g.label, ...g.words]).map((w) => w.toLowerCase());
+  for (const part of parts) {
+    if (LABELS.placeName.test(part)) { placeName = part.replace(LABELS.placeName, "").trim(); continue; }
+    if (LABELS.memo.test(part)) { memo.push(part.replace(LABELS.memo, "").trim()); continue; }
+    const info =
+      /https?:\/\//.test(part) ||
+      /[¥￥]\s*\d|\d[\d,]*\s*(円|yen)|無料/.test(part) ||
+      TIME_RANGE.test(part) ||
+      /[月火水木金土日](曜日?|曜)?\s*(定休|休み|休業|休館)|不定休|無休/.test(part) ||
+      /駅/.test(part) ||
+      new RegExp(`^(${PREFS})|[市区町村]\S*\d`).test(part) ||
+      /^(住所|営業時間|定休日|アクセス|時間|予算|値段|価格)/.test(part) ||
+      /^[#＃]/.test(part) ||
+      (extractDeadline(part, now) && /(まで|迄|〆|終了|[〜~～])/.test(part));
+    const isGenreWord = genreWords.includes(part.toLowerCase());
+    if (info || isGenreWord) {
+      // 「10/31までの限定パフェ」のように、期限の後ろに言葉が続くならメモにも残す（住所の「4-12」は日付とみなさない）
+      const hasDeadline = extractDeadline(part, now) && /(まで|迄|〆|終了|[〜~～])/.test(part);
+      const rest = !hasDeadline ? part : part.replace(/(?:[〜~～]\s*)?(?:\d{4}\s*[\/年.\-]\s*)?\d{1,2}\s*[\/月.\-]\s*\d{1,2}\s*日?\s*(まで(の)?|迄|〆|終了)?/, "").trim();
+      if (deadline && rest && rest !== part && rest.length >= 2 && !/^(まで|限定)$/.test(rest)) memo.push(part);
+      continue;
+    }
+    if (!placeName && !base.placeName && part.length <= 40) { placeName = part; continue; }
+    memo.push(part);
+  }
+  // 都道府県のない住所（「渋谷区神宮前4-12-10」）も拾う
+  let address = base.address;
+  if (!address) {
+    const a = raw.match(/[^\s、,，／/｜|]*?[市区町村][^\s、,，／/｜|]*?\d[\d\-−－‐ー丁目番地号の]*/);
+    if (a) address = a[0];
+  }
+  const out = { ...base, address, placeName: placeName || base.placeName, deadline, memo: memo.join(" / ").slice(0, 300), url: url ? normalizeUrl(url) : "" };
+  if (out.url) out.platform = detectPlatform(out.url);
+  // 店名からもジャンルを推測する
+  if (out.genre === "other" && out.placeName) out.genre = classifyGenre(out.placeName);
+  return out;
 }
