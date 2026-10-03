@@ -1,4 +1,4 @@
-// ふたりの行きたいリスト — サーバー
+// いきたいリスト — サーバー
 // 依存パッケージなしで動く Node.js サーバー（AI解析だけ任意で @anthropic-ai/sdk を使う）。
 // データは data/<部屋ID>.json に保存し、変更は SSE で相手の画面にすぐ反映する。
 
@@ -172,11 +172,15 @@ function sanitizeItem(input) {
   return out;
 }
 
+const MEMBER_COLORS = ["#df4a72", "#3b6fd8", "#1d936a", "#c47b0c", "#8a56d6", "#d6561f", "#0f8fa0", "#b0469a"];
+const GROUP_TYPES = ["couple", "friends", "family", "work", "circle", "solo"];
+const MAX_MEMBERS = 50;
+
 function sanitizeMember(m, i) {
   return {
     id: String(m.id || `m${i + 1}`).slice(0, 20),
-    name: String(m.name || (i ? "あいて" : "わたし")).slice(0, 20),
-    color: /^#[0-9a-f]{6}$/i.test(m.color) ? m.color : i ? "#4f8cff" : "#ff6b8b",
+    name: String(m.name || "メンバー").trim().slice(0, 20) || "メンバー",
+    color: /^#[0-9a-f]{6}$/i.test(m.color) ? m.color : MEMBER_COLORS[i % MEMBER_COLORS.length],
   };
 }
 
@@ -246,10 +250,10 @@ async function handleApi(req, res, url) {
 
   if (parts.length === 2 && method === "POST") {
     const body = await readJson(req);
-    const members = (Array.isArray(body.members) && body.members.length ? body.members : [{}, {}]).slice(0, 2).map(sanitizeMember);
-    while (members.length < 2) members.push(sanitizeMember({}, members.length));
-    members[0].id = "m1"; members[1].id = "m2";
-    const room = { id: newId(12), name: String(body.name || "ふたりの行きたいリスト").slice(0, 40), createdAt: now(), members, bases: [], items: [] };
+    // 作った人が最初のメンバー。ほかの人は招待リンクから参加する
+    const members = (Array.isArray(body.members) && body.members.length ? body.members : [{}]).slice(0, MAX_MEMBERS).map((m, i) => ({ ...sanitizeMember(m, i), id: `m${i + 1}` }));
+    const type = GROUP_TYPES.includes(body.type) ? body.type : "friends";
+    const room = { id: newId(12), name: String(body.name || "行きたいリスト").slice(0, 40), type, createdAt: now(), members, bases: [], items: [] };
     rooms.set(room.id, room);
     await saveRoom(room);
     return send(res, 201, room);
@@ -263,10 +267,40 @@ async function handleApi(req, res, url) {
     if (method === "PATCH") {
       const body = await readJson(req);
       if (body.name) room.name = String(body.name).slice(0, 40);
-      if (Array.isArray(body.members)) room.members = body.members.slice(0, 2).map((m, i) => ({ ...sanitizeMember(m, i), id: room.members[i]?.id || `m${i + 1}` }));
+      if (GROUP_TYPES.includes(body.type)) room.type = body.type;
+      // 名前と色の変更だけ受け付ける（参加・退出は members の API で）
+      if (Array.isArray(body.members)) {
+        for (const m of body.members) {
+          const cur = room.members.find((x) => x.id === m.id);
+          if (!cur) continue;
+          const clean = sanitizeMember({ ...cur, ...m }, room.members.indexOf(cur));
+          cur.name = clean.name;
+          cur.color = clean.color;
+        }
+      }
       if (Array.isArray(body.bases)) room.bases = body.bases.slice(0, 10).map(sanitizeBase).filter((b) => Number.isFinite(b.lat) && Number.isFinite(b.lng));
       await saveRoom(room);
       return send(res, 200, room);
+    }
+  }
+
+  if (parts[3] === "members") {
+    if (parts.length === 4 && method === "POST") {
+      const body = await readJson(req);
+      const name = String(body.name || "").trim().slice(0, 20);
+      if (!name) return send(res, 400, { error: "名前を入れてください" });
+      if (room.members.length >= MAX_MEMBERS) return send(res, 400, { error: `このリストに参加できるのは${MAX_MEMBERS}人までです` });
+      const member = { ...sanitizeMember({ name }, room.members.length), id: `m${newId(6)}` };
+      room.members.push(member);
+      await saveRoom(room);
+      return send(res, 201, member);
+    }
+    if (parts.length === 5 && method === "DELETE") {
+      if (!room.members.some((m) => m.id === parts[4])) return send(res, 404, { error: "メンバーが見つかりません" });
+      if (room.members.length <= 1) return send(res, 400, { error: "最後のメンバーは抜けられません" });
+      room.members = room.members.filter((m) => m.id !== parts[4]);
+      await saveRoom(room);
+      return send(res, 200, { ok: true });
     }
   }
 
@@ -366,5 +400,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`ふたりの行きたいリスト: http://localhost:${PORT}  (AI解析: ${aiEnabled() ? "ON" : "OFF"})`);
+  console.log(`いきたいリスト: http://localhost:${PORT}  (AI解析: ${aiEnabled() ? "ON" : "OFF"})`);
 });

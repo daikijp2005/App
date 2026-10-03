@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseHours, openState, seasonOf, buildCourses, externalLinks, calendarUrl, courseRouteUrl } from "../public/smart.js";
+import { parseHours, openState, seasonOf, buildCourses, externalLinks, calendarUrl, courseRouteUrl, requiredYes } from "../public/smart.js";
 
 const at = (dateStr, hm) => new Date(`${dateStr}T${hm}:00`);
 // 2026-10-06 は火曜日
@@ -63,4 +63,22 @@ test("外部リンク", () => {
   assert.ok(ids.includes("tabelog"));
   assert.match(links.find((l) => l.id === "route").url, /origin=35\.65,139\.7&destination=35\.6%2C139\.7&travelmode=transit/);
   assert.match(calendarUrl(s, "2026-10-10", "18:30", 90), /dates=20261010T183000\/20261010T200000/);
+});
+
+test("マッチに必要な人数", () => {
+  assert.equal(requiredYes(1), 1);
+  assert.equal(requiredYes(2), 2);
+  assert.equal(requiredYes(3), 2);
+  assert.equal(requiredYes(5), 3);
+  assert.equal(requiredYes(8), 4);
+});
+
+test("グループでは過半数が行きたい場所だけを選べる", () => {
+  const spots = [
+    { id: "a", genre: "cafe", lat: 35.66, lng: 139.70, likes: { m1: true, m2: true } },
+    { id: "b", genre: "art", lat: 35.661, lng: 139.701, likes: { m1: true } },
+    { id: "c", genre: "gourmet", lat: 35.662, lng: 139.702, likes: { m1: true, m2: true, m3: true } },
+  ];
+  const ids = buildCourses(spots, { stops: 3, bothOnly: true, peopleCount: 4 })[0].stops.map((s) => s.spot.id).sort();
+  assert.deepEqual(ids, ["a", "c"]);
 });

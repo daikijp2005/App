@@ -1,7 +1,7 @@
 {
-  "name": "ふたりの行きたいリスト",
+  "name": "いきたいリスト",
   "short_name": "行きたい",
-  "description": "SNSで見つけた「ここ行きたい！」をふたりで貯めておくリスト",
+  "description": "SNSで見つけた「ここ行きたい！」を、恋人・友達・家族・職場のみんなで貯めておくリスト",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

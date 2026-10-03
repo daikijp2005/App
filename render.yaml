@@ -1,4 +1,4 @@
-# Render の Blueprint。リポジトリをつなぐと、この設定でサーバーと保存用ディスクが作られる。
+# いきたいリスト（Webアプリ版）の Render Blueprint。リポジトリをつなぐと、この設定でサーバーと保存用ディスクが作られる。
 services:
   - type: web
     name: futari-ikitai

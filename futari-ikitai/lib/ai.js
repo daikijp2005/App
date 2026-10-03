@@ -26,7 +26,7 @@ async function getClient() {
         priceMax: z.number().nullable(),
         hours: z.string().describe("営業時間・開催期間。不明なら空文字"),
         deadline: z.string().describe("期間限定なら終了日 YYYY-MM-DD。なければ空文字"),
-        summary: z.string().describe("どんな場所か、ふたりで行く目線で40字以内の要約"),
+        summary: z.string().describe("どんな場所かを40字以内で紹介"),
       });
       return { client: new Anthropic(), format: zodOutputFormat(schema) };
     })();

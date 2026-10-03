@@ -31,9 +31,9 @@ async function artifactBackend() {
 
   return {
     kind: "artifact",
-    unavailable: db ? "" : "claude.ai にサインインして開くと、ふたりで共有して使えます。",
-    features: { map: false, thumbnails: false, aiButton: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, members: false, export: false, clipboardRead: false, geolocation: false },
-    shareNote: "ふたりとも claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
+    unavailable: db ? "" : "claude.ai にサインインして開くと、みんなで共有して使えます。",
+    features: { map: false, thumbnails: false, aiButton: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, members: false, lists: false, export: false, clipboardRead: false, geolocation: false },
+    shareNote: "一緒に使う人も claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
     readerNote: aiOn ? "本文を読み取り、「AIで読み取る」でClaudeが整理します（押した人の利用枠を使います）" : "本文をルールで読み取っています",
     subscribe(fn) {
       listener = fn;
@@ -59,7 +59,7 @@ async function artifactBackend() {
       const it = spots.find((s) => s.id === id);
       return wrap(db.collection("spots").doc(id).update({ comments: [...(it?.comments || []), { by: meId, text, at: new Date().toISOString() }].slice(-100) }));
     },
-    saveSettings: (patch) => wrap(db.doc("meta/settings").set({ name: "ふたりの行きたいリスト", bases: [], ...(settings || {}), ...patch })),
+    saveSettings: (patch) => wrap(db.doc("meta/settings").set({ name: "行きたいリスト", bases: [], ...(settings || {}), ...patch })),
     async readPost({ url = "", text = "", image = null, ai = false }) {
       const cleanUrl = url ? normalizeUrl(url) : "";
       const draft = { ...analyzeText(text), url: cleanUrl, platform: cleanUrl ? detectPlatform(cleanUrl) : "web", caption: text, ...(coordsFrom(url) || coordsFrom(text) || {}) };
@@ -70,7 +70,7 @@ async function artifactBackend() {
         `わからない項目は空文字かnullにし、投稿にない値段や営業時間は作らないでください。\n` +
         `lat/lng は、店名や住所・駅名から位置をおおよそ特定できるときだけ、あなたの知識で推定してください（わからなければnull）。\n` +
         `今日は ${new Date().toISOString().slice(0, 10)} です。` + (image ? "添付画像は投稿のスクリーンショットです。写っている文字も読んでください。" : "") + `\n` +
-        `返すJSON: {"placeName":"店名・施設名","address":"住所","prefecture":"都道府県","city":"市区町村","station":"最寄り駅","genre":${genres},"priceMin":1人あたりの最低価格(円・数値かnull),"priceMax":数値かnull,"hours":"営業時間","closed":"定休日","deadline":"期間限定の終了日 YYYY-MM-DD か空文字","summary":"ふたりで行く目線の40字以内の紹介","lat":数値かnull,"lng":数値かnull}\n\n` +
+        `返すJSON: {"placeName":"店名・施設名","address":"住所","prefecture":"都道府県","city":"市区町村","station":"最寄り駅","genre":${genres},"priceMin":1人あたりの最低価格(円・数値かnull),"priceMax":数値かnull,"hours":"営業時間","closed":"定休日","deadline":"期間限定の終了日 YYYY-MM-DD か空文字","summary":"どんな場所かを40字以内で紹介","lat":数値かnull,"lng":数値かnull}\n\n` +
         `<post>\nURL: ${cleanUrl || "なし"}\n本文:\n${String(text).slice(0, 4000)}\n</post>`;
       try {
         const res = await sample.json(prompt, image ? { images: image } : {});

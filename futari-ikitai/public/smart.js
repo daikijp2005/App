@@ -2,6 +2,23 @@
 // 営業時間の判定・旬の判定・デートコースの組み立て・外部アプリへのリンクを作る。
 import { distanceKm, estimateTravel } from "./util.js";
 
+// ---------- 誰と使うか ----------
+// リストごとに選ぶ「使う相手」。画面の言葉づかいやタブ名がこれで変わる
+export const GROUP_TYPES = {
+  couple: { label: "恋人", emoji: "💑", desc: "デートで行きたい場所を貯める", us: "ふたり", all: "ふたりとも", vote: "答え合わせ", plan: "デート", planTitle: "デートコースを作る", others: "相手", listName: "ふたりの行きたいリスト", invite: "ふたりの行きたいリストを作ったよ！行きたいお店とかここに貯めていこう" },
+  friends: { label: "友達", emoji: "🙌", desc: "遊びに行きたい場所を集める", us: "みんな", all: "みんな", vote: "投票", plan: "おでかけ", planTitle: "おでかけプランを作る", others: "ほかのメンバー", listName: "友達と行きたいリスト", invite: "行きたい場所を集めるリストを作ったよ！気になるお店とか貼っていこう" },
+  family: { label: "家族", emoji: "🏠", desc: "週末や旅行の候補をまとめる", us: "家族", all: "家族みんな", vote: "投票", plan: "おでかけ", planTitle: "家族のおでかけプラン", others: "家族", listName: "家族で行きたいリスト", invite: "家族で行きたい場所のリストを作ったよ。行きたいところを貼っておいてね" },
+  work: { label: "職場", emoji: "💼", desc: "ランチや飲み会の候補に", us: "チーム", all: "全員", vote: "投票", plan: "プラン", planTitle: "ランチ・飲み会のプラン", others: "ほかのメンバー", listName: "職場の行きたいリスト", invite: "ランチや飲み会の候補リストを作りました。気になるお店があれば貼ってください" },
+  circle: { label: "知人・サークル", emoji: "🎈", desc: "サークルやコミュニティで", us: "メンバー", all: "全員", vote: "投票", plan: "プラン", planTitle: "おでかけプランを作る", others: "ほかのメンバー", listName: "みんなの行きたいリスト", invite: "みんなで行きたい場所のリストを作りました。行きたいところを貼ってください" },
+  solo: { label: "ひとりで", emoji: "🙋", desc: "自分用の行きたいメモに", us: "わたし", all: "", vote: "", plan: "プラン", planTitle: "おでかけプランを作る", others: "", listName: "わたしの行きたいリスト", invite: "" },
+};
+
+// 何人が「行きたい」ならマッチとするか。2人までは全員、3人以上は過半数（最低2人）
+export function requiredYes(memberCount) {
+  if (memberCount <= 2) return Math.max(1, memberCount);
+  return Math.max(2, Math.ceil(memberCount / 2));
+}
+
 export const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 const toHalf = (s) =>
@@ -97,11 +114,11 @@ export function idealMinute(genre, style) {
   return (IDEAL_HOUR[genre] ?? 14) * 60;
 }
 
-function loveScore(spot, peopleCount) {
+function loveScore(spot, required) {
   const likes = Object.values(spot.likes || {});
   const yes = likes.filter((v) => v === true).length;
   const no = likes.filter((v) => v === "no").length;
-  let s = yes >= Math.max(2, peopleCount) ? 3 : yes ? 1.5 : 0.5;
+  let s = yes >= required ? 3 : yes ? 1 + yes * 0.5 : 0.5;
   s -= no * 2;
   if (seasonOf(spot)?.now) s += 1;
   if (spot.deadline) {
@@ -116,18 +133,20 @@ const fmt = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${St
 
 // 行きたい場所から、近い場所どうしを組み合わせて回る順番と時間割を作る
 export function buildCourses(spots, { stops = 3, style = "day", budget = null, bothOnly = false, date = null, peopleCount = 2 } = {}) {
+  const required = requiredYes(peopleCount);
   const day = date ? new Date(date + "T12:00:00") : new Date();
   const pool = spots.filter((s) => {
     if ((s.status || "want") === "visited" || s.lat == null || s.lng == null) return false;
     const yes = Object.values(s.likes || {}).filter((v) => v === true).length;
-    if (bothOnly && yes < 2) return false;
-    if (Object.values(s.likes || {}).filter((v) => v === "no").length >= Math.max(2, peopleCount)) return false;
+    if (bothOnly && yes < required) return false;
+    // 半分以上が「うーん」の場所は入れない
+    if (Object.values(s.likes || {}).filter((v) => v === "no").length * 2 >= Math.max(2, peopleCount)) return false;
     if (budget != null && s.priceMin != null && s.priceMin > budget) return false;
     if (style === "day" && s.genre === "bar") return false;
     if (s.genre === "stay") return false; // 宿は日帰りコースに入れない
     return true;
   });
-  const scored = pool.map((s) => ({ s, score: loveScore(s, peopleCount) })).sort((a, b) => b.score - a.score);
+  const scored = pool.map((s) => ({ s, score: loveScore(s, required) })).sort((a, b) => b.score - a.score);
   const seen = new Set();
   const courses = [];
   for (const { s: anchor } of scored.slice(0, 15)) {
@@ -145,14 +164,14 @@ export function buildCourses(spots, { stops = 3, style = "day", budget = null, b
       const key = picked.map((p) => p.id).sort().join("|");
       if (seen.has(key)) break;
       seen.add(key);
-      courses.push(timeline(picked, style, day, peopleCount));
+      courses.push(timeline(picked, style, day, required));
       break;
     }
   }
   return courses.sort((a, b) => b.score - a.score).slice(0, 3);
 }
 
-function timeline(picked, style, day, peopleCount) {
+function timeline(picked, style, day, required) {
   // 理想の時間帯順に並べてから、移動が往復にならないよう隣どうしを入れ替えて詰める
   let order = [...picked].sort((a, b) => idealMinute(a.genre, style) - idealMinute(b.genre, style));
   for (let pass = 0; pass < 2; pass++) {
@@ -191,7 +210,7 @@ function timeline(picked, style, day, peopleCount) {
     if (spot.priceMin != null) budget += spot.priceMin;
     else unknownPrice = true;
   });
-  const score = order.reduce((s, x) => s + loveScore(x, peopleCount), 0) - km * 0.25 - warnings.length;
+  const score = order.reduce((s, x) => s + loveScore(x, required), 0) - km * 0.25 - warnings.length;
   const area = order[0].station?.replace(/駅$/, "") || order[0].city || order[0].prefecture || "";
   return { stops, warnings, km, budget, unknownPrice, score, area, start: stops[0].arrive, end: stops[stops.length - 1].leave };
 }
