@@ -32,7 +32,7 @@ async function artifactBackend() {
   return {
     kind: "artifact",
     unavailable: db ? "" : "claude.ai にサインインして開くと、みんなで共有して使えます。",
-    features: { map: false, thumbnails: false, aiButton: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, members: false, lists: false, export: false, clipboardRead: false, geolocation: false },
+    features: { map: false, thumbnails: false, aiButton: aiOn, askAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, members: false, lists: false, export: false, clipboardRead: false, geolocation: false },
     shareNote: "一緒に使う人も claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
     readerNote: aiOn ? "本文を読み取り、「AIで読み取る」でClaudeが整理します（押した人の利用枠を使います）" : "本文をルールで読み取っています",
     subscribe(fn) {
@@ -79,6 +79,18 @@ async function artifactBackend() {
         for (const [k, v] of Object.entries(res)) if (v !== "" && v != null && (out[k] === "" || out[k] == null || out[k] === "other")) out[k] = v;
         if (res.lat != null && Number.isFinite(Number(res.lat))) { out.lat = Number(res.lat); out.lng = Number(res.lng); out.geoNote = "AIが推定した位置です"; }
         return out;
+      } catch (e) {
+        throw new Error(sampleError(e));
+      }
+    },
+    async ask(question, items) {
+      if (!aiOn) throw new Error("この表示ではAIを使えません");
+      const prompt = `行きたい場所を貯めたリストがあります。うろ覚えの質問に当てはまりそうな場所を、当てはまる順に最大5つ選んでください。\n` +
+        `当てはまるものがなければ空の配列にしてください。reason は「なぜそれっぽいか」を20字ほどで。\n` +
+        `返すJSON: {"picks":[{"id":"リストのid","reason":"理由"}]}\n\n質問: ${question}\n\nリスト:\n${JSON.stringify(items).slice(0, 60000)}`;
+      try {
+        const r = await sample.json(prompt);
+        return Array.isArray(r?.picks) ? r.picks : [];
       } catch (e) {
         throw new Error(sampleError(e));
       }

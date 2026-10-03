@@ -1,4 +1,4 @@
-// いきたいリスト — サーバー
+// あれどこ — サーバー
 // 依存パッケージなしで動く Node.js サーバー（AI解析だけ任意で @anthropic-ai/sdk を使う）。
 // データは data/<部屋ID>.json に保存し、変更は SSE で相手の画面にすぐ反映する。
 
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { analyzeText, GENRES } from "./lib/analyze.js";
 import { fetchPreview, cleanCaption, normalizeUrl } from "./lib/preview.js";
 import { geocode, geocodePlace } from "./lib/geo.js";
-import { aiEnabled, aiExtract } from "./lib/ai.js";
+import { aiEnabled, aiExtract, aiAsk } from "./lib/ai.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, "public");
@@ -284,6 +284,18 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (parts[3] === "ask" && method === "POST") {
+    if (!aiEnabled()) return send(res, 400, { error: "AIに聞くには、サーバーに ANTHROPIC_API_KEY の設定が必要です" });
+    const { q } = await readJson(req);
+    const question = String(q || "").trim().slice(0, 300);
+    if (!question) return send(res, 400, { error: "質問を入れてください" });
+    const names = Object.fromEntries(room.members.map((m) => [m.id, m.name]));
+    const genre = Object.fromEntries(GENRES.map((g) => [g.id, g.label]));
+    const items = room.items.map((s) => ({ id: s.id, name: s.placeName || s.title, genre: genre[s.genre], area: [s.prefecture, s.city, s.station].filter(Boolean).join(" "), priceMin: s.priceMin, status: s.status, addedBy: names[s.addedBy] || "", addedAt: (s.createdAt || "").slice(0, 10), tags: (s.tags || []).slice(0, 8), memo: s.memo || "", text: String(s.summary || s.caption || "").slice(0, 160) }));
+    try { return send(res, 200, { picks: await aiAsk(question, items) }); }
+    catch (e) { console.warn("[ai] ask", e.message); return send(res, 502, { error: "AIにうまく聞けませんでした。少し待ってからもう一度試してください" }); }
+  }
+
   if (parts[3] === "members") {
     if (parts.length === 4 && method === "POST") {
       const body = await readJson(req);
@@ -400,5 +412,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`いきたいリスト: http://localhost:${PORT}  (AI解析: ${aiEnabled() ? "ON" : "OFF"})`);
+  console.log(`あれどこ: http://localhost:${PORT}  (AI解析: ${aiEnabled() ? "ON" : "OFF"})`);
 });

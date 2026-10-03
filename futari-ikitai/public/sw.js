@@ -1,6 +1,6 @@
 // ホーム画面に追加できるようにするための最小限の Service Worker。
 // 画面のファイルだけキャッシュし、API は常にネットワークから取る。
-const CACHE = "ikitai-v3";
+const CACHE = "aredoko-v1";
 const SHELL = ["/", "/style.css", "/main.js", "/core.js", "/smart.js", "/util.js", "/lib/analyze.js", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {

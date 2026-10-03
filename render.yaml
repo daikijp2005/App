@@ -1,7 +1,7 @@
-# いきたいリスト（Webアプリ版）の Render Blueprint。リポジトリをつなぐと、この設定でサーバーと保存用ディスクが作られる。
+# あれどこ（Webアプリ版）の Render Blueprint。リポジトリをつなぐと、この設定でサーバーと保存用ディスクが作られる。
 services:
   - type: web
-    name: futari-ikitai
+    name: aredoko
     runtime: docker
     dockerfilePath: ./futari-ikitai/Dockerfile
     dockerContext: ./futari-ikitai

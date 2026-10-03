@@ -82,3 +82,22 @@ test("グループでは過半数が行きたい場所だけを選べる", () =>
   const ids = buildCourses(spots, { stops: 3, bothOnly: true, peopleCount: 4 })[0].stops.map((s) => s.spot.id).sort();
   assert.deepEqual(ids, ["a", "c"]);
 });
+
+test("うろ覚え検索", async () => {
+  const { fuzzySearch } = await import("../public/smart.js");
+  const now = new Date("2026-10-03T12:00:00").getTime();
+  const genres = [{ id: "cafe", label: "カフェ", words: ["カフェ"] }, { id: "sweets", label: "スイーツ", words: ["パフェ"] }];
+  const spots = [
+    { id: "1", placeName: "シーサイドカフェ", genre: "cafe", caption: "海を眺めながらラテ", priceMin: 800, addedBy: "m2", createdAt: "2026-09-01T00:00:00Z" },
+    { id: "2", placeName: "パーラー苺", genre: "sweets", caption: "苺パフェ", priceMin: 1800, addedBy: "m1", createdAt: "2026-09-30T00:00:00Z" },
+    { id: "3", placeName: "焼肉 大将", genre: "gourmet", caption: "", priceMin: 6000, addedBy: "m2", createdAt: "2026-09-29T00:00:00Z" },
+  ];
+  const ids = (q) => fuzzySearch(spots, q, { genres, members: { m1: "だいき", m2: "はるか" }, now }).results.map((r) => r.spot.id);
+  assert.deepEqual(ids("海が見えるカフェ"), ["1"]);
+  assert.deepEqual(ids("甘いやつ"), ["2"]);
+  assert.deepEqual(ids("はるかが見つけた安いとこ"), ["1"]);
+  assert.deepEqual(ids("最近のちょっといい店"), ["3"]);
+  assert.deepEqual(ids("オーシャン"), ["1"]);
+  assert.deepEqual(ids("存在しないもの"), []);
+  assert.deepEqual(ids("夜ごはん"), [], "「夜」ではなく「夜ごはん（ディナー）」として読む");
+});

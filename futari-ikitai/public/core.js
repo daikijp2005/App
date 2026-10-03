@@ -1,8 +1,8 @@
-// いきたいリスト — 画面（Webアプリとアーティファクトで共通）
+// あれどこ — 画面（Webアプリとアーティファクトで共通）
 // データの読み書きは backend に任せる。backend の形は README の「しくみ」を参照。
 import { GENRES, analyzeText } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
-import { openState, seasonOf, buildCourses, externalLinks, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes } from "./smart.js";
+import { openState, seasonOf, buildCourses, externalLinks, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch } from "./smart.js";
 
 const TINT = { cafe: "#efd5bd", sweets: "#f8cfdc", gourmet: "#f4cfae", bar: "#ddc8e6", nature: "#c9e3cf", sightseeing: "#eed7c0", art: "#d3d8f2", event: "#fbdfaa", shopping: "#cfe8ee", stay: "#f1cbc3", activity: "#cfe7c9", other: "#e6dfdc" };
 const STATUS = { want: "行きたい", planned: "予定あり", visited: "行った" };
@@ -49,7 +49,7 @@ const ICONS = {
   apple: "M12 7c-1-2-3-3-5-2s-3 4-2 8 3 7 5 7c1 0 1.5-.5 2-.5s1 .5 2 .5c2 0 4-3 5-6-2-1-3-3-2-5 .5-1 1-1.5 2-2-1-1.5-3-2-5-1-1 .5-1.5.5-2 0zM12 7c0-2 1-4 3-4",
 };
 const ic = (name, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;
-const LOGO = `<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="128" fill="var(--rose)"/><path d="M256 96c-69 0-124 54-124 122 0 90 124 198 124 198s124-108 124-198c0-68-55-122-124-122z" fill="var(--surface)"/><path d="M256 258c-6-5-56-41-56-75 0-18 14-33 32-33 10 0 19 5 24 12 5-7 14-12 24-12 18 0 32 15 32 33 0 34-50 70-56 75z" fill="var(--rose)"/></svg>`;
+const LOGO = `<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="128" fill="var(--rose)"/><path d="M256 92c-70 0-126 55-126 124 0 92 126 204 126 204s126-112 126-204c0-69-56-124-126-124z" fill="var(--surface)"/><path d="M220 196c0-22 16-38 37-38s37 15 37 35c0 27-37 29-37 56" fill="none" stroke="var(--rose)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><circle cx="257" cy="292" r="16" fill="var(--rose)"/></svg>`;
 const OPEN_ICON = { post: "insta", route: "train", car: "car", map: "map", apple: "apple", tabelog: "fork", reserve: "search", insta: "insta" };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -78,11 +78,19 @@ export function coordsFrom(text) {
 // ---------- 使い方スライド（最初に1回。設定からいつでも見られる） ----------
 const TOUR = [
   {
-    title: "見つけたら、リンクを貼るだけ",
-    text: "SNSで見つけたお店や場所のリンクを貼ると、ジャンル・場所・値段・営業時間を自動で読み取ります。",
+    title: "「あれ、どこだっけ？」をなくそう",
+    text: "SNSで見つけた行きたい場所は、リンクを貼るだけでメモ完了。ジャンル・場所・値段・営業時間まで自動で読み取ります。",
     art: () => `<div class="tour-mock">
       <div class="adder" style="margin:0 0 12px;box-shadow:none;border:1.5px solid var(--line)">${ic("insta")}<span class="sub" style="flex:1;padding:8px 4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">instagram.com/p/C9x…</span><span class="btn rose sm">追加</span></div>
       <div class="mini" style="flex:none;width:100%;box-shadow:var(--shadow-sm)"><span class="ph" style="--tint:${TINT.cafe}">☕</span><span class="tx"><b>Cafe Lumière 表参道</b><span class="sub">表参道駅 ・ ¥650〜 ・ 10:00〜19:00</span><span class="tag open">営業中</span></span></div></div>`,
+  },
+  {
+    title: "うろ覚えでも、見つかる",
+    text: "店名を忘れても大丈夫。「海が見えるカフェ」「先月見つけた安いとこ」のように、覚えているままに探せます。",
+    art: () => `<div class="tour-mock">
+      <div class="search" style="margin-bottom:12px;background:var(--surface)">${ic("search", "sm")}<span style="padding:9px 0">海が見えるカフェ</span></div>
+      <div class="search-info" style="margin:0 0 10px"><span class="tag">海っぽい</span><span class="tag">コーヒーっぽい</span></div>
+      <div class="mini" style="flex:none;width:100%;box-shadow:var(--shadow-sm)"><span class="ph" style="--tint:${TINT.cafe}">☕</span><span class="tx"><b>シーサイドカフェ</b><span class="sub">はるかが先月見つけた</span></span></div></div>`,
   },
   {
     title: "誰とでも、ひとつのリストに",
@@ -117,7 +125,7 @@ export function showOnboarding(onDone) {
   el.setAttribute("aria-modal", "true");
   el.setAttribute("aria-label", "使い方");
   el.innerHTML = `
-    <div class="tour-top"><span class="brand">${LOGO}<b>いきたいリスト</b></span><button class="btn sm line" data-skip>スキップ</button></div>
+    <div class="tour-top"><span class="brand">${LOGO}<b>あれどこ</b></span><button class="btn sm line" data-skip>スキップ</button></div>
     <div class="tour-track" tabindex="0">${TOUR.map((t, i) => `<section class="tour-slide" aria-label="${i + 1} / ${TOUR.length}">${t.art()}<h2>${esc(t.title)}</h2><p>${esc(t.text)}</p></section>`).join("")}</div>
     <div class="tour-bottom"><div class="tour-dots">${TOUR.map((_, i) => `<button aria-label="${i + 1}枚目" data-dot="${i}"></button>`).join("")}</div><button class="btn rose" data-next>次へ</button></div>`;
   document.body.append(el);
@@ -220,7 +228,7 @@ export function startApp(backend, mount = document.body) {
 
   // ---------- 骨組み ----------
   function render() {
-    document.title = S.settings.name;
+    document.title = `${S.settings.name} | あれどこ`;
     const pend = pending().length;
     const ppl = peopleList();
     $app.innerHTML = `
@@ -245,18 +253,18 @@ export function startApp(backend, mount = document.body) {
   function renderView() {
     const v = $("view");
     if (!v) return;
-    if (!S.loaded) { v.innerHTML = `<div class="empty"><span class="thinking"><span class="spinner"></span>リストを読み込んでいます</span></div>`; return; }
+    if (!S.loaded) { v.innerHTML = `<div class="empty"><span class="thinking"><span class="spinner"></span>記憶をたどっています…</span></div>`; return; }
     if (B.unavailable) { v.innerHTML = `<div class="empty"><h3>この表示ではリストを開けません</h3><p>${esc(B.unavailable)}</p></div>`; return; }
     ({ home: renderHome, match: renderMatch, plan: renderPlan, memories: renderMemories }[S.view] || renderHome)(v);
   }
 
   // ---------- ホーム ----------
   function filtered() {
-    const q = S.q.trim().toLowerCase();
-    let items = S.spots.filter((it) => (it.status || "want") !== "visited");
+    const q = S.q.trim();
+    // 探すときは行った場所も含める（「前に行ったあそこ」も探せるように）
+    let items = q ? [...S.spots] : S.spots.filter((it) => (it.status || "want") !== "visited");
     if (S.seg === "both") items = items.filter(isBoth);
     if (S.seg === "planned") items = items.filter((it) => it.status === "planned");
-    if (q) items = items.filter((it) => [it.title, it.placeName, it.address, it.station, it.city, it.prefecture, it.memo, it.caption, ...(it.tags || [])].join(" ").toLowerCase().includes(q));
     const f = S.f;
     if (f.genres.size) items = items.filter((it) => f.genres.has(it.genre));
     if (f.price) items = items.filter((it) => priceBucket(it).id === f.price);
@@ -272,6 +280,12 @@ export function startApp(backend, mount = document.body) {
       love: (a, b) => yesIds(b).length - yesIds(a).length || (b.createdAt || "").localeCompare(a.createdAt || ""),
       deadline: (a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999"),
     }[S.sortBy] || (() => 0);
+    if (q) {
+      const { results, understood } = fuzzySearch(items, q, { travelOf, genres: GENRES, members: Object.fromEntries(peopleList().map((p) => [p.id, p.name])) });
+      S.understood = understood;
+      return results.map((r) => r.spot);
+    }
+    S.understood = [];
     return items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || by(a, b));
   }
   const activeFilterCount = () => S.f.genres.size + [S.f.price, S.f.travel, S.f.area, S.f.who, S.f.openNow].filter(Boolean).length;
@@ -349,6 +363,7 @@ export function startApp(backend, mount = document.body) {
     const opt = (val, label, cur) => `<option value="${val}" ${cur === val ? "selected" : ""}>${label}</option>`;
     let list;
     if (!S.spots.length) list = welcomeEmpty();
+    else if (S.q.trim()) list = searchResults(items);
     else if (!items.length) list = `<div class="empty"><p>条件に合うスポットはありません。</p><button class="btn sm" data-act="clear">絞り込みを解除</button></div>`;
     else if (S.listMode === "map") list = `<div id="map"></div><p class="sub" style="margin-top:8px">位置がわかっているスポットだけを表示しています。</p>`;
     else if (S.groupBy === "none") list = `<div class="grid">${items.map(card).join("")}</div>`;
@@ -379,7 +394,7 @@ export function startApp(backend, mount = document.body) {
           <div class="seg" role="tablist">${[["all", "すべて"], ...(solo() ? [] : [["both", V().all]]), ["planned", "予定あり"]].map(([k, l]) => `<button data-seg="${k}" class="${S.seg === k ? "on" : ""}">${l}</button>`).join("")}</div>
         </div>
         <div class="controls">
-          <label class="search">${ic("search", "sm")}<input id="q" type="search" placeholder="店名・エリア・メモで探す" value="${esc(S.q)}" aria-label="検索"></label>
+          <label class="search">${ic("search", "sm")}<input id="q" type="search" placeholder="あれ、どこだっけ？ うろ覚えでOK" value="${esc(S.q)}" aria-label="検索"></label>
           <button class="icon-btn" data-act="filters" aria-label="絞り込み">${ic("filter")}${activeFilterCount() ? `<span class="badge num">${activeFilterCount()}</span>` : ""}</button>
           ${F.map ? `<button class="icon-btn" data-act="mode" aria-label="${S.listMode === "map" ? "一覧で見る" : "地図で見る"}">${ic(S.listMode === "map" ? "grid" : "map")}</button>` : ""}
         </div>
@@ -391,6 +406,31 @@ export function startApp(backend, mount = document.body) {
     if (S.listMode === "map" && items.length) renderMap(items);
   }
 
+  function searchResults(items) {
+    const ask = F.askAI ? `<button class="btn sm rose" data-act="ask">${ic("sparkle", "sm")}AIに聞く</button>` : "";
+    const head = `<div class="search-info">${S.understood.length ? `<span class="sub">こう読み取りました</span>${S.understood.map((u) => `<span class="tag">${esc(u)}</span>`).join("")}` : `<span class="sub">うろ覚え検索</span>`}${ask}</div>`;
+    if (!items.length) return `${head}<div class="empty"><h3>うーん、思い出せません…</h3><p>言い方を変えてみてください（例:「海が見えるカフェ」「先月見つけた安いとこ」）。${F.askAI ? "文章のまま「AIに聞く」こともできます。" : ""}</p></div>`;
+    return `${head}<h2 class="group-h">「${esc(S.q.trim())}」っぽい場所 <small class="num">${items.length}件</small></h2><div class="grid">${items.map(card).join("")}</div>`;
+  }
+
+  async function openAsk() {
+    const q = S.q.trim();
+    if (!q) return;
+    const { root } = sheet(`${head("AIに聞く")}<p class="sub" style="margin-top:0">「${esc(q)}」</p><div id="ask-out"><div class="empty"><span class="thinking"><span class="spinner"></span>記憶をたどっています…</span></div></div>`);
+    const out = root.querySelector("#ask-out");
+    try {
+      const names = Object.fromEntries(peopleList().map((p) => [p.id, p.name]));
+      const picks = await B.ask(q, S.spots.map((s) => ({ id: s.id, name: nameOf(s), genre: genreOf(s.genre).label, area: [s.prefecture, s.city, s.station].filter(Boolean).join(" "), price: formatPrice(s), status: STATUS[s.status || "want"], addedBy: names[s.addedBy] || "", addedAt: (s.createdAt || "").slice(0, 10), tags: (s.tags || []).slice(0, 8).join(" "), memo: s.memo || "", text: String(s.summary || s.caption || "").slice(0, 160) })));
+      const found = (picks || []).map((p) => ({ ...p, spot: S.spots.find((s) => s.id === p.id) })).filter((p) => p.spot);
+      out.innerHTML = found.length
+        ? found.map((p) => `<button class="mini" data-ask-open="${esc(p.spot.id)}" style="flex:none;width:100%;margin-bottom:8px"><span ${cover(p.spot, "ph")}>${img(p.spot) || genreOf(p.spot.genre).emoji}</span><span class="tx"><b>${esc(nameOf(p.spot))}</b><span class="sub">${esc(p.reason || "")}</span></span></button>`).join("")
+        : `<div class="empty"><h3>見つかりませんでした</h3><p>まだリストに入っていないのかもしれません。</p></div>`;
+    } catch (e) {
+      out.innerHTML = `<div class="notice warn">${esc(e?.message || "うまく聞けませんでした")}</div>`;
+    }
+    out.addEventListener("click", (e) => { const b = e.target.closest("[data-ask-open]"); if (b) openDetail(b.dataset.askOpen); });
+  }
+
   function welcomeEmpty() {
     const steps = [
       solo() ? ["1", "SNSで探す", "気になるお店や場所を見つけたら、共有メニューからリンクをコピーします。"]
@@ -398,7 +438,7 @@ export function startApp(backend, mount = document.body) {
       ["2", "出発地を登録", "家や職場、よく集まる駅を登録すると、移動時間の目安が出ます。"],
       ["3", "リンクを貼る", "SNSの共有リンクを貼ると、ジャンル・場所・値段を読み取ります。"],
     ];
-    return `<div class="empty"><h3>まだ行きたい場所はありません</h3><p>SNSで「ここ行きたい！」と思ったら、上の欄にリンクを貼りましょう。</p>
+    return `<div class="empty"><h3>まだ「あれどこ？」はゼロです</h3><p>SNSで「ここ行きたい！」と思ったら、上の欄にリンクを貼っておきましょう。未来のあなたが感謝します。</p>
       <div class="steps">${steps.map(([n, t, d]) => `<div class="step"><i>STEP ${n}</i><b>${t}</b><span class="sub">${d}</span></div>`).join("")}</div></div>`;
   }
 
@@ -607,7 +647,7 @@ export function startApp(backend, mount = document.body) {
           <div style="min-width:0"><b>${esc(nameOf(it))}</b> ${it.rating ? `<span class="stars-ro">${"★".repeat(it.rating)}</span>` : ""}
           <div class="sub">${it.visitedAt ? jpDate(it.visitedAt) : ""}${it.city ? ` ・ ${esc(it.city)}` : ""}</div>
           ${it.review ? `<div style="font-size:13.5px;margin-top:2px">${esc(it.review)}</div>` : ""}</div></div>`).join("")}</div>`).join("")
-        : `<div class="empty"><p>行った場所は、★と感想つきでここに残ります。スポットを開いて「行った」にしてみましょう。</p></div>`}`;
+        : `<div class="empty"><p>行った場所は、★と感想つきでここに残ります。「あれどこだっけ？」が「あれ良かったね」に変わる場所です。</p></div>`}`;
   }
 
   // ---------- 投票・書き込み ----------
@@ -795,7 +835,7 @@ export function startApp(backend, mount = document.body) {
       for (const k of ["url", "platform", "title", "caption", "image", "author", "genre", "placeName", "address", "prefecture", "city", "station", "walkMin", "priceMin", "priceMax", "priceNote", "hours", "closed", "deadline", "tags", "summary", "memo", "lat", "lng"]) if (data[k] !== undefined) body[k] = data[k];
       if (isNew) {
         const created = await act(() => B.addSpot(body));
-        if (created) { close(); toast(`「${nameOf(body)}」を追加しました`); }
+        if (created) { close(); toast("メモしました。もう「あれどこ？」とは言わせません"); }
         else e.target.disabled = false;
       } else if (await patch(id, body, "保存しました")) openDetail(id);
       else e.target.disabled = false;
@@ -1186,6 +1226,7 @@ export function startApp(backend, mount = document.body) {
     if (a === "settings") openSettings();
     if (a === "lists") openLists();
     if (a === "invite") openInvite();
+    if (a === "ask") openAsk();
     if (a === "bases") openSettings("bases");
     if (a === "add") openAdd();
     if (a === "filters") openFilters();

@@ -295,3 +295,97 @@ export const PREF_TILES = [
   ["熊本県", 0, 9], ["宮崎県", 1, 9], ["鹿児島県", 0, 10], ["沖縄県", 0, 12],
 ];
 export const prefShort = (p) => (p === "北海道" ? "北海道" : p.replace(/[都府県]$/, ""));
+
+// ---------- うろ覚え検索 ----------
+// 「海が見えるカフェ」「先月はるかが見つけた安いとこ」のような、あいまいな記憶から探す
+const toHira = (s) => String(s || "").toLowerCase()
+  .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+  .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+  .replace(/[\s　]+/g, " ");
+
+const FUZZY_WORDS = [
+  ["海", "うみ", "ビーチ", "海辺", "海岸", "オーシャン", "シーサイド", "湘南", "港"],
+  ["夜景", "夜", "ナイト", "ライトアップ", "イルミネーション", "イルミ"],
+  ["甘い", "あまい", "甘いもの", "スイーツ", "デザート", "パフェ", "ケーキ", "かき氷", "アイス", "ジェラート", "プリン", "パンケーキ", "クレープ"],
+  ["コーヒー", "珈琲", "カフェ", "喫茶", "ラテ"],
+  ["肉", "焼肉", "ステーキ", "ハンバーグ", "焼き鳥", "ジンギスカン", "bbq"],
+  ["魚", "寿司", "鮨", "すし", "海鮮", "刺身", "魚介"],
+  ["麺", "ラーメン", "うどん", "そば", "蕎麦", "パスタ", "つけ麺"],
+  ["酒", "お酒", "飲み", "飲み会", "バー", "ワイン", "ビール", "日本酒", "居酒屋", "ハイボール"],
+  ["花", "桜", "さくら", "紅葉", "ネモフィラ", "ひまわり", "紫陽花", "あじさい", "花畑", "梅"],
+  ["自然", "山", "森", "公園", "緑", "滝", "湖", "川", "高原", "ハイキング"],
+  ["温泉", "湯", "サウナ", "スパ", "旅館", "露天風呂"],
+  ["雨", "屋内", "室内", "美術館", "博物館", "水族館", "映画", "ミュージアム"],
+  ["映え", "おしゃれ", "オシャレ", "フォト", "写真", "インスタ映え", "かわいい"],
+  ["レトロ", "昭和", "古民家", "純喫茶", "懐かしい"],
+  ["子ども", "子供", "こども", "キッズ", "動物園", "水族館", "ファミリー"],
+  ["パン", "ベーカリー", "クロワッサン", "サンド"],
+  ["辛い", "からい", "カレー", "スパイス", "麻婆", "激辛"],
+  ["朝", "モーニング", "朝ごはん", "ブランチ"],
+  ["ランチ", "昼", "昼ごはん", "定食"],
+  ["ディナー", "夜ごはん", "記念日", "コース"],
+  ["体験", "ワークショップ", "陶芸", "手作り", "アクティビティ"],
+];
+const FUZZY_INDEX = FUZZY_WORDS.flatMap((g) => g.map((w) => ({ w: toHira(w), g }))).sort((a, b) => b.w.length - a.w.length);
+// 意味を持つ言葉（条件として扱う）
+const FUZZY_RULES = [
+  { words: ["安い", "やすい", "安め", "プチプラ", "コスパ", "お手頃", "手頃"], label: "安め", test: (s) => s.priceMin != null && s.priceMin <= 1500 },
+  { words: ["高級", "ちょっといい", "贅沢", "ご褒美", "高め"], label: "ちょっといい", test: (s) => s.priceMin != null && s.priceMin >= 5000 },
+  { words: ["無料", "タダ", "ただ", "フリー"], label: "無料", test: (s) => s.priceMin === 0 },
+  { words: ["近い", "近く", "近場", "近所", "すぐ"], label: "近い", test: (s, c) => (c.travelOf(s)?.best ?? 999) <= 30 },
+  { words: ["遠い", "遠出", "旅行", "遠く"], label: "遠出", test: (s, c) => (c.travelOf(s)?.best ?? 0) >= 90 },
+  { words: ["最近", "この前", "このまえ", "こないだ", "先週", "新しい"], label: "最近追加", test: (s, c) => c.now - new Date(s.createdAt || 0) <= 16 * 86400000 },
+  { words: ["先月", "前に", "だいぶ前", "昔"], label: "少し前に追加", test: (s, c) => c.now - new Date(s.createdAt || 0) >= 14 * 86400000 },
+  { words: ["期間限定", "限定", "もうすぐ終わる", "期限"], label: "期間限定", test: (s) => Boolean(s.deadline) },
+  { words: ["行った", "いった", "行ったこと"], label: "行った場所", test: (s) => s.status === "visited" },
+  { words: ["予定", "決まった"], label: "予定あり", test: (s) => s.status === "planned" },
+  { words: ["人気", "みんな", "マッチ", "両想い"], label: "♡が多い", test: (s) => Object.values(s.likes || {}).filter((v) => v === true).length >= 2 },
+];
+const FILLERS = /(っぽい|みたいな|みたいの|ような|ところ|とこ|場所|お店|やつ|って|けど|だっけ|かな|どこ|あれ|あの|その|見える|見つけた|見つけ|見た|行きたい|言ってた|気になる|教えて|探して|ある)/g;
+
+// 文から「知っている言葉」（人の名前・条件・言いかえ辞書）を拾い、残りはおまけの手がかりにする
+export function fuzzySearch(spots, query, ctx = {}) {
+  const c = { travelOf: () => null, members: {}, genres: [], now: Date.now(), ...ctx };
+  let q = toHira(query);
+  if (!q.trim()) return { results: [], understood: [] };
+  const understood = new Set();
+  const conds = [];
+  const words = [];
+  for (const [id, name] of Object.entries(c.members)) {
+    const n = toHira(name);
+    if (n && q.includes(n)) { conds.push({ test: (s) => s.addedBy === id }); understood.add(`${name}が見つけた`); q = q.split(n).join(" "); }
+  }
+  for (const r of FUZZY_RULES) {
+    const w = [...r.words].map(toHira).sort((x, y) => y.length - x.length).find((x) => q.includes(x));
+    if (w) { conds.push(r); understood.add(r.label); q = q.split(w).join(" "); }
+  }
+  // 長い言葉から先に当てる（「夜ごはん」を「夜」と読まないように）
+  const used = new Set();
+  for (const { w, g } of FUZZY_INDEX) {
+    if (used.has(g) || !q.includes(w)) continue;
+    used.add(g);
+    words.push({ t: w, alts: g.map(toHira), required: true });
+    understood.add(`${g[0]}っぽい`);
+    q = q.split(w).join(" ");
+  }
+  for (const t of q.replace(FILLERS, " ").split(/[\s、。・！？!?がのでにをとへもはや]+/)) {
+    if (t.length >= 2) words.push({ t, alts: [t], required: false });
+  }
+  const required = words.filter((w) => w.required);
+  const results = [];
+  for (const s of spots) {
+    if (!conds.every((r) => r.test(s, c))) continue;
+    const g = c.genres.find((x) => x.id === s.genre);
+    const hay = toHira([s.placeName, s.title, s.caption, s.summary, s.memo, s.address, s.station, s.city, s.prefecture, g?.label, ...(g?.words || []), ...(s.tags || []), ...(s.comments || []).map((x) => x.text)].join(" "));
+    let score = conds.length * 2;
+    const hits = words.filter((w) => hay.includes(w.t) || w.alts.some((x) => hay.includes(x)));
+    for (const w of hits) score += hay.includes(w.t) ? 3 : 2;
+    // 辞書にある言葉が1つでもあれば、どれかに当たること。なければ残りの手がかりのどれかに当たること
+    if (required.length ? !hits.some((w) => w.required) : !conds.length && !hits.length) continue;
+    if (hits.length === words.length) score += 2;
+    if ((s.status || "want") !== "visited") score += 0.3;
+    results.push({ spot: s, score });
+  }
+  results.sort((a, b) => b.score - a.score || (b.spot.createdAt || "").localeCompare(a.spot.createdAt || ""));
+  return { results, understood: [...understood] };
+}

@@ -67,3 +67,26 @@ export async function aiExtract({ url, platform, title, caption, image = null })
     return null;
   }
 }
+
+// うろ覚えの質問に当てはまりそうなスポットを選んでもらう
+let askFormat = null;
+export async function aiAsk(question, items) {
+  if (!aiEnabled()) return null;
+  const { client } = await getClient();
+  if (!askFormat) {
+    const { zodOutputFormat } = await import("@anthropic-ai/sdk/helpers/zod");
+    const { z } = await import("zod/v4");
+    askFormat = zodOutputFormat(z.object({ picks: z.array(z.object({ id: z.string(), reason: z.string().describe("なぜ当てはまりそうか、20字ほど") })).max(5) }));
+  }
+  const response = await client.messages.parse({
+    model: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
+    max_tokens: 2000,
+    output_config: { effort: "low", format: askFormat },
+    messages: [{
+      role: "user",
+      content: `行きたい場所を貯めたリストがあります。うろ覚えの質問に当てはまりそうな場所を、当てはまる順に最大5つ選んでください。当てはまるものがなければ空にしてください。\n\n<question>${question}</question>\n<list>${JSON.stringify(items).slice(0, 60000)}</list>`,
+    }],
+  });
+  if (response.stop_reason === "refusal") return [];
+  return response.parsed_output?.picks || [];
+}

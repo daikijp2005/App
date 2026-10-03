@@ -48,7 +48,7 @@ function webBackend(room, meta) {
   const meId = () => { const m = local.get(`me.${id}`); return current.members.some((x) => x.id === m) ? m : null; };
   return {
     kind: "web",
-    features: { map: true, thumbnails: true, aiButton: false, aiImage: meta.ai, ics: true, invite: true, members: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
+    features: { map: true, thumbnails: true, aiButton: false, askAI: meta.ai, aiImage: meta.ai, ics: true, invite: true, members: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
     readerNote: meta.ai ? "リンク先を開いて読み取り、AI（Claude）で整理しています" : "リンク先を開いてルールで読み取っています（サーバーに ANTHROPIC_API_KEY を設定するとAIで読み取ります）",
     subscribe(fn) {
       listener = fn;
@@ -82,6 +82,7 @@ function webBackend(room, meta) {
       if (draft.url && !draft.autoRead && draft.warnings?.length) draft.error = "リンク先を開けませんでした（ログインが必要な投稿など）。本文を貼ると読み取れます。";
       return draft;
     },
+    async ask(q) { const r = await api(`/rooms/${id}/ask`, { method: "POST", body: { q } }); return r.picks || []; },
     async locate(q) { try { return await api(`/geocode?q=${encodeURIComponent(q)}`); } catch { return null; } },
     lists: () => lists.all().map((l) => ({ ...l, url: `/r/${l.id}`, current: l.id === id })),
     newListUrl: () => "/new",
@@ -90,7 +91,7 @@ function webBackend(room, meta) {
   };
 }
 
-const LOGO = `<svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="128" fill="var(--rose)"/><path d="M256 96c-69 0-124 54-124 122 0 90 124 198 124 198s124-108 124-198c0-68-55-122-124-122z" fill="var(--surface)"/><path d="M256 258c-6-5-56-41-56-75 0-18 14-33 32-33 10 0 19 5 24 12 5-7 14-12 24-12 18 0 32 15 32 33 0 34-50 70-56 75z" fill="var(--rose)"/></svg>`;
+const LOGO = `<svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="128" fill="var(--rose)"/><path d="M256 92c-70 0-126 55-126 124 0 92 126 204 126 204s126-112 126-204c0-69-56-124-126-124z" fill="var(--surface)"/><path d="M220 196c0-22 16-38 37-38s37 15 37 35c0 27-37 29-37 56" fill="none" stroke="var(--rose)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><circle cx="257" cy="292" r="16" fill="var(--rose)"/></svg>`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ---------- リストを作る（誰と使う？ → 名前） ----------
@@ -99,6 +100,7 @@ function createFlow() {
   let type = null;
   const stepType = () => {
     document.body.innerHTML = `<div class="welcome">${LOGO}
+      <p class="brand-line"><b>あれどこ</b>行きたい場所、もう忘れない。</p>
       <div class="steps-bar"><i class="on"></i><i></i></div>
       <h1>誰と使いますか？</h1>
       <p>使う相手ごとにリストを作れます。あとから設定で変えられます。</p>
@@ -170,7 +172,7 @@ async function boot() {
     return;
   }
   lists.remember(room);
-  document.title = `${room.name} | いきたいリスト`;
+  document.title = `${room.name} | あれどこ`;
   const app = startApp(webBackend(room, meta));
   const add = params.get("add");
   if (params.has("add") || params.has("invite")) history.replaceState(null, "", `/r/${room.id}`);
