@@ -689,7 +689,7 @@ function scheduleReminder() {
 
   reminderTimer = setTimeout(() => {
     if (!isRecorded(toDateStr(new Date()))) {
-      const n = new Notification("家計簿の記録を忘れていませんか？", {
+      const n = new Notification("カネミル：今日の支出を記録しましたか？", {
         body: "今日の支出を記録しましょう。支出がなければ「今日は支出なし」を押してください。",
         tag: "budget-reminder",
       });
@@ -749,12 +749,12 @@ async function downloadIcs() {
     `DTSTART:${day}T${h}${m}00`,
     "DURATION:PT5M",
     "RRULE:FREQ=DAILY",
-    "SUMMARY:家計簿をつける",
+    "SUMMARY:カネミルで支出を記録する",
     `DESCRIPTION:今日の支出を記録しましょう。\\n${url}`,
     `URL:${url}`,
     "BEGIN:VALARM",
     "ACTION:DISPLAY",
-    "DESCRIPTION:家計簿をつける",
+    "DESCRIPTION:カネミルで支出を記録する",
     "TRIGGER:PT0M",
     "END:VALARM",
     "END:VEVENT",
@@ -769,7 +769,7 @@ async function downloadIcs() {
       return;
     }
     try {
-      await downloads.save({ filename: "家計簿リマインダー.ics", data });
+      await downloads.save({ filename: "カネミル_リマインダー.ics", data });
     } catch (e) {
       if (e?.code !== "cancelled" && e?.code !== "declined") showToast("カレンダー用ファイルを保存できませんでした");
     }
@@ -778,7 +778,7 @@ async function downloadIcs() {
   const blob = new Blob([data], { type: "text/calendar" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "家計簿リマインダー.ics";
+  a.download = "カネミル_リマインダー.ics";
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

@@ -148,7 +148,7 @@ select:focus-visible {
   margin: 0 0 0.15rem;
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   color: var(--accent);
   text-transform: uppercase;
 }
