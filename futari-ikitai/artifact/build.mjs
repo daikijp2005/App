@@ -15,6 +15,7 @@ const bundle = [
   flatten(read("lib/prompts.js")),
   flatten(read("public/util.js")),
   flatten(read("public/smart.js")),
+  flatten(read("public/art.js")),
   flatten(read("public/core.js")),
   flatten(read("artifact/backend.js")),
 ].join("\n");

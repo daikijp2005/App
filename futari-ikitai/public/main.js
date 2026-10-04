@@ -12,7 +12,7 @@ const lists = {
   all: () => local.get("lists", []),
   remember(room) {
     const rest = lists.all().filter((l) => l.id !== room.id);
-    local.set("lists", [{ id: room.id, name: room.name, type: room.type || "couple", count: room.items?.length ?? null, at: Date.now() }, ...rest].slice(0, 30));
+    local.set("lists", [{ id: room.id, name: room.name, type: room.type || "couple", count: room.items?.length ?? null, members: (room.members || []).slice(0, 50).map((m) => ({ id: m.id, name: m.name, color: m.color })), at: Date.now() }, ...rest].slice(0, 30));
     local.set("lastRoom", room.id);
   },
   forget(id) {
@@ -48,7 +48,7 @@ function webBackend(room, meta) {
   const meId = () => { const m = local.get(`me.${id}`); return current.members.some((x) => x.id === m) ? m : null; };
   return {
     kind: "web",
-    features: { map: true, thumbnails: true, aiButton: meta.ai, aiRead: meta.ai, codes: true, askAI: meta.ai, routeAI: meta.ai, aiImage: meta.ai, ics: true, invite: true, members: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
+    features: { map: true, thumbnails: true, aiButton: meta.ai, aiRead: meta.ai, codes: true, askAI: meta.ai, routeAI: meta.ai, aiImage: meta.ai, ics: true, invite: true, members: true, memberList: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
     readerNote: meta.ai ? "リンク先を開いて読み取り、AI（Claude）で整理しています" : "リンク先を開いてルールで読み取っています（サーバーに ANTHROPIC_API_KEY を設定するとAIで読み取ります）",
     subscribe(fn) {
       listener = fn;
@@ -87,7 +87,7 @@ function webBackend(room, meta) {
     },
     async ask(q) { const r = await api(`/rooms/${id}/ask`, { method: "POST", body: { q } }); return r.picks || []; },
     async locate(q) { try { return await api(`/geocode?q=${encodeURIComponent(q)}`); } catch { return null; } },
-    lists: () => lists.all().map((l) => ({ ...l, url: `/r/${l.id}`, current: l.id === id })),
+    lists: () => lists.all().map((l) => ({ ...l, url: `/r/${l.id}`, current: l.id === id, members: l.id === id ? current.members.map((m) => ({ id: m.id, name: m.name, color: m.color, avatar: m.avatar || "" })) : l.members || [] })),
     newListUrl: () => "/new",
     shareCode: async () => current.code || "",
     async joinByCode(code) {

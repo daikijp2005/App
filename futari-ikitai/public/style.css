@@ -498,3 +498,50 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 /* コースの費用内訳 */
 .cost-break { margin-top: 6px; line-height: 1.6; }
 .cost-break b { color: var(--ink); }
+
+/* サムネイルのイラスト（写真がないとき）。写真はその上に重ねる */
+.cover, .hero, .mini .ph, .memory .ph, .photo-pick .ph { position: relative; overflow: hidden; }
+.art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cover img, .hero img, .mini .ph img, .memory .ph img, .photo-pick .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.cover .tl, .cover .tr { z-index: 2; }
+:root[data-theme="dark"] .art { filter: brightness(.88) saturate(.95); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .art { filter: brightness(.88) saturate(.95); } }
+
+/* 写真を選ぶ（編集画面） */
+.photo-pick { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; margin-bottom: 14px; }
+.photo-pick .ph { width: 112px; aspect-ratio: 4 / 3; border-radius: 14px; box-shadow: var(--shadow-sm); }
+.photo-pick .sub { display: block; font-size: 12px; }
+
+/* ほかのアプリで開く：アプリごとに1行、同じアプリの操作は横に並べる */
+.apps { margin: 14px 0 6px; background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); padding: 4px 12px 8px; }
+.apps-h { font-size: 11.5px; font-weight: 800; color: var(--muted); letter-spacing: .08em; padding: 10px 2px 4px; }
+.app-row { display: grid; grid-template-columns: 34px 88px 1fr; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.apps-h + .app-row { border-top: 0; }
+.app-name { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-acts { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.app-acts::-webkit-scrollbar { display: none; }
+.app-act { flex: 0 0 auto; display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.app-act:hover { border-color: var(--rose); color: var(--rose); }
+.app-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
+.app-ic svg { width: 24px; height: 24px; }
+.app-gmaps, .app-google, .app-apple { background: #fff; }
+.app-apple { background: linear-gradient(160deg, #fdfdfd, #e7ecef); }
+.app-transit { background: #ff0033; }
+.app-instagram { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285aeb 90%); }
+.app-tiktok, .app-x, .app-threads { background: #111; }
+.app-youtube { background: #ff0000; }
+.app-tabelog { background: #f08300; }
+.app-lemon8 { background: #f7d33c; }
+.app-facebook { background: #1877f2; }
+.app-web { background: #7a8794; }
+.app-calendar { background: #4285f4; }
+.app-line { background: #06c755; }
+.app-copy { background: #8a7d82; }
+@media (max-width: 380px) { .app-row { grid-template-columns: 34px 1fr; } .app-acts { grid-column: 1 / -1; } }
+
+/* グループ一覧のメンバー */
+.g-members { display: flex; align-items: center; gap: 0; margin-top: 5px; min-width: 0; }
+.g-members .av { margin-left: -6px; box-shadow: 0 0 0 2px var(--surface); }
+.g-members .av:first-child { margin-left: 0; }
+.g-members .more { background: var(--surface-2); color: var(--ink); font-size: 9.5px; }
+.g-names { margin-left: 8px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

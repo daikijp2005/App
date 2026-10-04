@@ -294,6 +294,44 @@ export function externalLinks(s, base) {
   return links;
 }
 
+// ほかのアプリで開くリンクを、アプリごとにまとめる（同じアプリの操作は横に並べる）
+// 返す形: [{ section, apps: [{ app, name, actions: [{ label, url } | { label, act }] }] }]
+export function appLinks(s, base, { fromName = "", calDate = "" } = {}) {
+  const q = spotQuery(s);
+  const name = s.placeName || s.title || q;
+  const dest = s.lat != null ? `${s.lat},${s.lng}` : q;
+  const apple = (flag) => `https://maps.apple.com/?${base && flag ? `saddr=${base.lat},${base.lng}&` : ""}daddr=${enc(dest || "")}${flag ? `&dirflg=${flag}` : ""}&q=${enc(name || "")}`;
+  const post = s.url ? { label: "元の投稿", url: s.url } : null;
+  const plat = s.platform || "web";
+  const food = ["gourmet", "cafe", "sweets", "bar"].includes(s.genre);
+  const map = [
+    { app: "gmaps", name: "Googleマップ", actions: [{ label: "地図", url: mapsUrl(s) }, { label: "電車で", url: routeUrl(s, base, "transit") }, { label: "車で", url: routeUrl(s, base, "driving") }, { label: "歩いて", url: routeUrl(s, base, "walking") }] },
+    { app: "apple", name: "Appleマップ", actions: [{ label: "地図", url: `https://maps.apple.com/?q=${enc(name || "")}${s.lat != null ? `&ll=${s.lat},${s.lng}` : ""}` }, { label: "電車で", url: apple("r") }, { label: "車で", url: apple("d") }, { label: "歩いて", url: apple("w") }] },
+  ];
+  const toName = s.station || s.placeName || s.address;
+  if (fromName && toName) map.push({ app: "transit", name: "乗換案内", actions: [{ label: "経路と運賃", url: yahooTransitUrl(fromName, toName) }] });
+  const sns = [];
+  if (q || post) {
+    sns.push({ app: "instagram", name: "Instagram", actions: [...(plat === "instagram" && post ? [post] : []), ...(q ? [{ label: "ほかの投稿", url: `https://www.instagram.com/explore/search/keyword/?q=${enc(name)}` }] : [])] });
+    sns.push({ app: "tiktok", name: "TikTok", actions: [...(plat === "tiktok" && post ? [post] : []), ...(q ? [{ label: "動画を探す", url: `https://www.tiktok.com/search?q=${enc(name)}` }] : [])] });
+    sns.push({ app: "x", name: "X", actions: [...(plat === "x" && post ? [post] : []), ...(q ? [{ label: "口コミを探す", url: `https://x.com/search?q=${enc(name)}` }] : [])] });
+    if (plat === "youtube" || ["sightseeing", "nature", "stay", "activity", "event"].includes(s.genre)) sns.push({ app: "youtube", name: "YouTube", actions: [...(plat === "youtube" && post ? [post] : []), ...(q ? [{ label: "動画を探す", url: `https://www.youtube.com/results?search_query=${enc(q)}` }] : [])] });
+    if (food || plat === "tabelog") sns.push({ app: "tabelog", name: "食べログ", actions: [...(plat === "tabelog" && post ? [post] : []), ...(q ? [{ label: "口コミ・予約", url: `https://tabelog.com/rstLst/?sw=${enc(name)}` }] : [])] });
+    if (post && !["instagram", "tiktok", "x", "youtube", "tabelog"].includes(plat)) sns.unshift({ app: ["threads", "lemon8", "googlemaps", "facebook"].includes(plat) ? plat : "web", name: platformLabel(plat), actions: [post] });
+    if (q) sns.push({ app: "google", name: "Google", actions: [{ label: "検索", url: `https://www.google.com/search?q=${enc(q)}` }, { label: s.genre === "stay" ? "宿を予約" : "予約を探す", url: `https://www.google.com/search?q=${enc(q + (s.genre === "stay" ? " 宿泊 予約" : " 予約"))}` }] });
+  }
+  const share = [
+    { app: "calendar", name: "カレンダー", actions: [{ label: "Google", url: calendarUrl(s, calDate || new Date().toISOString().slice(0, 10)) }, { label: "iPhone", act: "ics" }] },
+    { app: "line", name: "LINE", actions: [{ label: "送る", url: lineShareUrl(`ここ行きたい！\n${spotShareText(s)}`) }] },
+    { app: "copy", name: "コピー", actions: [{ label: "店名とリンク", act: "copy" }] },
+  ];
+  return [
+    { section: "地図・行き方", apps: map },
+    { section: "SNS・口コミ", apps: sns.filter((a) => a.actions.length) },
+    { section: "予定・共有", apps: share },
+  ].filter((g) => g.apps.length);
+}
+
 export function platformLabel(p) {
   return { instagram: "Instagram", tiktok: "TikTok", x: "X", youtube: "YouTube", threads: "Threads", tabelog: "食べログ", googlemaps: "Googleマップ", lemon8: "Lemon8", facebook: "Facebook" }[p] || "Webページ";
 }

@@ -41,10 +41,19 @@ async function artifactBackend() {
       gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0];
     }
   }
+  // グループ一覧に出す名前・種類・メンバー（ほかのグループのメンバーも一覧で見られるように）
+  const allProfiles = {};
+  const noteGroup = (g, data = {}) => { groupNames[g] = { name: data.name || "行きたいリスト", type: data.type, members: Array.isArray(data.members) ? data.members : [], nicknames: data.nicknames || {}, avatars: data.avatars || {} }; };
+  const loadProfiles = async (ids) => {
+    const need = ids.filter((id) => id && !allProfiles[id]);
+    if (!user || !need.length) return;
+    Object.assign(allProfiles, await user.profiles(need).catch(() => ({})));
+  };
   for (const g of myGroups) {
     const d = await settingsRef(g).get().catch(() => null);
-    groupNames[g] = d?.exists ? { name: d.data().name, type: d.data().type } : { name: "行きたいリスト" };
+    noteGroup(g, d?.exists ? d.data() : {});
   }
+  await loadProfiles(myGroups.flatMap((g) => groupNames[g].members));
 
   let unsubs = [];
   function open(g) {
@@ -59,7 +68,7 @@ async function artifactBackend() {
     unsubs.push(spotsCol().onSnapshot(async (snap) => {
       const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // 名前を引いてから差し替える（先に差し替えると「相手」と表示されてしまう）
-      if (user) profiles = await user.profiles(idsInUse(next));
+      if (user) { profiles = await user.profiles(idsInUse(next)); Object.assign(allProfiles, profiles); }
       if (g !== gid) return;
       spots = next;
       gotSpots = true;
@@ -68,7 +77,9 @@ async function artifactBackend() {
     unsubs.push(settingsRef().onSnapshot((d) => {
       if (g !== gid) return;
       settings = d.exists ? d.data() : {};
-      groupNames[g] = { name: settings.name || "行きたいリスト", type: settings.type };
+      noteGroup(g, settings);
+      // 開いた人をメンバーとして記録する（グループのメンバー一覧に出すため）
+      if (meId && d.exists && !members().includes(meId)) settingsRef(g).update({ members: [...members(), meId] }).catch(() => {});
       gotSettings = true;
       if (gotSpots) emit();
     }, () => {}));
@@ -94,7 +105,7 @@ async function artifactBackend() {
   return {
     kind: "artifact",
     unavailable: db ? "" : "claude.ai にサインインして開くと、みんなで共有して使えます。",
-    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, lists: Boolean(db && meId), export: false, clipboardRead: false, geolocation: false },
+    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, memberList: true, lists: Boolean(db && meId), export: false, clipboardRead: false, geolocation: false },
     shareNote: "一緒に使う人も claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
     readerNote: aiOn ? "書いたメモや投稿をClaudeが分析します（使う人のClaudeの利用枠を使います）" : "書いたメモをルールで読み取っています",
     subscribe(fn) {
@@ -124,12 +135,17 @@ async function artifactBackend() {
     },
     saveSettings,
     // ---------- グループの切り替え・作成・共有コード ----------
-    lists: () => myGroups.map((g) => ({ id: g, name: groupNames[g]?.name || "行きたいリスト", type: groupNames[g]?.type || "couple", current: g === gid })),
+    lists: () => myGroups.map((g) => {
+      const n = groupNames[g] || {};
+      const ids = g === gid ? idsInUse() : n.members || [];
+      return { id: g, name: n.name || "行きたいリスト", type: n.type || "couple", current: g === gid,
+        members: ids.map((id) => ({ id, name: n.nicknames?.[id] || allProfiles[id]?.name || "メンバー", color: allProfiles[id]?.color || "#9a8a8f", avatar: n.avatars?.[id] || allProfiles[id]?.avatarUrl || "" })) };
+    }),
     openList: (g) => switchTo(g),
     async createList({ type, name }) {
       const g = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       await wrap(db.doc(`groups/${g}`).set({ name, type, code: newCode(), bases: [], members: meId ? [meId] : [], createdAt: new Date().toISOString() }));
-      groupNames[g] = { name, type };
+      noteGroup(g, { name, type, members: meId ? [meId] : [] });
       await switchTo(g);
     },
     async joinByCode(code) {
@@ -143,7 +159,8 @@ async function artifactBackend() {
       }
       if (!g) throw new Error("その共有コードのグループは見つかりませんでした。コードを確かめてください");
       const d = await settingsRef(g).get();
-      groupNames[g] = { name: d.data()?.name || "行きたいリスト", type: d.data()?.type };
+      noteGroup(g, d.data() || {});
+      await loadProfiles(groupNames[g].members);
       if (g !== "main" && meId && !(d.data()?.members || []).includes(meId)) await settingsRef(g).update({ members: [...(d.data()?.members || []), meId] }).catch(() => {});
       await switchTo(g);
       return groupNames[g];

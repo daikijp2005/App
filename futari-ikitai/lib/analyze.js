@@ -253,6 +253,7 @@ export function parseFreeform(text, now = new Date()) {
   const genreWords = GENRES.flatMap((g) => [g.label, ...g.words]).map((w) => w.toLowerCase());
   let nameAt = -2;
   let prevGenre = "";
+  const genreOnly = [];
   for (const [i, part] of parts.entries()) {
     if (LABELS.placeName.test(part)) { placeName = part.replace(LABELS.placeName, "").trim(); continue; }
     if (LABELS.memo.test(part)) { memo.push(part.replace(LABELS.memo, "").trim()); continue; }
@@ -270,7 +271,7 @@ export function parseFreeform(text, now = new Date()) {
     const isGenreWord = genreWords.includes(part.toLowerCase());
     // スペース区切りの1行（「カフェ ルミエール 表参道駅…」）では、続いている言葉をまとめて店名にする
     if (spaced && !info && placeName && nameAt === i - 1 && placeName.length + part.length < 30) { placeName += ` ${part}`; nameAt = i; continue; }
-    if (isGenreWord && !info) { prevGenre = part; continue; }
+    if (isGenreWord && !info) { prevGenre = part; genreOnly.push(part); continue; }
     if (info) {
       // 「10/31までの限定パフェ」のように、期限の後ろに言葉が続くならメモにも残す（住所の「4-12」は日付とみなさない）
       const hasDeadline = extractDeadline(part, now) && /(まで|迄|〆|終了|[〜~～])/.test(part);
@@ -292,6 +293,8 @@ export function parseFreeform(text, now = new Date()) {
     if (a) address = withBuilding(raw, a.index + a[0].length, a[0]);
   }
   const city = address ? cityFromAddress(address, base.prefecture) : base.city;
+  // 「バー 夜景」のようにジャンルの言葉しかないときは、それを仮の名前にする
+  if (!placeName && !base.placeName && genreOnly.length) placeName = genreOnly.join(" ").slice(0, 40);
   const out = { ...base, address, city, placeName: placeName || base.placeName, deadline, memo: memo.join(" / ").slice(0, 300), url: url ? normalizeUrl(url) : "" };
   if (out.url) out.platform = detectPlatform(out.url);
   // 店名からもジャンルを推測する

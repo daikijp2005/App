@@ -89,6 +89,17 @@ setInterval(() => {
 }, 25000).unref();
 
 // ---------- 画像の保存 ----------
+// 自分で選んだ写真（data URL）はファイルにして、リストのデータを軽くしておく
+async function savePhoto(roomId, itemId, dataUrl, old = "") {
+  if (!dataUrl?.startsWith("data:")) return dataUrl || "";
+  const m = dataUrl.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+  if (!m) return "";
+  const name = `${roomId}_${itemId}_p${newId(4)}.${m[1] === "jpeg" ? "jpg" : m[1]}`;
+  await fs.writeFile(path.join(IMAGES, name), Buffer.from(m[2], "base64"));
+  if (old?.startsWith("/img/")) fs.unlink(path.join(IMAGES, path.basename(old))).catch(() => {});
+  return `/img/${name}`;
+}
+
 // SNS の画像URLは時間が経つと切れるので、登録時にサーバーへ保存しておく
 async function cacheImage(roomId, itemId, imageUrl) {
   if (!imageUrl || !/^https?:/.test(imageUrl)) return "";
@@ -169,7 +180,7 @@ const ITEM_FIELDS = {
   url: "s", platform: "s", title: "s", caption: "s", image: "s", author: "s", genre: "s", placeName: "s", address: "s",
   prefecture: "s", city: "s", station: "s", walkMin: "n", priceMin: "n", priceMax: "n", priceNote: "s", hours: "s", closed: "s",
   tags: "a", summary: "s", lat: "n", lng: "n", memo: "s", status: "s", plannedDate: "s", visitedAt: "s", rating: "n", review: "s",
-  deadline: "s", pinned: "b", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
+  deadline: "s", pinned: "b", photo: "p", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
 };
 
 function sanitizeItem(input) {
@@ -181,6 +192,8 @@ function sanitizeItem(input) {
     else if (type === "n") out[k] = v === "" || v == null || !Number.isFinite(Number(v)) ? null : Number(v);
     else if (type === "a") out[k] = Array.isArray(v) ? v.map(String).slice(0, 20) : [];
     else if (type === "b") out[k] = Boolean(v);
+    // 自分で選んだ写真：画面で縮めたJPEG（data URL）か、保存済みの /img/ だけ受け付ける
+    else if (type === "p") out[k] = v && (/^\/img\/[\w.-]+$/.test(v) || (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 400_000)) ? String(v) : "";
   }
   if (out.status && !["want", "planned", "visited"].includes(out.status)) delete out.status;
   if (out.genre && !GENRES.some((g) => g.id === out.genre)) out.genre = "other";
@@ -393,6 +406,7 @@ async function handleApi(req, res, url) {
         addedBy: memberId, createdAt: now(), updatedAt: now(),
       };
       if (item.image && !item.image.startsWith("/img/")) item.image = await cacheImage(room.id, id, item.image);
+      if (item.photo) item.photo = await savePhoto(room.id, id, item.photo);
       room.items.unshift(item);
       await saveRoom(room);
       return send(res, 201, item);
@@ -403,14 +417,19 @@ async function handleApi(req, res, url) {
 
     if (parts.length === 5 && method === "PATCH") {
       const body = await readJson(req);
-      Object.assign(item, sanitizeItem(body), { updatedAt: now() });
+      const fields = sanitizeItem(body);
+      if ("photo" in fields && fields.photo !== item.photo) {
+        if (fields.photo) fields.photo = await savePhoto(room.id, item.id, fields.photo, item.photo);
+        else if (item.photo?.startsWith("/img/")) fs.unlink(path.join(IMAGES, path.basename(item.photo))).catch(() => {});
+      }
+      Object.assign(item, fields, { updatedAt: now() });
       if (body.status === "visited" && !item.visitedAt) item.visitedAt = now().slice(0, 10);
       await saveRoom(room);
       return send(res, 200, item);
     }
     if (parts.length === 5 && method === "DELETE") {
       room.items = room.items.filter((i) => i.id !== itemId);
-      if (item.image?.startsWith("/img/")) fs.unlink(path.join(IMAGES, path.basename(item.image))).catch(() => {});
+      for (const f of [item.image, item.photo]) if (f?.startsWith("/img/")) fs.unlink(path.join(IMAGES, path.basename(f))).catch(() => {});
       await saveRoom(room);
       return send(res, 200, { ok: true });
     }

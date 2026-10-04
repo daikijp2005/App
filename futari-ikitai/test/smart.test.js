@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseHours, openState, seasonOf, buildCourses, externalLinks, calendarUrl, courseRouteUrl, requiredYes } from "../public/smart.js";
+import { appLinks, parseHours, openState, seasonOf, buildCourses, externalLinks, calendarUrl, courseRouteUrl, requiredYes } from "../public/smart.js";
 
 const at = (dateStr, hm) => new Date(`${dateStr}T${hm}:00`);
 // 2026-10-06 は火曜日
@@ -160,4 +160,17 @@ test("デートコースの予算は交通費込み", async () => {
   assert.equal(buildCourses(spots, { stops: 2, base: far, budget: 2700 }).length, 0, "スポット代だけなら収まっても交通費で超える");
   assert.equal(buildCourses(spots, { stops: 2, base: far, budget: c.total }).length, 1);
   assert.equal(legInfo({ lat: 35.66, lng: 139.70 }, { lat: 35.661, lng: 139.701 }).fare, 0, "徒歩は0円");
+});
+
+test("ほかのアプリのリンクはアプリごとにまとまる", () => {
+  const s = { id: "a", placeName: "焼肉たろう", city: "渋谷区", genre: "gourmet", url: "https://www.instagram.com/p/x/", platform: "instagram", lat: 35.6, lng: 139.7 };
+  const g = appLinks(s, { lat: 35.65, lng: 139.70 }, { fromName: "渋谷駅" });
+  assert.deepEqual(g.map((x) => x.section), ["地図・行き方", "SNS・口コミ", "予定・共有"]);
+  const apps = g.flatMap((x) => x.apps.map((a) => a.app));
+  assert.ok(["gmaps", "apple", "transit", "instagram", "tiktok", "x", "tabelog", "google", "calendar", "line"].every((a) => apps.includes(a)));
+  // 元の投稿は Instagram の行に入り、Instagram は1行だけ
+  const insta = g[1].apps.filter((a) => a.app === "instagram");
+  assert.equal(insta.length, 1);
+  assert.equal(insta[0].actions[0].label, "元の投稿");
+  assert.match(g[0].apps[1].actions[1].url, /saddr=35\.65,139\.7&daddr=35\.6%2C139\.7&dirflg=r/);
 });
