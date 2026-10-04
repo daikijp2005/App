@@ -1,4 +1,4 @@
-// どこいく — 画面（Webアプリとアーティファクトで共通）
+// Spotrip（どこいく） — 画面（Webアプリとアーティファクトで共通）
 // データの読み書きは backend に任せる。backend の形は README の「しくみ」を参照。
 import { GENRES, analyzeText, parseFreeform, cityShort } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
@@ -164,7 +164,7 @@ export function showOnboarding(onDone) {
   el.setAttribute("aria-modal", "true");
   el.setAttribute("aria-label", "使い方");
   el.innerHTML = `
-    <div class="tour-top"><span class="brand">${LOGO}<b>どこいく</b></span><button class="btn sm line" data-skip>スキップ</button></div>
+    <div class="tour-top"><span class="brand">${LOGO}<b>Spotrip</b></span><button class="btn sm line" data-skip>スキップ</button></div>
     <div class="tour-track" tabindex="0">${TOUR.map((t, i) => `<section class="tour-slide" aria-label="${i + 1} / ${TOUR.length}">${t.art()}<h2>${esc(t.title)}</h2><p>${esc(t.text)}</p></section>`).join("")}</div>
     <div class="tour-bottom"><div class="tour-dots">${TOUR.map((_, i) => `<button aria-label="${i + 1}枚目" data-dot="${i}"></button>`).join("")}</div><button class="btn rose" data-next>次へ</button></div>`;
   document.body.append(el);
@@ -298,7 +298,7 @@ export function startApp(backend, mount = document.body) {
 
   // ---------- 骨組み ----------
   function render() {
-    document.title = `${S.settings.name} | どこいく`;
+    document.title = `${S.settings.name} | Spotrip`;
     const pend = pending().length;
     const ppl = peopleList();
     $app.innerHTML = `

@@ -1,6 +1,6 @@
 {
-  "name": "どこいく",
-  "short_name": "どこいく",
+  "name": "Spotrip",
+  "short_name": "Spotrip",
   "description": "行きたい場所、もう忘れない。SNSで見つけた「ここ行きたい！」をみんなで貯めて、うろ覚えでも見つけられるアプリ",
   "start_url": "/",
   "scope": "/",

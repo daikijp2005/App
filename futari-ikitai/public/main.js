@@ -109,7 +109,7 @@ function createFlow() {
   let type = null;
   const stepType = () => {
     document.body.innerHTML = `<div class="welcome">${LOGO}
-      <p class="brand-line"><b>どこいく</b>行きたい場所、もう忘れない。</p>
+      <p class="brand-line"><b>Spotrip</b>行きたい場所、もう忘れない。</p>
       <div class="steps-bar"><i class="on"></i><i></i></div>
       <h1>誰と使いますか？</h1>
       <p>使う相手ごとにリストを作れます。あとから設定で変えられます。</p>
@@ -194,7 +194,7 @@ async function boot() {
     return;
   }
   lists.remember(room);
-  document.title = `${room.name} | どこいく`;
+  document.title = `${room.name} | Spotrip`;
   const app = startApp(webBackend(room, meta));
   const add = params.get("add");
   if (params.has("add") || params.has("invite")) history.replaceState(null, "", `/r/${room.id}`);
