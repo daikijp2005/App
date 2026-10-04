@@ -106,11 +106,17 @@ export function seasonOf(spot, date = new Date()) {
 
 // ---------- デートコース ----------
 const STAY = { cafe: 60, sweets: 45, gourmet: 90, bar: 90, nature: 90, sightseeing: 60, art: 90, event: 90, shopping: 60, stay: 0, activity: 120, other: 60 };
-const IDEAL = { day: { start: 11 * 60, gourmet: 12 * 60 }, afternoon: { start: 14 * 60, gourmet: 18.5 * 60 }, evening: { start: 17 * 60, gourmet: 18.5 * 60 } };
+const IDEAL = { morning: { start: 9 * 60, gourmet: 12 * 60 }, day: { start: 11 * 60, gourmet: 12 * 60 }, afternoon: { start: 14 * 60, gourmet: 18.5 * 60 }, evening: { start: 17 * 60, gourmet: 18.5 * 60 }, night: { start: 19 * 60, gourmet: 19.5 * 60 } };
+// 出発の時刻（分）から、ごはんの時間などの目安を決める（「10:30から」のように自由に入れた時刻にも対応）
+export function startPlan(style = "day", start = null) {
+  const s = Number.isFinite(start) ? start : (IDEAL[style] || IDEAL.day).start;
+  return { start: s, gourmet: s < 13 * 60 ? 12 * 60 : Math.max(18.5 * 60, s + 30) };
+}
 const IDEAL_HOUR = { nature: 10, activity: 10, sightseeing: 11, art: 13, shopping: 14, cafe: 15, sweets: 15.5, event: 16, other: 14, bar: 21, stay: 23 };
 
-export function idealMinute(genre, style) {
-  if (genre === "gourmet") return IDEAL[style].gourmet;
+export function idealMinute(genre, plan) {
+  const p = typeof plan === "string" ? startPlan(plan) : plan;
+  if (genre === "gourmet") return p.gourmet;
   return (IDEAL_HOUR[genre] ?? 14) * 60;
 }
 
@@ -142,8 +148,12 @@ export function legInfo(a, b, people = 2) {
   return { mode, min, km: tr.km, fare };
 }
 
-export function buildCourses(spots, { stops = 3, style = "day", budget = null, bothOnly = false, date = null, peopleCount = 2, base = null } = {}) {
+export function buildCourses(spots, { stops = 3, style = "day", start = null, budget = null, budgetMin = null, bothOnly = false, date = null, peopleCount = 2, base = null, limit = 3 } = {}) {
   const required = requiredYes(peopleCount);
+  stops = Math.max(1, Math.min(10, Math.round(stops) || 3));
+  const plan = startPlan(style, start);
+  // 夜まで続くコースならバーも入れる（10か所なら朝からでも夜になる）
+  const lateEnough = plan.start + stops * 100 >= 18 * 60;
   const day = date ? new Date(date + "T12:00:00") : new Date();
   const pool = spots.filter((s) => {
     if ((s.status || "want") === "visited" || s.lat == null || s.lng == null) return false;
@@ -152,7 +162,7 @@ export function buildCourses(spots, { stops = 3, style = "day", budget = null, b
     // 半分以上が「うーん」の場所は入れない
     if (Object.values(s.likes || {}).filter((v) => v === "no").length * 2 >= Math.max(2, peopleCount)) return false;
     if (budget != null && s.priceMin != null && s.priceMin > budget) return false;
-    if (style === "day" && s.genre === "bar") return false;
+    if (!lateEnough && s.genre === "bar") return false;
     if (s.genre === "stay") return false; // 宿は日帰りコースに入れない
     return true;
   });
@@ -160,41 +170,68 @@ export function buildCourses(spots, { stops = 3, style = "day", budget = null, b
   const seen = new Set();
   const courses = [];
   for (const { s: anchor } of scored.slice(0, 15)) {
-    for (const radius of [2, 6, 15]) {
+    for (const radius of stops <= 4 ? [2, 6, 15] : [3, 8, 20, 40]) {
       const near = scored
         .filter(({ s }) => s !== anchor && distanceKm(anchor, s) <= radius)
         .sort((a, b) => b.score - a.score - (distanceKm(anchor, a.s) - distanceKm(anchor, b.s)) * 0.4);
       const picked = [anchor];
       for (const { s } of near) {
         if (picked.length >= stops) break;
-        if (picked.some((p) => p.genre === s.genre && s.genre !== "other")) continue;
+        // 同じジャンルは、少ない数のコースでは1つまで。多いときは2つまで（ランチとディナーなど）
+        const same = picked.filter((p) => p.genre === s.genre).length;
+        if (s.genre !== "other" && same >= (stops <= 4 ? 1 : 2)) continue;
         picked.push(s);
       }
       if (picked.length < Math.min(2, stops)) continue;
       const key = picked.map((p) => p.id).sort().join("|");
       if (seen.has(key)) break;
       seen.add(key);
-      courses.push(timeline(picked, style, day, required, base, peopleCount));
+      const c = timeline(picked, plan, day, required, base, peopleCount);
+      if (picked.length < stops) c.warnings.unshift(`行きたい場所が近くに足りず、${picked.length}か所のコースです`);
+      courses.push(c);
       break;
     }
   }
   // 予算は「スポット代＋交通費（行き帰り込み）」の1人あたり合計で判定する
-  const fit = budget == null ? courses : courses.filter((c) => c.total <= budget);
-  return fit.sort((a, b) => b.score - a.score).slice(0, 3);
+  const fit = courses.filter((c) => (budget == null || c.total <= budget) && (budgetMin == null || c.total >= budgetMin));
+  // 頼んだ数をそろえられたコースを先に
+  return fit.sort((a, b) => b.stops.length - a.stops.length || b.score - a.score).slice(0, limit);
 }
 
-function timeline(picked, style, day, required, base = null, people = 2) {
+// 何日から何日まで：日ごとに作って、営業日などで一番よい日を選ぶ（同じ組み合わせは一番よい日だけ残す）
+export function buildCoursesRange(spots, { dateFrom, dateTo = null, ...opts } = {}) {
+  const days = [];
+  const d = new Date((dateFrom || new Date().toISOString().slice(0, 10)) + "T12:00:00");
+  const end = new Date((dateTo && dateTo >= dateFrom ? dateTo : dateFrom || d.toISOString().slice(0, 10)) + "T12:00:00");
+  while (d <= end && days.length < 31) { days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`); d.setDate(d.getDate() + 1); }
+  const best = new Map();
+  for (const date of days) {
+    for (const c of buildCourses(spots, { ...opts, date, limit: 6 })) {
+      const key = c.stops.map((x) => x.spot.id).sort().join("|");
+      const prev = best.get(key);
+      if (!prev || c.score > prev.score + 0.01) best.set(key, { ...c, date });
+    }
+  }
+  return [...best.values()].sort((a, b) => b.stops.length - a.stops.length || b.score - a.score || a.date.localeCompare(b.date)).slice(0, days.length > 1 ? 5 : 3);
+}
+
+function timeline(picked, plan, day, required, base = null, people = 2) {
+  // 2軒目のごはんは夕食にまわす
+  const ideal = new Map();
+  let meals = 0;
+  for (const p of picked) ideal.set(p, p.genre === "gourmet" && meals++ > 0 ? Math.max(18.5 * 60, plan.gourmet + 300) : idealMinute(p.genre, plan));
+  const im = (x) => ideal.get(x);
   // 理想の時間帯順に並べてから、移動が往復にならないよう隣どうしを入れ替えて詰める
-  let order = [...picked].sort((a, b) => idealMinute(a.genre, style) - idealMinute(b.genre, style));
+  let order = [...picked].sort((a, b) => im(a) - im(b));
   for (let pass = 0; pass < 2; pass++) {
     for (let i = 0; i < order.length - 2; i++) {
       const [a, b, c] = order.slice(i, i + 3);
-      if (distanceKm(a, c) + distanceKm(c, b) + 0.5 < distanceKm(a, b) + distanceKm(b, c) && Math.abs(idealMinute(b.genre, style) - idealMinute(c.genre, style)) <= 180) {
+      if (distanceKm(a, c) + distanceKm(c, b) + 0.5 < distanceKm(a, b) + distanceKm(b, c) && Math.abs(im(b) - im(c)) <= 180) {
         order = [...order.slice(0, i + 1), c, b, ...order.slice(i + 3)];
       }
     }
   }
-  let t = Math.max(IDEAL[style].start, Math.min(idealMinute(order[0].genre, style), IDEAL[style].start + 60));
+  let t = plan.start; // 出発の時刻から始める
   const stops = [];
   const warnings = [];
   let km = 0;
@@ -210,7 +247,7 @@ function timeline(picked, style, day, required, base = null, people = 2) {
       t = Math.ceil((t + leg.min) / 5) * 5; // 到着時刻は5分単位にそろえる
     }
     // ごはんは食事どきまで待つ
-    if (spot.genre === "gourmet" && t < idealMinute("gourmet", style) - 30) t = idealMinute("gourmet", style) - 30;
+    if (spot.genre === "gourmet" && t < im(spot) - 30) t = im(spot) - 30;
     const stay = STAY[spot.genre] ?? 60;
     const when = new Date(day);
     when.setHours(Math.floor(t / 60), t % 60, 0, 0);
@@ -222,6 +259,7 @@ function timeline(picked, style, day, required, base = null, people = 2) {
     else unknownPrice = true;
   });
   // 出発地からの行きと、最後の場所からの帰り
+  if (t > 23.5 * 60) warnings.push("終わりが遅くなりそうです。回る数を減らすか、早めに出発しましょう");
   const access = base ? { go: legInfo(base, order[0], people), back: legInfo(order[order.length - 1], base, people) } : null;
   if (access) transport += access.go.fare + access.back.fare;
   const score = order.reduce((s, x) => s + loveScore(x, required), 0) - km * 0.25 - warnings.length - transport / 4000;

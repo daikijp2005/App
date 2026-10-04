@@ -174,3 +174,26 @@ test("ほかのアプリのリンクはアプリごとにまとまる", () => {
   assert.equal(insta[0].actions[0].label, "元の投稿");
   assert.match(g[0].apps[1].actions[1].url, /saddr=35\.65,139\.7&daddr=35\.6%2C139\.7&dirflg=r/);
 });
+
+test("コース：日付の範囲・予算の下限・自由な出発時刻・多い数", async () => {
+  const { buildCourses, buildCoursesRange } = await import("../public/smart.js");
+  const yes = { a: true, b: true };
+  const mk = (id, genre, dlat, extra = {}) => ({ id, genre, placeName: id, lat: 35.66 + dlat, lng: 139.70 + dlat, priceMin: 1000, likes: yes, ...extra });
+  // 月曜定休のカフェ：月曜〜火曜の範囲なら火曜を選ぶ
+  const spots = [mk("cafe", "cafe", 0, { hours: "10:00〜19:00", closed: "月曜" }), mk("art", "art", 0.002, { hours: "10:00〜18:00" })];
+  const r = buildCoursesRange(spots, { dateFrom: "2026-10-05", dateTo: "2026-10-06", stops: 2 });
+  assert.equal(r[0].date, "2026-10-06");
+  assert.equal(r[0].warnings.length, 0);
+  // 予算の下限
+  assert.equal(buildCourses(spots, { stops: 2, budgetMin: 5000 }).length, 0);
+  assert.equal(buildCourses(spots, { stops: 2, budgetMin: 1500, budget: 2500 }).length, 1);
+  // 自由な出発時刻
+  assert.equal(buildCourses(spots, { stops: 2, start: 10 * 60 + 30, date: "2026-10-06" })[0].start, "10:30");
+  // 8か所（同じジャンルは2つまで、2軒目のごはんは夕食）
+  const genres = ["cafe", "gourmet", "gourmet", "art", "nature", "shopping", "sweets", "sightseeing", "bar"];
+  const many = genres.map((g, i) => mk(`s${i}`, g, i * 0.003));
+  const [c] = buildCourses(many, { stops: 8, start: 9 * 60 });
+  assert.equal(c.stops.length, 8);
+  const meals = c.stops.filter((x) => x.spot.genre === "gourmet").map((x) => x.arrive);
+  if (meals.length === 2) assert.ok(meals[1] >= "17:00", meals.join(","));
+});
