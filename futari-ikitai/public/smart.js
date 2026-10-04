@@ -137,6 +137,66 @@ function loveScore(spot, required) {
 
 const fmt = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(Math.round(min % 60)).padStart(2, "0")}`;
 
+// ---------- 気分・雰囲気 ----------
+// genres: ジャンルごとの合い具合（0〜2）、words: 店名・タグ・メモにあると合う言葉、exclude: 入れないジャンル
+export const MOODS = {
+  relax: { label: "のんびり癒し", emoji: "🌿", genres: { nature: 2, cafe: 2, art: 1, sweets: 1, stay: 1 }, words: /のんびり|癒|静か|庭園|公園|温泉|ゆったり|まったり|足湯/, avoid: ["activity", "event"] },
+  active: { label: "アクティブ", emoji: "🎢", genres: { activity: 2, event: 2, shopping: 1, sightseeing: 1 }, words: /体験|アクティビティ|遊園地|ボウリング|カラオケ|スポーツ|アスレチック|フェス|ゲーム/ },
+  photo: { label: "おしゃれ・映え", emoji: "📸", genres: { cafe: 2, sweets: 2, art: 1, shopping: 1 }, words: /映え|おしゃれ|オシャレ|かわいい|可愛い|フォト|インスタ|写真|ネオン|レトロ/ },
+  gourmet: { label: "グルメ三昧", emoji: "🍽️", genres: { gourmet: 2, sweets: 2, cafe: 1, bar: 1 }, words: /食べ歩き|名物|行列|人気店|老舗|絶品/ },
+  nature: { label: "自然・絶景", emoji: "🏞️", genres: { nature: 2, sightseeing: 2 }, words: /絶景|海|山|湖|滝|花|桜|紅葉|景色|展望|ビーチ/ },
+  culture: { label: "文化・アート", emoji: "🎨", genres: { art: 2, sightseeing: 2 }, words: /美術館|博物館|ギャラリー|神社|寺|城|歴史|展示|アート|建築/ },
+  romantic: { label: "夜景ロマンチック", emoji: "🌃", genres: { bar: 2, gourmet: 1, sightseeing: 1 }, words: /夜景|イルミ|ライトアップ|記念日|ディナー|ロマンチック|展望|キャンドル|夕日|夕焼け/ },
+  rainy: { label: "雨の日もOK", emoji: "☔", genres: { art: 2, shopping: 2, cafe: 1, sweets: 1, gourmet: 1, bar: 1 }, words: /屋内|室内|水族館|映画|美術館|博物館|モール|駅直結|地下/, avoid: ["nature", "activity", "event"] },
+};
+const moodText = (s) => [s.placeName, s.title, s.summary, s.memo, (s.tags || []).join(" "), String(s.caption || "").slice(0, 300)].join(" ");
+export function moodScore(spot, moods = []) {
+  let sc = 0;
+  for (const id of moods) {
+    const m = MOODS[id];
+    if (!m) continue;
+    sc += m.genres[spot.genre] || 0;
+    if (m.words.test(moodText(spot))) sc += 1.5;
+  }
+  return sc;
+}
+// 気分に合わない場所（雨の日の公園など）。言葉が合っていれば入れる（屋内の植物園など）
+const moodAvoids = (spot, moods) => moods.some((id) => MOODS[id]?.avoid?.includes(spot.genre) && !MOODS[id].words.test(moodText(spot)));
+
+// ---------- 主なエリア ----------
+// 中心と半径（km）。位置がわかっている場所を、このエリアの中かどうかで分ける
+export const AREAS = [
+  { id: "tokyo", label: "東京（23区）", lat: 35.6812, lng: 139.7671, r: 14 },
+  { id: "shibuya", label: "渋谷・原宿・表参道", lat: 35.6645, lng: 139.7034, r: 2.2, parent: "tokyo" },
+  { id: "shinjuku", label: "新宿", lat: 35.6905, lng: 139.7003, r: 2, parent: "tokyo" },
+  { id: "ginza", label: "銀座・東京駅・日本橋", lat: 35.6762, lng: 139.7680, r: 2, parent: "tokyo" },
+  { id: "asakusa", label: "浅草・上野・スカイツリー", lat: 35.7128, lng: 139.7893, r: 2.6, parent: "tokyo" },
+  { id: "odaiba", label: "お台場・豊洲", lat: 35.6316, lng: 139.7838, r: 2.6, parent: "tokyo" },
+  { id: "kichijoji", label: "吉祥寺・三鷹", lat: 35.7030, lng: 139.5795, r: 3 },
+  { id: "yokohama", label: "横浜", lat: 35.4537, lng: 139.6380, r: 9 },
+  { id: "kamakura", label: "鎌倉・湘南・江の島", lat: 35.3150, lng: 139.5160, r: 9 },
+  { id: "hakone", label: "箱根", lat: 35.2324, lng: 139.1069, r: 10 },
+  { id: "nagoya", label: "名古屋", lat: 35.1709, lng: 136.8815, r: 12 },
+  { id: "kyoto", label: "京都", lat: 35.0116, lng: 135.7681, r: 10 },
+  { id: "osaka", label: "大阪", lat: 34.6937, lng: 135.5023, r: 12 },
+  { id: "kobe", label: "神戸", lat: 34.6901, lng: 135.1955, r: 8 },
+  { id: "nara", label: "奈良", lat: 34.6851, lng: 135.8048, r: 8 },
+  { id: "kanazawa", label: "金沢", lat: 36.5613, lng: 136.6562, r: 8 },
+  { id: "hiroshima", label: "広島", lat: 34.3853, lng: 132.4553, r: 9 },
+  { id: "fukuoka", label: "福岡", lat: 33.5902, lng: 130.4017, r: 10 },
+  { id: "sapporo", label: "札幌", lat: 43.0618, lng: 141.3545, r: 12 },
+  { id: "sendai", label: "仙台", lat: 38.2682, lng: 140.8694, r: 10 },
+  { id: "okinawa", label: "沖縄本島", lat: 26.4, lng: 127.8, r: 70 },
+];
+// エリアの指定：{ id } で上の一覧、{ prefecture } で都道府県、{ lat, lng, r } で任意の範囲
+export function inArea(spot, area) {
+  if (!area) return true;
+  if (area.prefecture) return spot.prefecture === area.prefecture;
+  const a = area.lat != null ? area : AREAS.find((x) => x.id === area.id);
+  if (!a || spot.lat == null || spot.lng == null) return false;
+  return distanceKm(a, spot) <= a.r;
+}
+
 // 行きたい場所から、近い場所どうしを組み合わせて回る順番と時間割を作る
 // 1区間の移動手段・時間・1人あたりの交通費（車は人数で割る）
 export function legInfo(a, b, people = 2) {
@@ -148,7 +208,7 @@ export function legInfo(a, b, people = 2) {
   return { mode, min, km: tr.km, fare };
 }
 
-export function buildCourses(spots, { stops = 3, style = "day", start = null, budget = null, budgetMin = null, bothOnly = false, date = null, peopleCount = 2, base = null, limit = 3 } = {}) {
+export function buildCourses(spots, { stops = 3, style = "day", start = null, budget = null, budgetMin = null, bothOnly = false, date = null, peopleCount = 2, base = null, limit = 3, moods = [], area = null } = {}) {
   const required = requiredYes(peopleCount);
   stops = Math.max(1, Math.min(10, Math.round(stops) || 3));
   const plan = startPlan(style, start);
@@ -164,9 +224,12 @@ export function buildCourses(spots, { stops = 3, style = "day", start = null, bu
     if (budget != null && s.priceMin != null && s.priceMin > budget) return false;
     if (!lateEnough && s.genre === "bar") return false;
     if (s.genre === "stay") return false; // 宿は日帰りコースに入れない
+    if (!inArea(s, area)) return false;
+    if (moods.length && moodAvoids(s, moods)) return false;
     return true;
   });
-  const scored = pool.map((s) => ({ s, score: loveScore(s, required) })).sort((a, b) => b.score - a.score);
+  // 気分に合う場所ほど選ばれやすく、コースの起点にもなりやすい
+  const scored = pool.map((s) => ({ s, score: loveScore(s, required) + moodScore(s, moods) * 1.2 })).sort((a, b) => b.score - a.score);
   const seen = new Set();
   const courses = [];
   for (const { s: anchor } of scored.slice(0, 15)) {
@@ -179,7 +242,7 @@ export function buildCourses(spots, { stops = 3, style = "day", start = null, bu
         if (picked.length >= stops) break;
         // 同じジャンルは、少ない数のコースでは1つまで。多いときは2つまで（ランチとディナーなど）
         const same = picked.filter((p) => p.genre === s.genre).length;
-        if (s.genre !== "other" && same >= (stops <= 4 ? 1 : 2)) continue;
+        if (s.genre !== "other" && same >= (stops <= 4 && !(moods.includes("gourmet") && ["gourmet", "sweets"].includes(s.genre)) ? 1 : 2)) continue;
         picked.push(s);
       }
       if (picked.length < Math.min(2, stops)) continue;
@@ -187,6 +250,7 @@ export function buildCourses(spots, { stops = 3, style = "day", start = null, bu
       if (seen.has(key)) break;
       seen.add(key);
       const c = timeline(picked, plan, day, required, base, peopleCount);
+      if (moods.length) { const fit = picked.reduce((n, p) => n + moodScore(p, moods), 0); c.score += fit * 0.6; c.moods = moods.filter((id) => picked.some((p) => moodScore(p, [id]) >= 2)).map((id) => ({ id, full: picked.filter((p) => moodScore(p, [id]) >= 2).length * 2 >= picked.length })); }
       if (picked.length < stops) c.warnings.unshift(`行きたい場所が近くに足りず、${picked.length}か所のコースです`);
       courses.push(c);
       break;

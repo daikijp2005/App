@@ -197,3 +197,23 @@ test("コース：日付の範囲・予算の下限・自由な出発時刻・�
   const meals = c.stops.filter((x) => x.spot.genre === "gourmet").map((x) => x.arrive);
   if (meals.length === 2) assert.ok(meals[1] >= "17:00", meals.join(","));
 });
+
+test("コース：気分とエリア", async () => {
+  const { buildCourses, inArea } = await import("../public/smart.js");
+  const yes = { a: true, b: true };
+  const at = (id, genre, lat, lng, extra = {}) => ({ id, genre, placeName: id, lat, lng, priceMin: 1000, likes: yes, ...extra });
+  const spots = [
+    at("渋谷カフェ", "cafe", 35.6640, 139.7020), at("渋谷公園", "nature", 35.6660, 139.6960), at("渋谷美術館", "art", 35.6650, 139.7050), at("渋谷モール", "shopping", 35.6600, 139.7010),
+    at("名古屋カフェ", "cafe", 35.1700, 136.8800), at("名古屋城", "sightseeing", 35.1856, 136.8990), at("名古屋めし", "gourmet", 35.1680, 136.8850),
+  ];
+  assert.ok(inArea(spots[4], { id: "nagoya" }) && !inArea(spots[0], { id: "nagoya" }));
+  const nagoya = buildCourses(spots, { stops: 3, area: { id: "nagoya" } });
+  assert.ok(nagoya.length && nagoya.every((c) => c.stops.every((x) => x.spot.id.startsWith("名古屋"))));
+  // 雨の日：公園は入らない
+  const rainy = buildCourses(spots, { stops: 3, area: { id: "shibuya" }, moods: ["rainy"] });
+  assert.ok(rainy.length && rainy.every((c) => c.stops.every((x) => x.spot.genre !== "nature")));
+  // のんびり：公園が入る
+  const relax = buildCourses(spots, { stops: 2, area: { id: "shibuya" }, moods: ["relax"] });
+  assert.ok(relax[0].stops.some((x) => x.spot.genre === "nature"));
+  assert.deepEqual(buildCourses(spots, { stops: 2, area: { prefecture: "大阪府" } }), []);
+});

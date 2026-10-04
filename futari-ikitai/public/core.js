@@ -3,7 +3,7 @@
 import { GENRES, analyzeText, parseFreeform, cityShort } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
 import { spotArt, appIcon } from "./art.js";
-import { appLinks, openState, parseHours, seasonOf, buildCourses, buildCoursesRange, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
+import { appLinks, openState, parseHours, seasonOf, buildCourses, buildCoursesRange, MOODS, AREAS, inArea, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
 
 const TINT = { cafe: "#efd5bd", sweets: "#f8cfdc", gourmet: "#f4cfae", bar: "#ddc8e6", nature: "#c9e3cf", sightseeing: "#eed7c0", art: "#d3d8f2", event: "#fbdfaa", shopping: "#cfe8ee", stay: "#f1cbc3", activity: "#cfe7c9", other: "#e6dfdc" };
 const STATUS = { want: "行きたい", planned: "予定あり", visited: "行った" };
@@ -221,7 +221,7 @@ export function startApp(backend, mount = document.body) {
     settings: { name: "行きたいリスト", bases: [] }, spots: [], loaded: false,
     view: local.get("view", "home"), q: "", seg: "all", groupBy: local.get("groupBy", "date"), sortBy: local.get("sortBy", "new"),
     f: freshFilters(), listMode: "grid",
-    baseId: local.get("baseId", null), plan: { dateFrom: nextSaturday(), dateTo: "", style: "day", startTime: "", stops: 3, budgetMin: "", budgetMax: "", bothOnly: false }, courses: null,
+    baseId: local.get("baseId", null), plan: { dateFrom: nextSaturday(), dateTo: "", style: "day", startTime: "", stops: 3, budgetMin: "", budgetMax: "", bothOnly: false, moods: [], area: "" }, courses: null,
     skipped: new Set(), planTab: "calendar", calMonth: "", calDay: "", openMode: "", routeCache: {},
   };
 
@@ -772,6 +772,25 @@ export function startApp(backend, mount = document.body) {
     if (P.budgetMin && P.budgetMax && Number(P.budgetMin) > Number(P.budgetMax)) [P.budgetMin, P.budgetMax] = [P.budgetMax, P.budgetMin];
     P.startTime = $("p-time")?.value ?? P.startTime;
   }
+  // コースを作るエリアの候補（行きたい場所があるところだけ）
+  function planAreas() {
+    const pool = S.spots.filter((i) => (i.status || "want") !== "visited" && i.lat != null);
+    const out = [{ key: "", label: "どこでも", count: pool.length }];
+    const base = activeBase();
+    if (base) out.push({ key: "near", label: `${base.label}の近く`, count: pool.filter((i) => inArea(i, { lat: base.lat, lng: base.lng, r: 5 })).length });
+    for (const a of AREAS) { const n = pool.filter((i) => inArea(i, { id: a.id })).length; if (n) out.push({ key: a.id, label: a.label, count: n }); }
+    const prefs = {};
+    for (const i of pool) if (i.prefecture) prefs[i.prefecture] = (prefs[i.prefecture] || 0) + 1;
+    for (const [p, n] of Object.entries(prefs).sort((a, b) => b[1] - a[1])) out.push({ key: `pref:${p}`, label: p, count: n });
+    return out.filter((a) => a.key === "" || a.count);
+  }
+  function planArea() {
+    const k = S.plan.area;
+    if (!k) return null;
+    if (k === "near") { const b = activeBase(); return b ? { lat: b.lat, lng: b.lng, r: 5 } : null; }
+    if (k.startsWith("pref:")) return { prefecture: k.slice(5) };
+    return { id: k };
+  }
   const planStart = () => { const m = /^(\d{1,2}):(\d{2})/.exec(S.plan.startTime || ""); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 
   function renderCourse(v) {
@@ -784,6 +803,12 @@ export function startApp(backend, mount = document.body) {
       <div class="section-h"><h2>${esc(V().planTitle)}</h2><button class="link" data-act="gacha">迷ったらガチャ</button></div>
       <div class="panel">
         <p class="sub" style="margin:0 0 12px">${esc(V().us)}の「行きたい」から、近い場所どうしを組み合わせて回る順番と時間を考えます。</p>
+        <div class="field"><label>どのあたりで？</label>
+          <div class="chips wrap-chips">${planAreas().map((a) => `<button class="chip ${P.area === a.key ? "on" : ""}" data-parea="${esc(a.key)}">${esc(a.label)} <small>${a.count}</small></button>`).join("")}</div>
+          <span class="sub">位置がわかっている行きたい場所の数です。</span></div>
+        <div class="field"><label>気分・雰囲気（3つまで）</label>
+          <div class="mood-grid">${Object.entries(MOODS).map(([k, m]) => `<button class="mood ${P.moods.includes(k) ? "on" : ""}" data-pmood="${k}"><span>${m.emoji}</span>${esc(m.label)}</button>`).join("")}</div>
+          ${P.moods.includes("romantic") && !P.startTime && ["morning", "day"].includes(P.style) ? `<span class="sub">夜景を楽しむなら「夕方から」がおすすめです。</span>` : ""}</div>
         <div class="field"><label for="p-from">行く日（何日から何日まで）</label>
           <div class="range-row"><input id="p-from" type="date" value="${esc(P.dateFrom)}" aria-label="この日から"><span>〜</span><input id="p-to" type="date" value="${esc(P.dateTo)}" min="${esc(P.dateFrom)}" aria-label="この日まで（1日だけなら空のまま）"></div>
           <div class="chips wrap-chips" style="margin-top:8px">${datePresets().map(([k, l]) => `<button class="chip ${datePresetOn(k) ? "on" : ""}" data-pdate="${k}">${l}</button>`).join("")}</div>
@@ -819,7 +844,7 @@ export function startApp(backend, mount = document.body) {
     return `${c.area ? c.area + "で " : ""}${c.stops.map((s) => genreOf(s.spot.genre).label.replace(/・.*/, "")).join(" → ")}`;
   }
   function coursesHtml(courses) {
-    if (!courses.length) return `<div class="empty"><p>条件に合うコースが作れませんでした。${S.plan.budgetMin || S.plan.budgetMax ? "予算には交通費も含まれます。予算の幅を広げるか、" : ""}${S.plan.dateTo ? "" : "日にちの幅を広げるか、"}条件をゆるめるか、位置のわかるスポットを増やしてください。</p></div>`;
+    if (!courses.length) return `<div class="empty"><p>条件に合うコースが作れませんでした。${S.plan.budgetMin || S.plan.budgetMax ? "予算には交通費も含まれます。予算の幅を広げるか、" : ""}${S.plan.dateTo ? "" : "日にちの幅を広げるか、"}${S.plan.area || S.plan.moods.length ? "エリアや気分の指定を外すか、" : ""}条件をゆるめるか、位置のわかるスポットを増やしてください。</p></div>`;
     const legIcon = (m) => (m === "徒歩" ? "walk" : m === "電車" ? "train" : "car");
     const legLi = (l, label = "") => `<li><span></span><div class="leg">${ic(legIcon(l.mode), "sm")}${label}${l.mode} 約${formatMinutes(l.min)}${l.fare ? ` ・ ${yen(l.fare)}` : ""}</div></li>`;
     return courses.map((c, i) => `
@@ -830,6 +855,7 @@ export function startApp(backend, mount = document.body) {
           <div class="course-stats"><span>${ic("clock", "sm")} <b>${c.start}〜${c.end}</b></span><span>移動 <b>${c.km.toFixed(1)}km</b></span><span>合計 <b>${yen(c.total)}${c.unknownPrice ? "〜" : ""}</b>/人</span></div>
           <div class="cost-break sub">スポット代 ${yen(c.budget)}${c.unknownPrice ? "〜" : ""} ＋ 交通費 ${yen(c.transport)}${c.access ? `（${esc(activeBase()?.label || "出発地")}からの行き帰り込み）` : ""} ＝ <b>${yen(c.total)}${c.unknownPrice ? "〜" : ""}</b>/人</div>
         </div>
+        ${c.moods?.length ? `<div class="tags" style="margin:6px 16px 0">${c.moods.map(({ id, full }) => `<span class="tag ${full ? "match" : ""}">${MOODS[id].emoji} ${esc(MOODS[id].label)}${full ? "にぴったり" : "も楽しめる"}</span>`).join("")}</div>` : ""}
         ${c.warnings.length ? `<div class="notice warn" style="margin:6px 16px 0">${c.warnings.map(esc).join("<br>")}</div>` : ""}
         <ul class="tl">${c.access ? legLi(c.access.go, `${esc(activeBase()?.label || "出発地")}から `) : ""}${c.stops.map((s) => `
           ${s.leg ? legLi(s.leg) : ""}
@@ -1702,7 +1728,7 @@ export function startApp(backend, mount = document.body) {
   function go(view) { S.view = view; local.set("view", view); render(); window.scrollTo({ top: 0 }); }
 
   $app.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-act],[data-view],[data-seg],[data-like],[data-open],[data-vote],[data-pstyle],[data-pstops],[data-pdate],[data-pbudget],[data-take],[data-genre],[data-ptab],[data-cal],[data-day]");
+    const t = e.target.closest("[data-act],[data-view],[data-seg],[data-like],[data-open],[data-vote],[data-pstyle],[data-pstops],[data-pdate],[data-pbudget],[data-parea],[data-pmood],[data-take],[data-genre],[data-ptab],[data-cal],[data-day]");
     if (!t) return;
     if (t.dataset.like) { e.stopPropagation(); const it = S.spots.find((s) => s.id === t.dataset.like); return vote(it.id, myVote(it) === true ? null : true); }
     if (t.dataset.vote) { const it = S.spots.find((s) => s.id === $("swipe")?.dataset.id); return it && decide(it, t.dataset.vote); }
@@ -1722,6 +1748,15 @@ export function startApp(backend, mount = document.body) {
     if (t.dataset.pstyle) { readPlanForm(); S.plan.style = t.dataset.pstyle; S.plan.startTime = ""; return renderView(); }
     if (t.dataset.pstops) { readPlanForm(); S.plan.stops = Number(t.dataset.pstops); if (S.plan.stops >= 6 && !S.plan.startTime && ["afternoon", "evening", "night"].includes(S.plan.style)) S.plan.style = "morning"; return renderView(); }
     if (t.dataset.pdate) { readPlanForm(); [S.plan.dateFrom, S.plan.dateTo] = datePresetRange(t.dataset.pdate); return renderView(); }
+    if (t.dataset.parea !== undefined) { readPlanForm(); S.plan.area = S.plan.area === t.dataset.parea ? "" : t.dataset.parea; return renderView(); }
+    if (t.dataset.pmood) {
+      readPlanForm();
+      const m = t.dataset.pmood, list = S.plan.moods;
+      if (list.includes(m)) S.plan.moods = list.filter((x) => x !== m);
+      else if (list.length >= 3) toast("気分は3つまで選べます");
+      else S.plan.moods = [...list, m];
+      return renderView();
+    }
     if (t.dataset.pbudget) { readPlanForm(); [S.plan.budgetMin, S.plan.budgetMax] = t.dataset.pbudget.split("-"); return renderView(); }
     if (t.dataset.take) {
       const c = S.courses?.[Number(t.dataset.take)];
@@ -1750,7 +1785,7 @@ export function startApp(backend, mount = document.body) {
     if (a === "build") {
       readPlanForm();
       const P = S.plan;
-      S.courses = buildCoursesRange(S.spots, { dateFrom: P.dateFrom, dateTo: P.dateTo || null, stops: P.stops, style: P.style, start: planStart(), budget: P.budgetMax ? Number(P.budgetMax) : null, budgetMin: P.budgetMin ? Number(P.budgetMin) : null, bothOnly: P.bothOnly, peopleCount: Math.max(2, peopleList().length), base: activeBase() });
+      S.courses = buildCoursesRange(S.spots, { dateFrom: P.dateFrom, dateTo: P.dateTo || null, stops: P.stops, style: P.style, start: planStart(), budget: P.budgetMax ? Number(P.budgetMax) : null, budgetMin: P.budgetMin ? Number(P.budgetMin) : null, bothOnly: P.bothOnly, peopleCount: Math.max(2, peopleList().length), base: activeBase(), moods: P.moods, area: planArea() });
       renderView();
       document.getElementById("courses")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
