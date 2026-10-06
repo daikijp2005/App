@@ -135,8 +135,8 @@ const TOUR = [
       <div class="mini" style="flex:none;width:100%;box-shadow:var(--shadow-sm)"><span class="ph" style="--tint:${TINT.cafe}">☕</span><span class="tx"><b>シーサイドカフェ</b><span class="sub">はるかが先月見つけた</span></span></div></div>`,
   },
   {
-    title: "相手ごとに、グループを分けて",
-    text: "恋人・友達・家族・職場など、使う相手ごとにリストを作れます。グループごとの共有コードかリンクを送れば、相手は名前を入れるだけで参加できます。",
+    title: "相手ごとに、部屋を分けて",
+    text: "恋人・友達・家族・職場など、使う相手ごとにリストを作れます。部屋ごとの招待コードかリンクを送れば、相手は名前を入れるだけで参加できます。",
     art: () => `<div class="tour-mock"><div class="type-grid compact">${Object.values(GROUP_TYPES).map((t) => `<span class="type-tile"><span class="emoji">${t.emoji}</span>${esc(t.label)}</span>`).join("")}</div></div>`,
   },
   {
@@ -240,7 +240,7 @@ export function startApp(backend, mount = document.body) {
     const inner = a.startsWith("emoji:") ? `<span class="emo">${esc(a.slice(6))}</span>` : a ? `<img src="${esc(a)}" alt="">` : esc([...(p.name || "?")][0]);
     return `<span class="av ${cls}${a.startsWith("emoji:") ? " is-emoji" : ""}" style="background:${esc(p.color || "#9a8a8f")}" title="${esc(p.name)}">${inner}</span>`;
   };
-  // ほかのグループのメンバーなど、いまのグループにいない人のアイコン
+  // ほかの部屋のメンバーなど、いまの部屋にいない人のアイコン
   const avOf = (m) => {
     const a = m.avatar || "";
     const inner = a.startsWith("emoji:") ? `<span class="emo">${esc(a.slice(6))}</span>` : a ? `<img src="${esc(a)}" alt="">` : esc([...(m.name || "?")][0]);
@@ -304,7 +304,7 @@ export function startApp(backend, mount = document.body) {
     document.title = `${S.settings.name} | Spotrip`;
     const pend = pending().length;
     const ppl = peopleList();
-    $app.innerHTML = `
+    $app.innerHTML = `${F.preview ? `<div class="preview-bar">ゲスト画面のプレビュー中<button data-act="exit-preview">終わる</button></div>` : ""}
       <header class="topbar"><div class="wrap">
         ${F.lists ? `<button class="brand" data-act="lists" aria-label="リストを切り替える" style="border:0;background:none;padding:0;text-align:left;color:inherit">${LOGO}<h1>${esc(S.settings.name)}</h1>${ic("chev", "sm")}</button>`
           : `<div class="brand">${LOGO}<h1>${esc(S.settings.name)}</h1></div>`}
@@ -530,7 +530,8 @@ export function startApp(backend, mount = document.body) {
   function welcomeEmpty() {
     const steps = [
       solo() ? ["1", "SNSで探す", "気になるお店や場所を見つけたら、店名や場所をざっくり覚えておきます。"]
-        : F.invite || F.codes ? ["1", `${V().label}を招待`, "設定の「招待」から共有コードかリンクを送ります。相手は名前を入れるだけで使えます。"] : ["1", `${V().label}を招待`, "共有メニューから相手を「編集できる」で招待します。"],
+        : !isLeader() ? ["1", "みんなで貯める", "部屋のみんなが見つけた場所が、ここに集まります。「行きたい」で気持ちを伝えましょう。"]
+        : F.invite || F.codes ? ["1", `${V().label}を招待`, "設定の「招待」から招待コードかリンクを送ります。相手は名前を入れるだけで使えます。"] : ["1", `${V().label}を招待`, "共有メニューから相手を「編集できる」で招待します。"],
       ["2", "出発地を登録", "家や職場、よく集まる駅を登録すると、移動時間の目安が出ます。"],
       ["3", "書くだけで追加", `「表参道のパンケーキ 1500円」のように書くと、${F.aiRead ? "AIが" : ""}ジャンル・場所・値段を整理します。SNSのリンクからも追加できます。`],
     ];
@@ -1418,14 +1419,14 @@ export function startApp(backend, mount = document.body) {
     const meId = me();
     const sorted = [...ppl].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : (statOf[b.id]?.added || 0) - (statOf[a.id]?.added || 0)));
     const { root } = sheet(`${head(`メンバー <span class="sub" style="font-family:var(--body)">${ppl.length}人</span>`)}
-      <p class="sub" style="margin-top:0">「${esc(S.settings.name)}」に参加している人です。${F.lists ? "ほかのグループのメンバーは、上のグループ名から確認できます。" : ""}</p>
+      <p class="sub" style="margin-top:0">「${esc(S.settings.name)}」に参加している人です。${F.lists ? "ほかの部屋のメンバーは、上の部屋名から確認できます。" : ""}</p>
       ${best && ppl.length >= 3 ? `<div class="best-combo"><span class="sub">ベストコンビ</span><div class="duo">${av(best.a)}${av(best.b)}</div><b>${esc(pname(best.a))} × ${esc(pname(best.b))}</b><span class="num">相性 ${best.score}%</span></div>` : ""}
       <div class="member-grid">${sorted.map((p) => {
         const st = statOf[p.id] || { titles: [], added: 0, yes: 0, visited: 0 };
         const c = meId && p.id !== meId && !solo() ? compatibility(S.spots, meId, p.id) : null;
         const g = st.topGenre ? genreOf(st.topGenre) : null;
         return `<div class="member-card">
-          <div class="mc-top">${av(p.id, "lg")}<div style="min-width:0"><b class="mc-name">${esc(p.name || "メンバー")}</b>${p.id === meId ? ` <span class="tag">あなた</span>` : ""}
+          <div class="mc-top">${av(p.id, "lg")}<div style="min-width:0"><b class="mc-name">${esc(p.name || "メンバー")}</b>${p.id === meId ? ` <span class="tag">あなた</span>` : ""}${p.leader ? ` <span class="tag match">👑 リーダー</span>` : ""}
             <div class="tags" style="margin:4px 0 0">${st.titles.map((t) => `<span class="tag title">${esc(t)}</span>`).join("")}</div></div></div>
           <div class="mc-stats"><span><b class="num">${st.added}</b>見つけた</span><span><b class="num">${st.yes}</b>行きたい♡</span><span><b class="num">${st.visited}</b>行けた</span></div>
           ${g ? `<p class="sub" style="margin:0">よく見つけるのは ${g.emoji} ${esc(g.label)}</p>` : ""}
@@ -1436,7 +1437,7 @@ export function startApp(backend, mount = document.body) {
           </div>
         </div>`;
       }).join("")}</div>
-      ${(F.invite || F.codes) && !solo() ? `<button class="btn rose block" style="margin-top:12px" data-act-invite>${ic("users", "sm")}メンバーを招待する（共有コード）</button>` : ""}
+      ${(F.invite || F.codes) && !solo() && isLeader() ? `<button class="btn rose block" style="margin-top:12px" data-act-invite>${ic("users", "sm")}メンバーを招待する（招待コード）</button>` : ""}
       <p class="sub" style="margin-top:12px">称号は、見つけた場所・投票・コメントから自動で付きます。相性は、ふたりとも答えた場所の「行きたい／まあまあ」がどれだけ一致したかです。</p>`);
     root.addEventListener("click", (e) => {
       const r = e.target.closest("[data-rename]");
@@ -1492,14 +1493,15 @@ export function startApp(backend, mount = document.body) {
   }
 
   function inviteText(code = "") {
-    return `${V().invite || "行きたい場所のリストを作りました"}\n${F.invite ? B.inviteUrl() : ""}${code ? `\n共有コード: ${code}` : ""}`.replace(/\n\n/g, "\n");
+    return `${V().invite || "行きたい場所のリストを作りました"}\n${F.invite ? B.inviteUrl() : ""}${code ? `\n招待コード: ${code}` : ""}`.replace(/\n\n/g, "\n");
   }
-  // 招待：リンク（Webアプリ）と、グループごとの共有コード
+  // 招待：リンク（Webアプリ）と、部屋ごとの招待コード
   function openInvite() {
+    if (!isLeader()) return toast("招待できるのはリーダーだけです");
     const who = esc(V().label === "ひとりで" ? "メンバー" : V().label);
     const { root } = sheet(`${head(`${who}を招待`)}
-      ${F.codes ? `<div class="code-box"><span class="sub">「${esc(S.settings.name)}」の共有コード</span><b class="num" id="s-code"><span class="spinner"></span></b><button class="btn sm line" data-copy-code disabled>コードをコピー</button></div>
-        <p class="sub" style="margin:8px 0 14px">${F.invite ? "相手はアプリの最初の画面で「共有コードで参加する」に入れるだけ。" : "このページのリンクを共有したあと、相手にリストの切り替え →「共有コードで参加」でこのコードを入れてもらいます。"}コードはグループごとに別なので、恋人用・友達用を混ぜずに使えます。</p>` : ""}
+      ${F.codes ? `<div class="code-box"><span class="sub">「${esc(S.settings.name)}」の招待コード</span><b class="num" id="s-code"><span class="spinner"></span></b><button class="btn sm line" data-copy-code disabled>コードをコピー</button></div>
+        <p class="sub" style="margin:8px 0 14px">${F.invite ? "相手はアプリの最初の画面で「招待コードで参加する」に入れるだけ。" : "このページのリンクを共有したあと、相手にリストの切り替え →「招待コードで参加」でこのコードを入れてもらいます。"}コードは部屋ごとに別なので、恋人用・友達用を混ぜずに使えます。</p>` : ""}
       ${F.invite ? `<div class="label" style="margin-top:0">リンクで招待</div>
         <div style="display:flex;gap:6px"><input id="s-invite" readonly value="${esc(B.inviteUrl())}" aria-label="招待リンク" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn sm line" data-copy-invite>コピー</button></div>
         <p class="sub" style="margin-top:6px">リンクを開いて名前を入れるだけで参加できます。アカウント登録はいりません。</p>` : `<div class="notice">${esc(B.shareNote || "画面上部の共有メニューから、このページを共有してください。")}</div>`}
@@ -1517,7 +1519,7 @@ export function startApp(backend, mount = document.body) {
       root.querySelector("[data-copy-code]").disabled = !code;
       root.querySelector("[data-line]").href = lineShareUrl(inviteText(code));
     }).catch(() => { const el = root.querySelector("#s-code"); if (el) el.textContent = "—"; });
-    root.querySelector("[data-copy-code]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); toast("共有コードをコピーしました"); } catch { toast(code); } });
+    root.querySelector("[data-copy-code]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); toast("招待コードをコピーしました"); } catch { toast(code); } });
     root.querySelector("[data-copy-invite]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(B.inviteUrl()); toast("コピーしました"); } catch { root.querySelector("#s-invite").select(); } });
     root.querySelector("[data-share-invite]")?.addEventListener("click", () => navigator.share({ title: S.settings.name, text: inviteText(code) }).catch(() => {}));
   }
@@ -1527,20 +1529,23 @@ export function startApp(backend, mount = document.body) {
     const ppl = peopleList();
     const mine = person(me());
     const { root, close } = sheet(`${head("設定")}
-      ${solo() ? "" : F.invite || F.codes ? `<button class="btn rose block" data-invite>${ic("users", "sm")}${esc(V().label)}を招待する（共有コード）</button>`
+      ${B.kind === "artifact" ? `<div class="role-line">${isLeader() ? `<span class="tag match">👑 リーダー</span><span class="sub">部屋を作って、招待コードでみんなを招待できます。</span>` : `<span class="tag">ゲスト</span><span class="sub">部屋の作成やジャンルの変更はリーダーが行います。そのほかはみんなと同じように使えます。</span>`}</div>` : ""}
+      ${solo() || !isLeader() ? "" : F.invite || F.codes ? `<button class="btn rose block" data-invite>${ic("users", "sm")}${esc(V().label)}を招待する（招待コード）</button>`
         : `<div class="notice">一緒に使う人は、画面上部の共有メニューから「編集できる」で招待してください。${esc(B.shareNote || "")}</div>`}
 
-      <div class="label">このリスト</div>
+      <div class="label">この部屋</div>
       <div class="panel">
-        <div class="field"><label for="s-name">リストの名前</label><div style="display:flex;gap:6px"><input id="s-name" value="${esc(st.name)}" maxlength="40" style="flex:1"><button class="btn sm line" data-save-name>保存</button></div></div>
-        <div class="field" style="margin:0"><label>誰と使う？</label>
+        ${isLeader() ? `<div class="field"><label for="s-name">部屋の名前</label><div style="display:flex;gap:6px"><input id="s-name" value="${esc(st.name)}" maxlength="40" style="flex:1"><button class="btn sm line" data-save-name>保存</button></div></div>
+        <div class="field" style="margin:0"><label>部屋のジャンル（誰と使う？）</label>
           <div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile ${(st.type || "couple") === k ? "on" : ""}" data-type="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
-          <span class="sub">選んだ相手に合わせて、言葉づかいやタブの名前が変わります。</span></div>
+          <span class="sub">選んだ相手に合わせて、言葉づかいやタブの名前が変わります。</span></div>`
+        : `<div class="room-ro"><span class="room-emoji">${V().emoji}</span><div><b>${esc(st.name)}</b><div class="sub">${esc(V().label)}と使う部屋${B.leaderId?.() ? ` ・ リーダー: ${esc(person(B.leaderId()).name || "リーダー")}` : ""}</div></div></div>
+          <p class="sub" style="margin:8px 0 0">部屋の名前とジャンルは、リーダーだけが変えられます。</p>`}
       </div>
 
       ${F.members || F.memberList ? `<div class="label">メンバー（${ppl.length}人）<button class="link" data-members style="border:0;background:none;color:var(--plan);font-weight:700;float:right;letter-spacing:0">メンバー図鑑を見る</button></div>
         <div class="panel">
-          ${ppl.map((p) => { const st = memberStats(S.spots, [p.id]).members[0] || {}; return `<div class="base-item" style="padding:6px 0;margin:0;background:none">${av(p.id)}<div class="val"><b>${esc(p.name || "メンバー")}</b>${p.id === me() ? ` <span class="tag">あなた</span>` : ""}<div class="sub">見つけた ${st.added || 0}件 ・ 行きたい♡ ${st.yes || 0}件</div></div></div>`; }).join("")}
+          ${ppl.map((p) => { const st = memberStats(S.spots, [p.id]).members[0] || {}; return `<div class="base-item" style="padding:6px 0;margin:0;background:none">${av(p.id)}<div class="val"><b>${esc(p.name || "メンバー")}</b>${p.id === me() ? ` <span class="tag">あなた</span>` : ""}${p.leader ? ` <span class="tag match">👑 リーダー</span>` : ""}<div class="sub">見つけた ${st.added || 0}件 ・ 行きたい♡ ${st.yes || 0}件</div></div></div>`; }).join("")}
           ${F.members && mine && me() ? `<form id="me-form" style="margin-top:10px"><div class="row2"><div class="field"><label for="me-name">あなたの名前</label><input id="me-name" value="${esc(mine.name)}" maxlength="20"></div><div class="field"><label for="me-color">あなたの色</label><input id="me-color" type="color" value="${esc(mine.color)}" style="height:46px;padding:4px"></div></div>
             <div class="actions" style="margin-top:0"><button class="btn line">保存</button><button type="button" class="btn line" data-switch>別の人として使う</button></div></form>` : ""}
         </div>` : ""}
@@ -1566,7 +1571,9 @@ export function startApp(backend, mount = document.body) {
         <button class="btn line" data-theme>表示テーマを切り替え</button>
         ${F.export ? `<a class="btn line" href="${esc(B.exportUrl())}" download>バックアップ</a>` : ""}
       </div>
-      ${F.members && ppl.length > 1 && me() ? `<button class="btn danger block" style="margin-top:14px" data-leave>このリストから抜ける</button>
+      ${F.owner ? `<div class="label">リーダー用</div><div class="panel"><b>ゲストの画面を確かめる</b><p class="sub" style="margin:4px 0 10px">${F.preview ? "いまゲスト画面のプレビュー中です。" : "招待された友人に見える画面（招待コードの入力から）を、このタブで試せます。書き込みはあなたとして行われます。"}</p>
+        <button class="btn line block" data-preview>${F.preview ? "プレビューを終わる" : "ゲスト画面をプレビュー"}</button></div>` : ""}
+      ${(F.members && ppl.length > 1 && me()) || (B.kind === "artifact" && !isLeader()) ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
         <div class="notice warn" data-leave-confirm hidden style="margin-top:10px">「${esc(st.name)}」から抜けると、この端末ではリストが開けなくなります（あなたが追加したスポットは残ります）。<div class="actions"><button class="btn line sm" data-leave-cancel>やめる</button><button class="btn danger sm" data-leave-do>抜ける</button></div></div>` : ""}
       <p class="sub" style="margin-top:14px">読み取り: ${esc(B.readerNote)}<br>移動時間は直線距離から出した目安です。正確な時間はスポットの「経路」から確認できます。</p>`);
     if (focus === "bases") setTimeout(() => root.querySelector("#b-label")?.focus(), 60);
@@ -1616,7 +1623,8 @@ export function startApp(backend, mount = document.body) {
     root.querySelector("[data-leave]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = false));
     root.querySelector("[data-leave-cancel]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = true));
     root.querySelector("[data-leave-do]")?.addEventListener("click", () => act(() => B.leave()));
-    root.querySelector("[data-save-name]").addEventListener("click", async () => { const name = root.querySelector("#s-name").value.trim() || V().listName; if (await act(() => B.saveSettings({ name }), "保存しました")) { S.settings = { ...S.settings, name }; render(); } });
+    root.querySelector("[data-preview]")?.addEventListener("click", () => B.setPreview(!F.preview));
+    root.querySelector("[data-save-name]")?.addEventListener("click", async () => { const name = root.querySelector("#s-name").value.trim() || V().listName; if (await act(() => B.saveSettings({ name }), "保存しました")) { S.settings = { ...S.settings, name }; render(); } });
     root.querySelector("[data-theme]").addEventListener("click", () => {
       const r = document.documentElement;
       const dark = r.dataset.theme === "dark" || (!r.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -1659,7 +1667,7 @@ export function startApp(backend, mount = document.body) {
     });
   }
 
-  // グループ（リスト）の切り替え・新規作成・共有コードで参加
+  // 部屋（リスト）の切り替え・新規作成・招待コードで参加
   function openLists() {
     const lists = B.lists();
     const row = (l) => {
@@ -1668,24 +1676,26 @@ export function startApp(backend, mount = document.body) {
       const inner = `<span class="ph" style="width:44px;height:44px;font-size:22px;--tint:${TINT.other}">${t.emoji}</span>
         <span style="min-width:0"><b>${esc(l.name)}</b><div class="sub">${esc(t.label)}${l.count != null ? ` ・ ${l.count}件` : ""}${mem.length ? ` ・ ${mem.length}人` : ""}</div>
           ${mem.length ? `<span class="g-members">${mem.slice(0, 6).map(avOf).join("")}${mem.length > 6 ? `<span class="av xs more">+${mem.length - 6}</span>` : ""}<span class="g-names">${esc(mem.slice(0, 4).map((m) => (m.id === me() ? "あなた" : m.name || "メンバー")).join("・"))}${mem.length > 4 ? " ほか" : ""}</span></span>` : ""}</span>
-        ${l.current ? `<span class="tag plan">表示中</span>` : ""}`;
+        ${l.current ? `<span class="tag plan">表示中</span>` : l.leader && l.leader === me() ? `<span class="tag match">👑</span>` : ""}`;
       const style = "text-decoration:none;color:inherit;grid-template-columns:44px 1fr auto;align-items:center;width:100%;border:0;background:none;text-align:left;font:inherit";
       return l.url ? `<a class="memory" href="${esc(l.url)}" style="${style}">${inner}</a>` : `<button class="memory" data-gid="${esc(l.id)}" style="${style}">${inner}</button>`;
     };
-    const { root, close } = sheet(`${head("グループ")}
-      <p class="sub" style="margin-top:0">恋人用・友達用・家族用など、相手ごとにグループを分けられます。共有コードはグループごとに別です。</p>
+    const { root, close } = sheet(`${head("部屋")}
+      <p class="sub" style="margin-top:0">恋人用・友達用・家族用など、相手ごとに部屋を分けられます。招待コードは部屋ごとに別です。</p>
       <div class="panel" style="padding:6px 14px">${lists.map(row).join("")}</div>
-      <button class="btn line block" style="margin-top:10px" data-see-members>${ic("users", "sm")}表示中のグループのメンバーを見る（${peopleList().length}人）</button>
-      <div class="label">新しいグループを作る</div>
+      <button class="btn line block" style="margin-top:10px" data-see-members>${ic("users", "sm")}表示中の部屋のメンバーを見る（${peopleList().length}人）</button>
+      ${isLeader() ? `<div class="label">新しい部屋を作る</div>
       ${B.kind === "artifact" ? `<div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-newtype="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
         <form id="new-group" hidden style="margin-top:8px"><div style="display:flex;gap:6px"><input id="ng-name" maxlength="40" required style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn rose">作る</button></div></form>`
-        : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しいグループを作る</a>`}
-      ${F.codes ? `<div class="label">共有コードで参加する</div>
+        : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しい部屋を作る</a>`}` : `<p class="sub" style="margin-top:12px">新しい部屋は、リーダーが作って招待してくれます。</p>`}
+      ${B.kind === "artifact" ? `<button class="btn line block" style="margin-top:12px" data-join-another>${ic("plus", "sm")}招待コードで別の部屋に参加</button>`
+        : F.codes ? `<div class="label">招待コードで参加する</div>
         <form id="join-code"><div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn line">参加</button></div>
         <p class="sub" id="jc-status" style="margin:6px 0 0">誘ってくれた人から聞いた6文字のコードを入れてください。</p></form>` : ""}`);
     let newType = null;
     root.addEventListener("click", async (e) => {
       if (e.target.closest("[data-see-members]")) return openMembers();
+      if (e.target.closest("[data-join-another]")) { close(); return joinAnother(); }
       const g = e.target.closest("[data-gid]");
       if (g) { if (g.dataset.gid !== lists.find((l) => l.current)?.id) { close(); await act(() => B.openList(g.dataset.gid)); } return; }
       const t = e.target.closest("[data-newtype]");
@@ -1702,7 +1712,7 @@ export function startApp(backend, mount = document.body) {
       if (!name || !newType) return;
       e.submitter && (e.submitter.disabled = true);
       close();
-      if (await act(() => B.createList({ type: newType, name }))) toast(`「${name}」を作りました。設定の「招待」から共有コードを送れます`);
+      if (await act(() => B.createList({ type: newType, name }))) toast(`「${name}」を作りました。設定の「招待」から招待コードを送れます`);
     });
     root.querySelector("#join-code")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1714,14 +1724,178 @@ export function startApp(backend, mount = document.body) {
     return root;
   }
 
-  // 初めて開いたとき：使い方スライド → （Webアプリ）参加 →（アーティファクト）誰と使うか
+  // ---------- 入口：招待コード → 部屋の確認 → ロゴ → 基本情報 → 使い方 → ホーム ----------
+  // リーダー（アーティファクトの持ち主）は部屋を作って招待する人。ゲストは招待コードで入る
+  const isLeader = () => F.leader !== false;
+  let loadedWait = [];
+  const whenLoaded = () => (S.loaded ? Promise.resolve() : new Promise((ok) => loadedWait.push(ok)));
+  function screen(html) {
+    document.querySelector(".gate")?.remove();
+    const el = document.createElement("div");
+    el.className = "gate";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-modal", "true");
+    el.innerHTML = `${F.preview ? `<div class="preview-bar">ゲスト画面のプレビュー中<button data-exit-preview>終わる</button></div>` : ""}<div class="welcome">${html}</div>`;
+    el.querySelector("[data-exit-preview]")?.addEventListener("click", () => B.setPreview(false));
+    document.body.append(el);
+    el.scrollTop = 0;
+    return el;
+  }
+  const closeScreen = () => document.querySelector(".gate")?.remove();
+  const steps = (n, all = 5) => `<div class="steps-bar">${Array.from({ length: all }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</div>`;
+
+  // 1. 招待コード
+  function codeStep(onJoined, { first = true, msg = "" } = {}) {
+    const el = screen(`${steps(1)}
+      <h1>招待コードを入力</h1>
+      <p>招待してくれた人（リーダー）から届いた、6文字のコードを入れてください。</p>
+      ${B.readOnly ? `<div class="notice warn" style="text-align:left">いまは見るだけの権限で開いています。参加するには、リーダーに共有メニューから<b>メールで「編集者」として招待</b>してもらってください。</div>` : ""}
+      <form id="gate-code">
+        <input id="gate-code-in" class="code-in" maxlength="8" placeholder="K7M2QX" autocomplete="off" autocapitalize="characters" aria-label="招待コード" spellcheck="false">
+        <p class="sub" id="gate-st" role="status" style="min-height:1.5em;margin:8px 0">${esc(msg)}</p>
+        <button class="btn rose block">次へ</button>
+      </form>
+      ${first ? "" : `<p class="sub" style="margin-top:14px"><a href="#" data-back>もどる</a></p>`}`);
+    const inp = el.querySelector("#gate-code-in");
+    inp.addEventListener("input", () => { const v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); if (v !== inp.value) inp.value = v; });
+    el.querySelector("#gate-code").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const st = el.querySelector("#gate-st");
+      const btn = el.querySelector("#gate-code button");
+      btn.disabled = true;
+      st.innerHTML = `<span class="thinking"><span class="spinner"></span>部屋を探しています…</span>`;
+      try { roomStep(await B.peekCode(inp.value), onJoined); }
+      catch (err) { st.textContent = err?.message || "見つかりませんでした"; btn.disabled = false; }
+    });
+    el.querySelector("[data-back]")?.addEventListener("click", (e) => { e.preventDefault(); closeScreen(); });
+    setTimeout(() => inp.focus(), 60);
+  }
+  // 2. 部屋の確認
+  function roomStep(info, onJoined) {
+    const t = GROUP_TYPES[info.type] || GROUP_TYPES.friends;
+    const others = info.members.filter((m) => !m.leader);
+    const el = screen(`${steps(2)}
+      <h1>この部屋に参加しますか？</h1>
+      <div class="room-card">
+        <span class="room-emoji">${t.emoji}</span>
+        <b class="room-name">${esc(info.name)}</b>
+        <span class="tag">${esc(t.label)}と使う部屋</span>
+        ${info.leader ? `<div class="room-leader">${avOf(info.leader)}<span><small>リーダー</small>${esc(info.leader.name)}</span></div>` : ""}
+        <div class="room-members">${others.length ? `${others.slice(0, 8).map(avOf).join("")}<span class="sub">${others.length}人が参加中</span>` : `<span class="sub">あなたが最初のメンバーです</span>`}</div>
+      </div>
+      ${info.joined ? `<p class="sub">この部屋にはもう参加しています。</p>` : ""}
+      <div class="actions" style="justify-content:center"><button class="btn line" data-redo>コードを入れ直す</button><button class="btn rose" data-ok>OK、次へ</button></div>`);
+    el.querySelector("[data-redo]").addEventListener("click", () => codeStep(onJoined, { first: !S.loaded }));
+    el.querySelector("[data-ok]").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      if (await act(() => B.joinRoom(info.id))) onJoined(info);
+      else e.target.disabled = false;
+    });
+  }
+  // 3. ロゴ・アプリ名・キャッチフレーズ
+  function splashStep(next, n = 3, all = 5) {
+    const el = screen(`${steps(n, all)}
+      <div class="splash">${LOGO}<b class="splash-name">Spotrip</b><p class="splash-catch">行きたい場所、もう忘れない。</p>
+      <p>SNSで見つけた「ここ行きたい！」をみんなで貯めて、次の「どこいく？」にすぐ答えられるアプリです。</p></div>
+      <button class="btn rose block" data-next>はじめる</button>`);
+    el.querySelector("[data-next]").addEventListener("click", next);
+  }
+  // （リーダーだけ）部屋のジャンル
+  function typeStep(next) {
+    const el = screen(`<h1>誰と使いますか？</h1><p>この部屋のジャンルです。あとから設定で変えられます。</p>
+      <div class="type-grid" style="margin-top:16px">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-type="${k}"><span class="emoji">${t.emoji}</span><b>${esc(t.label)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`);
+    el.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-type]");
+      if (!b) return;
+      const t = GROUP_TYPES[b.dataset.type];
+      const patch = { type: b.dataset.type, ...(S.settings.name === "行きたいリスト" || !S.settings.name ? { name: t.listName } : {}) };
+      if (await act(() => B.saveSettings(patch))) { S.settings = { ...S.settings, ...patch }; render(); next(); }
+    });
+  }
+  // 4. 名前・アイコン・テーマカラー・出発地
+  async function profileStep(next, n = 4, all = 5) {
+    await whenLoaded();
+    const mine = person(me());
+    let emoji = (mine.avatar || "").startsWith("emoji:") ? mine.avatar.slice(6) : "";
+    let accent = local.get("accent", "") || "#df4a72";
+    const el = screen(`${steps(n, all)}
+      <h1>あなたのこと</h1><p>部屋のみんなに表示される名前などを決めましょう。あとから設定で変えられます。</p>
+      <form id="gate-prof">
+        <div class="prof-top"><span class="av lg" id="gp-av" style="background:${esc(mine.color || "#9a8a8f")}"></span>
+          <div class="field" style="flex:1;margin:0"><label for="gp-name">名前（ニックネーム）</label><input id="gp-name" required maxlength="20" value="${esc(mine.name || "")}" placeholder="例: はるか" autocomplete="nickname"></div></div>
+        <div class="field"><label>アイコン（任意）</label><div class="emoji-row">${["", ...AVATAR_EMOJI.slice(0, 15)].map((x) => `<button type="button" data-emo="${x}" class="${x === emoji ? "on" : ""}" aria-label="${x || "名前の頭文字"}">${x || "Aa"}</button>`).join("")}</div></div>
+        <div class="field"><label>テーマカラー</label><div class="swatches">${ACCENTS.map(([hex, label]) => `<button type="button" class="swatch ${accent === hex ? "on" : ""}" style="--sw:${hex}" data-accent="${hex}" aria-label="${label}"><i></i><small>${label}</small></button>`).join("")}</div></div>
+        <div class="field"><label for="gp-where">出発地（任意）</label>
+          <div class="row2" style="margin:0"><input id="gp-label" value="自宅" maxlength="20" aria-label="出発地の名前"><input id="gp-where" placeholder="駅名・住所など" aria-label="出発地の場所"></div>
+          <span class="sub">移動時間やデートコースの交通費の計算に使います。あとからでも登録できます。</span></div>
+        <p class="sub" id="gp-st" role="status" style="min-height:1.4em"></p>
+        ${F.preview ? `<p class="sub">プレビュー中なので、ここで入れた内容は保存しません。</p>` : ""}
+        <button class="btn rose block">次へ</button>
+      </form>`);
+    const drawAv = () => { const a = el.querySelector("#gp-av"); const nm = el.querySelector("#gp-name").value || "?"; a.innerHTML = emoji ? `<span class="emo">${esc(emoji)}</span>` : esc([...nm][0]); a.classList.toggle("is-emoji", Boolean(emoji)); };
+    drawAv();
+    el.querySelector("#gp-name").addEventListener("input", drawAv);
+    el.addEventListener("click", (e) => {
+      const em = e.target.closest("[data-emo]");
+      if (em) { emoji = em.dataset.emo; el.querySelectorAll("[data-emo]").forEach((b) => b.classList.toggle("on", b === em)); drawAv(); }
+      const ac = e.target.closest("[data-accent]");
+      if (ac) { accent = ac.dataset.accent; el.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b === ac)); applyAccent(accent === "#df4a72" ? "" : accent); }
+    });
+    el.querySelector("#gate-prof").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const st = el.querySelector("#gp-st");
+      const btn = e.target.querySelector("button.rose");
+      const name = el.querySelector("#gp-name").value.trim();
+      const where = el.querySelector("#gp-where").value.trim();
+      const label = el.querySelector("#gp-label").value.trim() || "自宅";
+      if (!name) return (st.textContent = "名前を入れてください");
+      btn.disabled = true;
+      local.set("accent", accent === "#df4a72" ? "" : accent);
+      if (!F.preview) {
+        if (name !== mine.name && !(await act(() => B.renameMember(me(), name)))) { btn.disabled = false; return; }
+        if ((emoji ? `emoji:${emoji}` : "") !== (mine.avatar || "") && (emoji || (mine.avatar || "").startsWith("emoji:"))) await act(() => B.setAvatar(me(), emoji ? `emoji:${emoji}` : ""));
+        if (where) {
+          st.innerHTML = `<span class="thinking"><span class="spinner"></span>出発地の位置を探しています</span>`;
+          const pos = await B.locate(where).catch(() => null);
+          if (!pos) { st.textContent = "出発地の位置が見つかりませんでした。空のままにするか、別の書き方で試してください"; btn.disabled = false; return; }
+          const id = `b${Date.now().toString(36)}`;
+          const taken = (S.settings.bases || []).some((b) => b.label === label);
+          const bases = [...(S.settings.bases || []), { id, label: taken ? `${name}の${label}` : label, address: /^https?:/.test(where) ? "" : where, lat: pos.lat, lng: pos.lng }];
+          if (await act(() => B.saveSettings({ bases }))) { S.settings = { ...S.settings, bases }; S.baseId = id; local.set("baseId", id); }
+        }
+      }
+      next();
+    });
+    setTimeout(() => el.querySelector("#gp-name")?.focus(), 60);
+  }
+  // 5. 使い方 → ホーム
+  function tourStep() {
+    closeScreen();
+    showOnboarding(() => { local.set(F.preview ? "onboardedPreview" : "onboarded", true); render(); toast(`ようこそ、「${S.settings.name}」へ`); });
+  }
+  // コードから来たときは「コード・部屋の確認」が済んでいるので 3/5 から
+  function runSetup({ fromCode = false } = {}) {
+    const all = fromCode ? 5 : 3, off = fromCode ? 0 : 2;
+    splashStep(async () => {
+      const toProfile = () => profileStep(tourStep, 4 - off, all);
+      if (isLeader() && !S.settings.type) { await whenLoaded(); return typeStep(toProfile); }
+      toProfile();
+    }, 3 - off, all);
+  }
+  // ほかの部屋の招待コードで参加する（部屋の一覧から）
+  function joinAnother() {
+    codeStep((info) => { closeScreen(); toast(`「${info.name}」に参加しました`); }, { first: false });
+  }
+
   function firstRun() {
-    const next = () => {
-      if (F.members && !me()) return joinSheet();
-      if (!S.settings.type && B.kind === "artifact") return typeSheet();
-    };
-    if (!local.get("onboarded", false)) showOnboarding(() => { local.set("onboarded", true); next(); });
-    else next();
+    // Webアプリ版：使い方 → 名前を入れて参加
+    if (B.kind !== "artifact") {
+      const next = () => { if (F.members && !me()) joinSheet(); };
+      if (!local.get("onboarded", false)) return showOnboarding(() => { local.set("onboarded", true); next(); });
+      return next();
+    }
+    if (!local.get(F.preview ? "onboardedPreview" : "onboarded", false)) return runSetup();
+    if (isLeader() && !S.settings.type) typeSheet();
   }
 
   // ---------- 画面遷移・イベント ----------
@@ -1769,6 +1943,7 @@ export function startApp(backend, mount = document.body) {
     }
     const a = t.dataset.act;
     if (a === "settings") openSettings();
+    if (a === "exit-preview") B.setPreview(false);
     if (a === "lists") openLists();
     if (a === "invite") openInvite();
     if (a === "ask") openAsk();
@@ -1831,8 +2006,8 @@ export function startApp(backend, mount = document.body) {
   if (theme) document.documentElement.dataset.theme = theme;
   applyAccent(local.get("accent", ""));
   render();
-  B.subscribe(({ settings, spots, reset }) => {
-    // グループを切り替えたときは、前のグループの状態を持ち越さない
+  const boot = () => B.subscribe(({ settings, spots, reset }) => {
+    // 部屋を切り替えたときは、前の部屋の状態を持ち越さない
     if (reset) {
       Object.assign(S, { spots: [], q: "", f: freshFilters(), seg: "all", courses: null, openMode: "", calDay: "", skipped: new Set(), routeCache: {} });
       $modal.innerHTML = "";
@@ -1847,8 +2022,14 @@ export function startApp(backend, mount = document.body) {
     }
     render();
     refreshDetail();
-    if (!wasLoaded) firstRun();
+    if (S.loaded) { loadedWait.forEach((ok) => ok()); loadedWait = []; }
+    if (!wasLoaded && !joining) firstRun();
+    joining = false;
   });
+  // ゲストで、まだどの部屋にも入っていないとき：招待コードから始める
+  let joining = false;
+  if (B.needsJoin?.()) codeStep(() => { joining = true; boot(); runSetup({ fromCode: true }); });
+  else boot();
 
   return { openAdd, go, invite: openInvite };
 }

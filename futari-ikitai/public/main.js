@@ -115,7 +115,7 @@ function createFlow() {
       <p>使う相手ごとにリストを作れます。あとから設定で変えられます。</p>
       <div class="type-grid" style="margin-top:18px">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-type="${k}"><span class="emoji">${t.emoji}</span><b>${esc(t.label)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
       <form id="join-code" class="panel" style="margin-top:16px;text-align:left">
-        <b>共有コードで参加する</b><p class="sub" style="margin:2px 0 8px">誘ってくれた人から聞いた6文字のコードを入れてください。</p>
+        <b>招待コードで参加する</b><p class="sub" style="margin:2px 0 8px">誘ってくれた人から聞いた6文字のコードを入れてください。</p>
         <div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn rose">参加</button></div>
         <p class="sub" id="jc-status" style="margin:6px 0 0"></p>
       </form>

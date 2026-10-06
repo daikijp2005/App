@@ -576,6 +576,41 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .mood span { font-size: 18px; line-height: 1; }
 .mood.on { border-color: var(--rose); background: var(--rose-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--rose); }
 
+/* 入口（招待コード → 部屋の確認 → ロゴ → あなたのこと） */
+.gate { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.gate .welcome { padding-top: 40px; padding-bottom: 40px; }
+.gate h1 { font-family: var(--display); }
+.gate form { text-align: left; }
+.code-in { width: 100%; font-size: 30px; font-weight: 900; text-align: center; letter-spacing: .32em; padding: 14px 8px 14px calc(8px + .32em); border-radius: 16px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); text-transform: uppercase; font-family: var(--display); }
+.code-in:focus { outline: none; border-color: var(--rose); }
+.room-card { display: grid; justify-items: center; gap: 8px; margin: 20px 0 18px; padding: 22px 18px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
+.room-emoji { font-size: 44px; line-height: 1; }
+.room-name { font-family: var(--display); font-size: 22px; font-weight: 900; line-height: 1.35; word-break: auto-phrase; }
+.room-leader { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 8px 14px 8px 8px; border-radius: 999px; background: var(--rose-soft); text-align: left; }
+.room-leader small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 700; }
+.room-leader span { font-weight: 800; }
+.room-members { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; justify-content: center; }
+.room-members .sub { margin-left: 8px; }
+.splash { display: grid; justify-items: center; gap: 6px; margin: 18px 0 26px; }
+.splash svg { width: 112px; height: 112px; border-radius: 30px; box-shadow: 0 18px 40px -14px color-mix(in srgb, var(--rose) 60%, transparent); animation: pop .6s cubic-bezier(.2, .9, .3, 1.3) both; }
+.splash-name { font-family: var(--display); font-size: 40px; font-weight: 900; letter-spacing: .04em; color: var(--ink); margin-top: 10px; }
+.splash-catch { font-family: var(--display); font-size: 19px; font-weight: 700; color: var(--rose) !important; margin: 0; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .splash svg { animation: none; } }
+.prof-top { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
+.emoji-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.emoji-row::-webkit-scrollbar { display: none; }
+.emoji-row button { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); font-size: 20px; cursor: pointer; color: var(--muted); font-weight: 800; font-size: 13px; }
+.emoji-row button:not(:first-child) { font-size: 20px; }
+.emoji-row button.on { border-color: var(--rose); box-shadow: inset 0 0 0 1px var(--rose); background: var(--rose-soft); }
+.preview-bar { position: sticky; top: 0; z-index: 70; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 7px 12px; background: #2b2350; color: #fff; font-size: 12.5px; font-weight: 700; }
+.preview-bar button { border: 1px solid rgba(255,255,255,.5); background: none; color: #fff; border-radius: 999px; padding: 3px 10px; font: inherit; cursor: pointer; }
+.role-line { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.role-line .tag { flex-shrink: 0; }
+.role-line .sub { font-size: 12px; }
+.room-ro { display: flex; align-items: center; gap: 12px; }
+.room-ro .room-emoji { font-size: 32px; }
+
 </style>
 <div id="boot" class="empty" style="padding-top:30vh"><span class="thinking"><span class="spinner"></span>記憶をたどっています…</span></div>
 <script>
@@ -2083,8 +2118,8 @@ const TOUR = [
       <div class="mini" style="flex:none;width:100%;box-shadow:var(--shadow-sm)"><span class="ph" style="--tint:${TINT.cafe}">☕</span><span class="tx"><b>シーサイドカフェ</b><span class="sub">はるかが先月見つけた</span></span></div></div>`,
   },
   {
-    title: "相手ごとに、グループを分けて",
-    text: "恋人・友達・家族・職場など、使う相手ごとにリストを作れます。グループごとの共有コードかリンクを送れば、相手は名前を入れるだけで参加できます。",
+    title: "相手ごとに、部屋を分けて",
+    text: "恋人・友達・家族・職場など、使う相手ごとにリストを作れます。部屋ごとの招待コードかリンクを送れば、相手は名前を入れるだけで参加できます。",
     art: () => `<div class="tour-mock"><div class="type-grid compact">${Object.values(GROUP_TYPES).map((t) => `<span class="type-tile"><span class="emoji">${t.emoji}</span>${esc(t.label)}</span>`).join("")}</div></div>`,
   },
   {
@@ -2188,7 +2223,7 @@ function startApp(backend, mount = document.body) {
     const inner = a.startsWith("emoji:") ? `<span class="emo">${esc(a.slice(6))}</span>` : a ? `<img src="${esc(a)}" alt="">` : esc([...(p.name || "?")][0]);
     return `<span class="av ${cls}${a.startsWith("emoji:") ? " is-emoji" : ""}" style="background:${esc(p.color || "#9a8a8f")}" title="${esc(p.name)}">${inner}</span>`;
   };
-  // ほかのグループのメンバーなど、いまのグループにいない人のアイコン
+  // ほかの部屋のメンバーなど、いまの部屋にいない人のアイコン
   const avOf = (m) => {
     const a = m.avatar || "";
     const inner = a.startsWith("emoji:") ? `<span class="emo">${esc(a.slice(6))}</span>` : a ? `<img src="${esc(a)}" alt="">` : esc([...(m.name || "?")][0]);
@@ -2252,7 +2287,7 @@ function startApp(backend, mount = document.body) {
     document.title = `${S.settings.name} | Spotrip`;
     const pend = pending().length;
     const ppl = peopleList();
-    $app.innerHTML = `
+    $app.innerHTML = `${F.preview ? `<div class="preview-bar">ゲスト画面のプレビュー中<button data-act="exit-preview">終わる</button></div>` : ""}
       <header class="topbar"><div class="wrap">
         ${F.lists ? `<button class="brand" data-act="lists" aria-label="リストを切り替える" style="border:0;background:none;padding:0;text-align:left;color:inherit">${LOGO}<h1>${esc(S.settings.name)}</h1>${ic("chev", "sm")}</button>`
           : `<div class="brand">${LOGO}<h1>${esc(S.settings.name)}</h1></div>`}
@@ -2478,7 +2513,8 @@ function startApp(backend, mount = document.body) {
   function welcomeEmpty() {
     const steps = [
       solo() ? ["1", "SNSで探す", "気になるお店や場所を見つけたら、店名や場所をざっくり覚えておきます。"]
-        : F.invite || F.codes ? ["1", `${V().label}を招待`, "設定の「招待」から共有コードかリンクを送ります。相手は名前を入れるだけで使えます。"] : ["1", `${V().label}を招待`, "共有メニューから相手を「編集できる」で招待します。"],
+        : !isLeader() ? ["1", "みんなで貯める", "部屋のみんなが見つけた場所が、ここに集まります。「行きたい」で気持ちを伝えましょう。"]
+        : F.invite || F.codes ? ["1", `${V().label}を招待`, "設定の「招待」から招待コードかリンクを送ります。相手は名前を入れるだけで使えます。"] : ["1", `${V().label}を招待`, "共有メニューから相手を「編集できる」で招待します。"],
       ["2", "出発地を登録", "家や職場、よく集まる駅を登録すると、移動時間の目安が出ます。"],
       ["3", "書くだけで追加", `「表参道のパンケーキ 1500円」のように書くと、${F.aiRead ? "AIが" : ""}ジャンル・場所・値段を整理します。SNSのリンクからも追加できます。`],
     ];
@@ -3366,14 +3402,14 @@ function startApp(backend, mount = document.body) {
     const meId = me();
     const sorted = [...ppl].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : (statOf[b.id]?.added || 0) - (statOf[a.id]?.added || 0)));
     const { root } = sheet(`${head(`メンバー <span class="sub" style="font-family:var(--body)">${ppl.length}人</span>`)}
-      <p class="sub" style="margin-top:0">「${esc(S.settings.name)}」に参加している人です。${F.lists ? "ほかのグループのメンバーは、上のグループ名から確認できます。" : ""}</p>
+      <p class="sub" style="margin-top:0">「${esc(S.settings.name)}」に参加している人です。${F.lists ? "ほかの部屋のメンバーは、上の部屋名から確認できます。" : ""}</p>
       ${best && ppl.length >= 3 ? `<div class="best-combo"><span class="sub">ベストコンビ</span><div class="duo">${av(best.a)}${av(best.b)}</div><b>${esc(pname(best.a))} × ${esc(pname(best.b))}</b><span class="num">相性 ${best.score}%</span></div>` : ""}
       <div class="member-grid">${sorted.map((p) => {
         const st = statOf[p.id] || { titles: [], added: 0, yes: 0, visited: 0 };
         const c = meId && p.id !== meId && !solo() ? compatibility(S.spots, meId, p.id) : null;
         const g = st.topGenre ? genreOf(st.topGenre) : null;
         return `<div class="member-card">
-          <div class="mc-top">${av(p.id, "lg")}<div style="min-width:0"><b class="mc-name">${esc(p.name || "メンバー")}</b>${p.id === meId ? ` <span class="tag">あなた</span>` : ""}
+          <div class="mc-top">${av(p.id, "lg")}<div style="min-width:0"><b class="mc-name">${esc(p.name || "メンバー")}</b>${p.id === meId ? ` <span class="tag">あなた</span>` : ""}${p.leader ? ` <span class="tag match">👑 リーダー</span>` : ""}
             <div class="tags" style="margin:4px 0 0">${st.titles.map((t) => `<span class="tag title">${esc(t)}</span>`).join("")}</div></div></div>
           <div class="mc-stats"><span><b class="num">${st.added}</b>見つけた</span><span><b class="num">${st.yes}</b>行きたい♡</span><span><b class="num">${st.visited}</b>行けた</span></div>
           ${g ? `<p class="sub" style="margin:0">よく見つけるのは ${g.emoji} ${esc(g.label)}</p>` : ""}
@@ -3384,7 +3420,7 @@ function startApp(backend, mount = document.body) {
           </div>
         </div>`;
       }).join("")}</div>
-      ${(F.invite || F.codes) && !solo() ? `<button class="btn rose block" style="margin-top:12px" data-act-invite>${ic("users", "sm")}メンバーを招待する（共有コード）</button>` : ""}
+      ${(F.invite || F.codes) && !solo() && isLeader() ? `<button class="btn rose block" style="margin-top:12px" data-act-invite>${ic("users", "sm")}メンバーを招待する（招待コード）</button>` : ""}
       <p class="sub" style="margin-top:12px">称号は、見つけた場所・投票・コメントから自動で付きます。相性は、ふたりとも答えた場所の「行きたい／まあまあ」がどれだけ一致したかです。</p>`);
     root.addEventListener("click", (e) => {
       const r = e.target.closest("[data-rename]");
@@ -3440,14 +3476,15 @@ function startApp(backend, mount = document.body) {
   }
 
   function inviteText(code = "") {
-    return `${V().invite || "行きたい場所のリストを作りました"}\n${F.invite ? B.inviteUrl() : ""}${code ? `\n共有コード: ${code}` : ""}`.replace(/\n\n/g, "\n");
+    return `${V().invite || "行きたい場所のリストを作りました"}\n${F.invite ? B.inviteUrl() : ""}${code ? `\n招待コード: ${code}` : ""}`.replace(/\n\n/g, "\n");
   }
-  // 招待：リンク（Webアプリ）と、グループごとの共有コード
+  // 招待：リンク（Webアプリ）と、部屋ごとの招待コード
   function openInvite() {
+    if (!isLeader()) return toast("招待できるのはリーダーだけです");
     const who = esc(V().label === "ひとりで" ? "メンバー" : V().label);
     const { root } = sheet(`${head(`${who}を招待`)}
-      ${F.codes ? `<div class="code-box"><span class="sub">「${esc(S.settings.name)}」の共有コード</span><b class="num" id="s-code"><span class="spinner"></span></b><button class="btn sm line" data-copy-code disabled>コードをコピー</button></div>
-        <p class="sub" style="margin:8px 0 14px">${F.invite ? "相手はアプリの最初の画面で「共有コードで参加する」に入れるだけ。" : "このページのリンクを共有したあと、相手にリストの切り替え →「共有コードで参加」でこのコードを入れてもらいます。"}コードはグループごとに別なので、恋人用・友達用を混ぜずに使えます。</p>` : ""}
+      ${F.codes ? `<div class="code-box"><span class="sub">「${esc(S.settings.name)}」の招待コード</span><b class="num" id="s-code"><span class="spinner"></span></b><button class="btn sm line" data-copy-code disabled>コードをコピー</button></div>
+        <p class="sub" style="margin:8px 0 14px">${F.invite ? "相手はアプリの最初の画面で「招待コードで参加する」に入れるだけ。" : "このページのリンクを共有したあと、相手にリストの切り替え →「招待コードで参加」でこのコードを入れてもらいます。"}コードは部屋ごとに別なので、恋人用・友達用を混ぜずに使えます。</p>` : ""}
       ${F.invite ? `<div class="label" style="margin-top:0">リンクで招待</div>
         <div style="display:flex;gap:6px"><input id="s-invite" readonly value="${esc(B.inviteUrl())}" aria-label="招待リンク" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn sm line" data-copy-invite>コピー</button></div>
         <p class="sub" style="margin-top:6px">リンクを開いて名前を入れるだけで参加できます。アカウント登録はいりません。</p>` : `<div class="notice">${esc(B.shareNote || "画面上部の共有メニューから、このページを共有してください。")}</div>`}
@@ -3465,7 +3502,7 @@ function startApp(backend, mount = document.body) {
       root.querySelector("[data-copy-code]").disabled = !code;
       root.querySelector("[data-line]").href = lineShareUrl(inviteText(code));
     }).catch(() => { const el = root.querySelector("#s-code"); if (el) el.textContent = "—"; });
-    root.querySelector("[data-copy-code]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); toast("共有コードをコピーしました"); } catch { toast(code); } });
+    root.querySelector("[data-copy-code]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(code); toast("招待コードをコピーしました"); } catch { toast(code); } });
     root.querySelector("[data-copy-invite]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(B.inviteUrl()); toast("コピーしました"); } catch { root.querySelector("#s-invite").select(); } });
     root.querySelector("[data-share-invite]")?.addEventListener("click", () => navigator.share({ title: S.settings.name, text: inviteText(code) }).catch(() => {}));
   }
@@ -3475,20 +3512,23 @@ function startApp(backend, mount = document.body) {
     const ppl = peopleList();
     const mine = person(me());
     const { root, close } = sheet(`${head("設定")}
-      ${solo() ? "" : F.invite || F.codes ? `<button class="btn rose block" data-invite>${ic("users", "sm")}${esc(V().label)}を招待する（共有コード）</button>`
+      ${B.kind === "artifact" ? `<div class="role-line">${isLeader() ? `<span class="tag match">👑 リーダー</span><span class="sub">部屋を作って、招待コードでみんなを招待できます。</span>` : `<span class="tag">ゲスト</span><span class="sub">部屋の作成やジャンルの変更はリーダーが行います。そのほかはみんなと同じように使えます。</span>`}</div>` : ""}
+      ${solo() || !isLeader() ? "" : F.invite || F.codes ? `<button class="btn rose block" data-invite>${ic("users", "sm")}${esc(V().label)}を招待する（招待コード）</button>`
         : `<div class="notice">一緒に使う人は、画面上部の共有メニューから「編集できる」で招待してください。${esc(B.shareNote || "")}</div>`}
 
-      <div class="label">このリスト</div>
+      <div class="label">この部屋</div>
       <div class="panel">
-        <div class="field"><label for="s-name">リストの名前</label><div style="display:flex;gap:6px"><input id="s-name" value="${esc(st.name)}" maxlength="40" style="flex:1"><button class="btn sm line" data-save-name>保存</button></div></div>
-        <div class="field" style="margin:0"><label>誰と使う？</label>
+        ${isLeader() ? `<div class="field"><label for="s-name">部屋の名前</label><div style="display:flex;gap:6px"><input id="s-name" value="${esc(st.name)}" maxlength="40" style="flex:1"><button class="btn sm line" data-save-name>保存</button></div></div>
+        <div class="field" style="margin:0"><label>部屋のジャンル（誰と使う？）</label>
           <div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile ${(st.type || "couple") === k ? "on" : ""}" data-type="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
-          <span class="sub">選んだ相手に合わせて、言葉づかいやタブの名前が変わります。</span></div>
+          <span class="sub">選んだ相手に合わせて、言葉づかいやタブの名前が変わります。</span></div>`
+        : `<div class="room-ro"><span class="room-emoji">${V().emoji}</span><div><b>${esc(st.name)}</b><div class="sub">${esc(V().label)}と使う部屋${B.leaderId?.() ? ` ・ リーダー: ${esc(person(B.leaderId()).name || "リーダー")}` : ""}</div></div></div>
+          <p class="sub" style="margin:8px 0 0">部屋の名前とジャンルは、リーダーだけが変えられます。</p>`}
       </div>
 
       ${F.members || F.memberList ? `<div class="label">メンバー（${ppl.length}人）<button class="link" data-members style="border:0;background:none;color:var(--plan);font-weight:700;float:right;letter-spacing:0">メンバー図鑑を見る</button></div>
         <div class="panel">
-          ${ppl.map((p) => { const st = memberStats(S.spots, [p.id]).members[0] || {}; return `<div class="base-item" style="padding:6px 0;margin:0;background:none">${av(p.id)}<div class="val"><b>${esc(p.name || "メンバー")}</b>${p.id === me() ? ` <span class="tag">あなた</span>` : ""}<div class="sub">見つけた ${st.added || 0}件 ・ 行きたい♡ ${st.yes || 0}件</div></div></div>`; }).join("")}
+          ${ppl.map((p) => { const st = memberStats(S.spots, [p.id]).members[0] || {}; return `<div class="base-item" style="padding:6px 0;margin:0;background:none">${av(p.id)}<div class="val"><b>${esc(p.name || "メンバー")}</b>${p.id === me() ? ` <span class="tag">あなた</span>` : ""}${p.leader ? ` <span class="tag match">👑 リーダー</span>` : ""}<div class="sub">見つけた ${st.added || 0}件 ・ 行きたい♡ ${st.yes || 0}件</div></div></div>`; }).join("")}
           ${F.members && mine && me() ? `<form id="me-form" style="margin-top:10px"><div class="row2"><div class="field"><label for="me-name">あなたの名前</label><input id="me-name" value="${esc(mine.name)}" maxlength="20"></div><div class="field"><label for="me-color">あなたの色</label><input id="me-color" type="color" value="${esc(mine.color)}" style="height:46px;padding:4px"></div></div>
             <div class="actions" style="margin-top:0"><button class="btn line">保存</button><button type="button" class="btn line" data-switch>別の人として使う</button></div></form>` : ""}
         </div>` : ""}
@@ -3514,7 +3554,9 @@ function startApp(backend, mount = document.body) {
         <button class="btn line" data-theme>表示テーマを切り替え</button>
         ${F.export ? `<a class="btn line" href="${esc(B.exportUrl())}" download>バックアップ</a>` : ""}
       </div>
-      ${F.members && ppl.length > 1 && me() ? `<button class="btn danger block" style="margin-top:14px" data-leave>このリストから抜ける</button>
+      ${F.owner ? `<div class="label">リーダー用</div><div class="panel"><b>ゲストの画面を確かめる</b><p class="sub" style="margin:4px 0 10px">${F.preview ? "いまゲスト画面のプレビュー中です。" : "招待された友人に見える画面（招待コードの入力から）を、このタブで試せます。書き込みはあなたとして行われます。"}</p>
+        <button class="btn line block" data-preview>${F.preview ? "プレビューを終わる" : "ゲスト画面をプレビュー"}</button></div>` : ""}
+      ${(F.members && ppl.length > 1 && me()) || (B.kind === "artifact" && !isLeader()) ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
         <div class="notice warn" data-leave-confirm hidden style="margin-top:10px">「${esc(st.name)}」から抜けると、この端末ではリストが開けなくなります（あなたが追加したスポットは残ります）。<div class="actions"><button class="btn line sm" data-leave-cancel>やめる</button><button class="btn danger sm" data-leave-do>抜ける</button></div></div>` : ""}
       <p class="sub" style="margin-top:14px">読み取り: ${esc(B.readerNote)}<br>移動時間は直線距離から出した目安です。正確な時間はスポットの「経路」から確認できます。</p>`);
     if (focus === "bases") setTimeout(() => root.querySelector("#b-label")?.focus(), 60);
@@ -3564,7 +3606,8 @@ function startApp(backend, mount = document.body) {
     root.querySelector("[data-leave]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = false));
     root.querySelector("[data-leave-cancel]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = true));
     root.querySelector("[data-leave-do]")?.addEventListener("click", () => act(() => B.leave()));
-    root.querySelector("[data-save-name]").addEventListener("click", async () => { const name = root.querySelector("#s-name").value.trim() || V().listName; if (await act(() => B.saveSettings({ name }), "保存しました")) { S.settings = { ...S.settings, name }; render(); } });
+    root.querySelector("[data-preview]")?.addEventListener("click", () => B.setPreview(!F.preview));
+    root.querySelector("[data-save-name]")?.addEventListener("click", async () => { const name = root.querySelector("#s-name").value.trim() || V().listName; if (await act(() => B.saveSettings({ name }), "保存しました")) { S.settings = { ...S.settings, name }; render(); } });
     root.querySelector("[data-theme]").addEventListener("click", () => {
       const r = document.documentElement;
       const dark = r.dataset.theme === "dark" || (!r.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -3607,7 +3650,7 @@ function startApp(backend, mount = document.body) {
     });
   }
 
-  // グループ（リスト）の切り替え・新規作成・共有コードで参加
+  // 部屋（リスト）の切り替え・新規作成・招待コードで参加
   function openLists() {
     const lists = B.lists();
     const row = (l) => {
@@ -3616,24 +3659,26 @@ function startApp(backend, mount = document.body) {
       const inner = `<span class="ph" style="width:44px;height:44px;font-size:22px;--tint:${TINT.other}">${t.emoji}</span>
         <span style="min-width:0"><b>${esc(l.name)}</b><div class="sub">${esc(t.label)}${l.count != null ? ` ・ ${l.count}件` : ""}${mem.length ? ` ・ ${mem.length}人` : ""}</div>
           ${mem.length ? `<span class="g-members">${mem.slice(0, 6).map(avOf).join("")}${mem.length > 6 ? `<span class="av xs more">+${mem.length - 6}</span>` : ""}<span class="g-names">${esc(mem.slice(0, 4).map((m) => (m.id === me() ? "あなた" : m.name || "メンバー")).join("・"))}${mem.length > 4 ? " ほか" : ""}</span></span>` : ""}</span>
-        ${l.current ? `<span class="tag plan">表示中</span>` : ""}`;
+        ${l.current ? `<span class="tag plan">表示中</span>` : l.leader && l.leader === me() ? `<span class="tag match">👑</span>` : ""}`;
       const style = "text-decoration:none;color:inherit;grid-template-columns:44px 1fr auto;align-items:center;width:100%;border:0;background:none;text-align:left;font:inherit";
       return l.url ? `<a class="memory" href="${esc(l.url)}" style="${style}">${inner}</a>` : `<button class="memory" data-gid="${esc(l.id)}" style="${style}">${inner}</button>`;
     };
-    const { root, close } = sheet(`${head("グループ")}
-      <p class="sub" style="margin-top:0">恋人用・友達用・家族用など、相手ごとにグループを分けられます。共有コードはグループごとに別です。</p>
+    const { root, close } = sheet(`${head("部屋")}
+      <p class="sub" style="margin-top:0">恋人用・友達用・家族用など、相手ごとに部屋を分けられます。招待コードは部屋ごとに別です。</p>
       <div class="panel" style="padding:6px 14px">${lists.map(row).join("")}</div>
-      <button class="btn line block" style="margin-top:10px" data-see-members>${ic("users", "sm")}表示中のグループのメンバーを見る（${peopleList().length}人）</button>
-      <div class="label">新しいグループを作る</div>
+      <button class="btn line block" style="margin-top:10px" data-see-members>${ic("users", "sm")}表示中の部屋のメンバーを見る（${peopleList().length}人）</button>
+      ${isLeader() ? `<div class="label">新しい部屋を作る</div>
       ${B.kind === "artifact" ? `<div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-newtype="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
         <form id="new-group" hidden style="margin-top:8px"><div style="display:flex;gap:6px"><input id="ng-name" maxlength="40" required style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn rose">作る</button></div></form>`
-        : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しいグループを作る</a>`}
-      ${F.codes ? `<div class="label">共有コードで参加する</div>
+        : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しい部屋を作る</a>`}` : `<p class="sub" style="margin-top:12px">新しい部屋は、リーダーが作って招待してくれます。</p>`}
+      ${B.kind === "artifact" ? `<button class="btn line block" style="margin-top:12px" data-join-another>${ic("plus", "sm")}招待コードで別の部屋に参加</button>`
+        : F.codes ? `<div class="label">招待コードで参加する</div>
         <form id="join-code"><div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn line">参加</button></div>
         <p class="sub" id="jc-status" style="margin:6px 0 0">誘ってくれた人から聞いた6文字のコードを入れてください。</p></form>` : ""}`);
     let newType = null;
     root.addEventListener("click", async (e) => {
       if (e.target.closest("[data-see-members]")) return openMembers();
+      if (e.target.closest("[data-join-another]")) { close(); return joinAnother(); }
       const g = e.target.closest("[data-gid]");
       if (g) { if (g.dataset.gid !== lists.find((l) => l.current)?.id) { close(); await act(() => B.openList(g.dataset.gid)); } return; }
       const t = e.target.closest("[data-newtype]");
@@ -3650,7 +3695,7 @@ function startApp(backend, mount = document.body) {
       if (!name || !newType) return;
       e.submitter && (e.submitter.disabled = true);
       close();
-      if (await act(() => B.createList({ type: newType, name }))) toast(`「${name}」を作りました。設定の「招待」から共有コードを送れます`);
+      if (await act(() => B.createList({ type: newType, name }))) toast(`「${name}」を作りました。設定の「招待」から招待コードを送れます`);
     });
     root.querySelector("#join-code")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -3662,14 +3707,178 @@ function startApp(backend, mount = document.body) {
     return root;
   }
 
-  // 初めて開いたとき：使い方スライド → （Webアプリ）参加 →（アーティファクト）誰と使うか
+  // ---------- 入口：招待コード → 部屋の確認 → ロゴ → 基本情報 → 使い方 → ホーム ----------
+  // リーダー（アーティファクトの持ち主）は部屋を作って招待する人。ゲストは招待コードで入る
+  const isLeader = () => F.leader !== false;
+  let loadedWait = [];
+  const whenLoaded = () => (S.loaded ? Promise.resolve() : new Promise((ok) => loadedWait.push(ok)));
+  function screen(html) {
+    document.querySelector(".gate")?.remove();
+    const el = document.createElement("div");
+    el.className = "gate";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-modal", "true");
+    el.innerHTML = `${F.preview ? `<div class="preview-bar">ゲスト画面のプレビュー中<button data-exit-preview>終わる</button></div>` : ""}<div class="welcome">${html}</div>`;
+    el.querySelector("[data-exit-preview]")?.addEventListener("click", () => B.setPreview(false));
+    document.body.append(el);
+    el.scrollTop = 0;
+    return el;
+  }
+  const closeScreen = () => document.querySelector(".gate")?.remove();
+  const steps = (n, all = 5) => `<div class="steps-bar">${Array.from({ length: all }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</div>`;
+
+  // 1. 招待コード
+  function codeStep(onJoined, { first = true, msg = "" } = {}) {
+    const el = screen(`${steps(1)}
+      <h1>招待コードを入力</h1>
+      <p>招待してくれた人（リーダー）から届いた、6文字のコードを入れてください。</p>
+      ${B.readOnly ? `<div class="notice warn" style="text-align:left">いまは見るだけの権限で開いています。参加するには、リーダーに共有メニューから<b>メールで「編集者」として招待</b>してもらってください。</div>` : ""}
+      <form id="gate-code">
+        <input id="gate-code-in" class="code-in" maxlength="8" placeholder="K7M2QX" autocomplete="off" autocapitalize="characters" aria-label="招待コード" spellcheck="false">
+        <p class="sub" id="gate-st" role="status" style="min-height:1.5em;margin:8px 0">${esc(msg)}</p>
+        <button class="btn rose block">次へ</button>
+      </form>
+      ${first ? "" : `<p class="sub" style="margin-top:14px"><a href="#" data-back>もどる</a></p>`}`);
+    const inp = el.querySelector("#gate-code-in");
+    inp.addEventListener("input", () => { const v = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); if (v !== inp.value) inp.value = v; });
+    el.querySelector("#gate-code").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const st = el.querySelector("#gate-st");
+      const btn = el.querySelector("#gate-code button");
+      btn.disabled = true;
+      st.innerHTML = `<span class="thinking"><span class="spinner"></span>部屋を探しています…</span>`;
+      try { roomStep(await B.peekCode(inp.value), onJoined); }
+      catch (err) { st.textContent = err?.message || "見つかりませんでした"; btn.disabled = false; }
+    });
+    el.querySelector("[data-back]")?.addEventListener("click", (e) => { e.preventDefault(); closeScreen(); });
+    setTimeout(() => inp.focus(), 60);
+  }
+  // 2. 部屋の確認
+  function roomStep(info, onJoined) {
+    const t = GROUP_TYPES[info.type] || GROUP_TYPES.friends;
+    const others = info.members.filter((m) => !m.leader);
+    const el = screen(`${steps(2)}
+      <h1>この部屋に参加しますか？</h1>
+      <div class="room-card">
+        <span class="room-emoji">${t.emoji}</span>
+        <b class="room-name">${esc(info.name)}</b>
+        <span class="tag">${esc(t.label)}と使う部屋</span>
+        ${info.leader ? `<div class="room-leader">${avOf(info.leader)}<span><small>リーダー</small>${esc(info.leader.name)}</span></div>` : ""}
+        <div class="room-members">${others.length ? `${others.slice(0, 8).map(avOf).join("")}<span class="sub">${others.length}人が参加中</span>` : `<span class="sub">あなたが最初のメンバーです</span>`}</div>
+      </div>
+      ${info.joined ? `<p class="sub">この部屋にはもう参加しています。</p>` : ""}
+      <div class="actions" style="justify-content:center"><button class="btn line" data-redo>コードを入れ直す</button><button class="btn rose" data-ok>OK、次へ</button></div>`);
+    el.querySelector("[data-redo]").addEventListener("click", () => codeStep(onJoined, { first: !S.loaded }));
+    el.querySelector("[data-ok]").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      if (await act(() => B.joinRoom(info.id))) onJoined(info);
+      else e.target.disabled = false;
+    });
+  }
+  // 3. ロゴ・アプリ名・キャッチフレーズ
+  function splashStep(next, n = 3, all = 5) {
+    const el = screen(`${steps(n, all)}
+      <div class="splash">${LOGO}<b class="splash-name">Spotrip</b><p class="splash-catch">行きたい場所、もう忘れない。</p>
+      <p>SNSで見つけた「ここ行きたい！」をみんなで貯めて、次の「どこいく？」にすぐ答えられるアプリです。</p></div>
+      <button class="btn rose block" data-next>はじめる</button>`);
+    el.querySelector("[data-next]").addEventListener("click", next);
+  }
+  // （リーダーだけ）部屋のジャンル
+  function typeStep(next) {
+    const el = screen(`<h1>誰と使いますか？</h1><p>この部屋のジャンルです。あとから設定で変えられます。</p>
+      <div class="type-grid" style="margin-top:16px">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-type="${k}"><span class="emoji">${t.emoji}</span><b>${esc(t.label)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>`);
+    el.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-type]");
+      if (!b) return;
+      const t = GROUP_TYPES[b.dataset.type];
+      const patch = { type: b.dataset.type, ...(S.settings.name === "行きたいリスト" || !S.settings.name ? { name: t.listName } : {}) };
+      if (await act(() => B.saveSettings(patch))) { S.settings = { ...S.settings, ...patch }; render(); next(); }
+    });
+  }
+  // 4. 名前・アイコン・テーマカラー・出発地
+  async function profileStep(next, n = 4, all = 5) {
+    await whenLoaded();
+    const mine = person(me());
+    let emoji = (mine.avatar || "").startsWith("emoji:") ? mine.avatar.slice(6) : "";
+    let accent = local.get("accent", "") || "#df4a72";
+    const el = screen(`${steps(n, all)}
+      <h1>あなたのこと</h1><p>部屋のみんなに表示される名前などを決めましょう。あとから設定で変えられます。</p>
+      <form id="gate-prof">
+        <div class="prof-top"><span class="av lg" id="gp-av" style="background:${esc(mine.color || "#9a8a8f")}"></span>
+          <div class="field" style="flex:1;margin:0"><label for="gp-name">名前（ニックネーム）</label><input id="gp-name" required maxlength="20" value="${esc(mine.name || "")}" placeholder="例: はるか" autocomplete="nickname"></div></div>
+        <div class="field"><label>アイコン（任意）</label><div class="emoji-row">${["", ...AVATAR_EMOJI.slice(0, 15)].map((x) => `<button type="button" data-emo="${x}" class="${x === emoji ? "on" : ""}" aria-label="${x || "名前の頭文字"}">${x || "Aa"}</button>`).join("")}</div></div>
+        <div class="field"><label>テーマカラー</label><div class="swatches">${ACCENTS.map(([hex, label]) => `<button type="button" class="swatch ${accent === hex ? "on" : ""}" style="--sw:${hex}" data-accent="${hex}" aria-label="${label}"><i></i><small>${label}</small></button>`).join("")}</div></div>
+        <div class="field"><label for="gp-where">出発地（任意）</label>
+          <div class="row2" style="margin:0"><input id="gp-label" value="自宅" maxlength="20" aria-label="出発地の名前"><input id="gp-where" placeholder="駅名・住所など" aria-label="出発地の場所"></div>
+          <span class="sub">移動時間やデートコースの交通費の計算に使います。あとからでも登録できます。</span></div>
+        <p class="sub" id="gp-st" role="status" style="min-height:1.4em"></p>
+        ${F.preview ? `<p class="sub">プレビュー中なので、ここで入れた内容は保存しません。</p>` : ""}
+        <button class="btn rose block">次へ</button>
+      </form>`);
+    const drawAv = () => { const a = el.querySelector("#gp-av"); const nm = el.querySelector("#gp-name").value || "?"; a.innerHTML = emoji ? `<span class="emo">${esc(emoji)}</span>` : esc([...nm][0]); a.classList.toggle("is-emoji", Boolean(emoji)); };
+    drawAv();
+    el.querySelector("#gp-name").addEventListener("input", drawAv);
+    el.addEventListener("click", (e) => {
+      const em = e.target.closest("[data-emo]");
+      if (em) { emoji = em.dataset.emo; el.querySelectorAll("[data-emo]").forEach((b) => b.classList.toggle("on", b === em)); drawAv(); }
+      const ac = e.target.closest("[data-accent]");
+      if (ac) { accent = ac.dataset.accent; el.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b === ac)); applyAccent(accent === "#df4a72" ? "" : accent); }
+    });
+    el.querySelector("#gate-prof").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const st = el.querySelector("#gp-st");
+      const btn = e.target.querySelector("button.rose");
+      const name = el.querySelector("#gp-name").value.trim();
+      const where = el.querySelector("#gp-where").value.trim();
+      const label = el.querySelector("#gp-label").value.trim() || "自宅";
+      if (!name) return (st.textContent = "名前を入れてください");
+      btn.disabled = true;
+      local.set("accent", accent === "#df4a72" ? "" : accent);
+      if (!F.preview) {
+        if (name !== mine.name && !(await act(() => B.renameMember(me(), name)))) { btn.disabled = false; return; }
+        if ((emoji ? `emoji:${emoji}` : "") !== (mine.avatar || "") && (emoji || (mine.avatar || "").startsWith("emoji:"))) await act(() => B.setAvatar(me(), emoji ? `emoji:${emoji}` : ""));
+        if (where) {
+          st.innerHTML = `<span class="thinking"><span class="spinner"></span>出発地の位置を探しています</span>`;
+          const pos = await B.locate(where).catch(() => null);
+          if (!pos) { st.textContent = "出発地の位置が見つかりませんでした。空のままにするか、別の書き方で試してください"; btn.disabled = false; return; }
+          const id = `b${Date.now().toString(36)}`;
+          const taken = (S.settings.bases || []).some((b) => b.label === label);
+          const bases = [...(S.settings.bases || []), { id, label: taken ? `${name}の${label}` : label, address: /^https?:/.test(where) ? "" : where, lat: pos.lat, lng: pos.lng }];
+          if (await act(() => B.saveSettings({ bases }))) { S.settings = { ...S.settings, bases }; S.baseId = id; local.set("baseId", id); }
+        }
+      }
+      next();
+    });
+    setTimeout(() => el.querySelector("#gp-name")?.focus(), 60);
+  }
+  // 5. 使い方 → ホーム
+  function tourStep() {
+    closeScreen();
+    showOnboarding(() => { local.set(F.preview ? "onboardedPreview" : "onboarded", true); render(); toast(`ようこそ、「${S.settings.name}」へ`); });
+  }
+  // コードから来たときは「コード・部屋の確認」が済んでいるので 3/5 から
+  function runSetup({ fromCode = false } = {}) {
+    const all = fromCode ? 5 : 3, off = fromCode ? 0 : 2;
+    splashStep(async () => {
+      const toProfile = () => profileStep(tourStep, 4 - off, all);
+      if (isLeader() && !S.settings.type) { await whenLoaded(); return typeStep(toProfile); }
+      toProfile();
+    }, 3 - off, all);
+  }
+  // ほかの部屋の招待コードで参加する（部屋の一覧から）
+  function joinAnother() {
+    codeStep((info) => { closeScreen(); toast(`「${info.name}」に参加しました`); }, { first: false });
+  }
+
   function firstRun() {
-    const next = () => {
-      if (F.members && !me()) return joinSheet();
-      if (!S.settings.type && B.kind === "artifact") return typeSheet();
-    };
-    if (!local.get("onboarded", false)) showOnboarding(() => { local.set("onboarded", true); next(); });
-    else next();
+    // Webアプリ版：使い方 → 名前を入れて参加
+    if (B.kind !== "artifact") {
+      const next = () => { if (F.members && !me()) joinSheet(); };
+      if (!local.get("onboarded", false)) return showOnboarding(() => { local.set("onboarded", true); next(); });
+      return next();
+    }
+    if (!local.get(F.preview ? "onboardedPreview" : "onboarded", false)) return runSetup();
+    if (isLeader() && !S.settings.type) typeSheet();
   }
 
   // ---------- 画面遷移・イベント ----------
@@ -3717,6 +3926,7 @@ function startApp(backend, mount = document.body) {
     }
     const a = t.dataset.act;
     if (a === "settings") openSettings();
+    if (a === "exit-preview") B.setPreview(false);
     if (a === "lists") openLists();
     if (a === "invite") openInvite();
     if (a === "ask") openAsk();
@@ -3779,8 +3989,8 @@ function startApp(backend, mount = document.body) {
   if (theme) document.documentElement.dataset.theme = theme;
   applyAccent(local.get("accent", ""));
   render();
-  B.subscribe(({ settings, spots, reset }) => {
-    // グループを切り替えたときは、前のグループの状態を持ち越さない
+  const boot = () => B.subscribe(({ settings, spots, reset }) => {
+    // 部屋を切り替えたときは、前の部屋の状態を持ち越さない
     if (reset) {
       Object.assign(S, { spots: [], q: "", f: freshFilters(), seg: "all", courses: null, openMode: "", calDay: "", skipped: new Set(), routeCache: {} });
       $modal.innerHTML = "";
@@ -3795,8 +4005,14 @@ function startApp(backend, mount = document.body) {
     }
     render();
     refreshDetail();
-    if (!wasLoaded) firstRun();
+    if (S.loaded) { loadedWait.forEach((ok) => ok()); loadedWait = []; }
+    if (!wasLoaded && !joining) firstRun();
+    joining = false;
   });
+  // ゲストで、まだどの部屋にも入っていないとき：招待コードから始める
+  let joining = false;
+  if (B.needsJoin?.()) codeStep(() => { joining = true; boot(); runSetup({ fromCode: true }); });
+  else boot();
 
   return { openAdd, go, invite: openInvite };
 }
@@ -3805,7 +4021,7 @@ function startApp(backend, mount = document.body) {
 
 
 const DB_ERRORS = {
-  invalid_argument: "編集する権限がありません。リストの持ち主に「編集できる」で共有してもらってください",
+  invalid_argument: "書き込む権限がありません。リーダーに、共有メニューからメールで「編集者」として招待してもらってください",
   quota_exceeded: "保存できる量の上限です。いらないスポットを削除してください",
   resource_exhausted: "操作が多すぎます。少し待ってからもう一度試してください",
 };
@@ -3827,15 +4043,25 @@ async function artifactBackend() {
   let reset = false;
   const emit = () => { listener({ settings, spots, reset }); reset = false; };
 
-  // ---------- グループ ----------
-  // 最初からあるグループは "main"（meta/settings と spots）。追加したグループは groups/<id> と groups/<id>/spots。
-  // 自分が参加しているグループの一覧は、自分だけが読める data/users/<自分>/profile に保存する。
-  let gid = "main";
-  let myGroups = ["main"];
+  // ---------- 部屋 ----------
+  // 部屋の名前・ジャンル・共有コード・リーダーは rooms/<id>（リーダー＝アーティファクトの持ち主だけが書ける）。
+  // 出発地・メンバー・ニックネームなど、みんなで変える設定は部屋ごとの設定（main は meta/settings、ほかは groups/<id>）。
+  // 自分が入っている部屋の一覧は、自分だけが読める data/users/<自分>/profile に保存する。
+  const owner = user ? await user.isOwner().catch(() => false) : false;
+  const canWrite = user ? await user.can("data.write").catch(() => null) : null;
+  // リーダーがゲストの画面を確かめるためのプレビュー（このタブの間だけ）
+  const PREVIEW_KEY = "spotrip.previewGuest";
+  let preview = false;
+  try { preview = owner && sessionStorage.getItem(PREVIEW_KEY) === "1"; } catch {}
+  const leader = owner && !preview;
+  let gid = leader ? "main" : "";
+  let myGroups = leader ? ["main"] : [];
   const groupNames = {};
+  const ROOM_KEYS = ["name", "type", "code"];
+  const roomRef = (g = gid) => db.doc(`rooms/${g}`);
   const settingsRef = (g = gid) => (g === "main" ? db.doc("meta/settings") : db.doc(`groups/${g}`));
   const spotsCol = (g = gid) => (g === "main" ? db.collection("spots") : db.collection(`groups/${g}/spots`));
-  const myDoc = () => (db && meId ? db.doc(`data/users/${meId}/profile`) : null);
+  const myDoc = () => (db && meId ? db.doc(`data/users/${meId}/${preview ? "preview" : "profile"}`) : null);
   const saveMine = () => myDoc()?.set({ groups: myGroups, current: gid }).catch(() => {});
   if (myDoc()) {
     const d = await myDoc().get().catch(() => null);
@@ -3844,58 +4070,106 @@ async function artifactBackend() {
       gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0];
     }
   }
-  // グループ一覧に出す名前・種類・メンバー（ほかのグループのメンバーも一覧で見られるように）
+  // 部屋の情報（rooms の内容を優先し、古いデータは部屋の設定から補う）
+  const merge = (set = {}, room = {}) => { const out = { ...set }; for (const k of [...ROOM_KEYS, "leader"]) if (room[k]) out[k] = room[k]; return out; };
+  async function roomInfo(g) {
+    const [r, st] = await Promise.all([roomRef(g).get().catch(() => null), settingsRef(g).get().catch(() => null)]);
+    return { room: r?.exists ? r.data() : null, set: st?.exists ? st.data() : null };
+  }
+  // 部屋一覧に出す名前・種類・メンバー（ほかの部屋のメンバーも一覧で見られるように）
   const allProfiles = {};
-  const noteGroup = (g, data = {}) => { groupNames[g] = { name: data.name || "行きたいリスト", type: data.type, members: Array.isArray(data.members) ? data.members : [], nicknames: data.nicknames || {}, avatars: data.avatars || {} }; };
+  const noteGroup = (g, data = {}) => { groupNames[g] = { name: data.name || "行きたいリスト", type: data.type, leader: data.leader || "", members: Array.isArray(data.members) ? data.members : [], nicknames: data.nicknames || {}, avatars: data.avatars || {} }; };
   const loadProfiles = async (ids) => {
     const need = ids.filter((id) => id && !allProfiles[id]);
     if (!user || !need.length) return;
     Object.assign(allProfiles, await user.profiles(need).catch(() => ({})));
   };
-  for (const g of myGroups) {
-    const d = await settingsRef(g).get().catch(() => null);
-    noteGroup(g, d?.exists ? d.data() : {});
+  if (db) for (const g of myGroups) {
+    const { room, set } = await roomInfo(g);
+    noteGroup(g, merge(set || {}, room || {}));
   }
-  await loadProfiles(myGroups.flatMap((g) => groupNames[g].members));
+  await loadProfiles(myGroups.flatMap((g) => [groupNames[g].leader, ...groupNames[g].members]));
 
   let unsubs = [];
+  let roomMeta = {};
+  let settingsDoc = {};
+  let subscribed = false;
+  const refreshSettings = () => { settings = merge(settingsDoc, roomMeta); noteGroup(gid, settings); };
   function open(g) {
     unsubs.forEach((u) => u());
     unsubs = [];
     gid = g;
     spots = [];
     settings = null;
+    roomMeta = {};
+    settingsDoc = {};
     reset = true;
-    if (!db) { settings = {}; emit(); return; }
-    let gotSettings = false, gotSpots = false;
+    if (!db || !g) { settings = {}; emit(); return; }
+    let gotSettings = false, gotSpots = false, gotRoom = false;
+    const ready = () => gotSettings && gotSpots && gotRoom;
     unsubs.push(spotsCol().onSnapshot(async (snap) => {
       const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // 名前を引いてから差し替える（先に差し替えると「相手」と表示されてしまう）
-      if (user) { profiles = await user.profiles(idsInUse(next)); Object.assign(allProfiles, profiles); }
+      if (user) { profiles = await user.profiles(idsInUse(next, true)); Object.assign(allProfiles, profiles); }
       if (g !== gid) return;
       spots = next;
       gotSpots = true;
-      if (gotSettings) emit();
-    }, () => { gotSpots = true; if (gotSettings) emit(); }));
-    unsubs.push(settingsRef().onSnapshot((d) => {
+      if (ready()) emit();
+    }, () => { gotSpots = true; if (ready()) emit(); }));
+    unsubs.push(roomRef(g).onSnapshot(async (d) => {
       if (g !== gid) return;
-      settings = d.exists ? d.data() : {};
-      noteGroup(g, settings);
-      // 開いた人をメンバーとして記録する（グループのメンバー一覧に出すため）
-      if (meId && d.exists && !members().includes(meId)) settingsRef(g).update({ members: [...members(), meId] }).catch(() => {});
+      roomMeta = d.exists ? d.data() : {};
+      // リーダーが開いたとき、古い形の部屋（rooms がない）を新しい形にそろえる
+      if (!d.exists && owner && gotSettings) migrate(g);
+      if (roomMeta.leader && user && !profiles[roomMeta.leader]) { Object.assign(profiles, await user.profiles([roomMeta.leader]).catch(() => ({}))); }
+      gotRoom = true;
+      refreshSettings();
+      if (ready()) emit();
+    }, () => { gotRoom = true; if (ready()) emit(); }));
+    unsubs.push(settingsRef(g).onSnapshot((d) => {
+      if (g !== gid) return;
+      settingsDoc = d.exists ? d.data() : {};
+      // 開いた人をメンバーとして記録する（部屋のメンバー一覧に出すため）
+      const mem = Array.isArray(settingsDoc.members) ? settingsDoc.members : [];
+      if (meId && canWrite !== false && !mem.includes(meId)) settingsRef(g).set({ ...settingsDoc, members: [...mem, meId] }).catch(() => {});
+      const first = !gotSettings;
       gotSettings = true;
-      if (gotSpots) emit();
-    }, () => {}));
+      if (first && gotRoom && !roomMeta.leader && owner) migrate(g);
+      refreshSettings();
+      if (ready()) emit();
+    }, () => { gotSettings = true; if (ready()) emit(); }));
+  }
+  let migrating = false;
+  async function migrate(g) {
+    if (migrating || !owner) return;
+    migrating = true;
+    const meta = { name: settingsDoc.name || "行きたいリスト", type: settingsDoc.type || "", code: settingsDoc.code || newCode(), leader: meId, createdAt: new Date().toISOString() };
+    await roomRef(g).set({ ...meta, ...Object.fromEntries(Object.entries(roomMeta).filter(([, v]) => v)) }).catch(() => {});
+    migrating = false;
   }
   async function switchTo(g) {
     if (!myGroups.includes(g)) myGroups = [...myGroups, g];
+    gid = g;
     await saveMine();
-    open(g);
+    if (subscribed) open(g);
+  }
+  // コードから部屋を探す（rooms → 古い形の部屋）
+  async function findByCode(code) {
+    const c = normCode(code);
+    if (c.length < 4) throw new Error("6文字の招待コードを入れてください");
+    if (!db) throw new Error("claude.ai にサインインして開いてください");
+    let g = null;
+    const q = await db.collection("rooms").where("code", "==", c).limit(1).get().catch(() => null);
+    if (q && !q.empty) g = q.docs[0].id;
+    if (!g) { const m = await db.doc("meta/settings").get().catch(() => null); if (m?.exists && m.data().code === c) g = "main"; }
+    if (!g) { const q2 = await db.collection("groups").where("code", "==", c).limit(1).get().catch(() => null); if (q2 && !q2.empty) g = q2.docs[0].id; }
+    if (!g) throw new Error("その招待コードの部屋は見つかりませんでした。コードを確かめてください");
+    return g;
   }
 
   const wrap = (p) => p.catch((e) => { throw new Error(DB_ERRORS[e?.code] || "保存できませんでした。少し待ってからもう一度試してください"); });
-  const members = () => (Array.isArray(settings?.members) ? settings.members : []);
-  const idsInUse = (list = spots) => [...new Set([meId, ...members(), ...list.flatMap((s) => [s.addedBy, ...Object.keys(s.likes || {}), ...(s.comments || []).map((c) => c.by)])].filter(Boolean))];
+  const members = () => (Array.isArray(settings?.members) ? settings.members : Array.isArray(settingsDoc?.members) ? settingsDoc.members : []);
+  const idsInUse = (list = spots, withLeader = false) => [...new Set([meId, settings?.leader || roomMeta.leader, ...members(), ...list.flatMap((s) => [s.addedBy, ...Object.keys(s.likes || {}), ...(s.comments || []).map((c) => c.by)])].filter(Boolean))];
   const sampleError = (e) => {
     if (SAMPLE_OFF.includes(e?.code)) { aiOn = false; return "この表示ではAI読み取りを使えません"; }
     if (e?.code === "rate_limited") return "AIの利用が混み合っています。少し時間をおいて試してください";
@@ -3903,23 +4177,43 @@ async function artifactBackend() {
     if (e?.code === "invalid_json" || e?.code === "empty_completion") return "うまく読み取れませんでした。本文を貼ってもう一度試してください";
     return "読み取りに失敗しました。もう一度試してください";
   };
-  const saveSettings = (patch) => wrap(settingsRef().set({ name: "行きたいリスト", bases: [], ...(settings || {}), ...patch }));
+  // 部屋の名前・ジャンル・コードはリーダーだけ。ほかの設定（出発地など）はみんなで変えられる
+  async function saveSettings(patch) {
+    const roomPatch = Object.fromEntries(Object.entries(patch).filter(([k]) => ROOM_KEYS.includes(k)));
+    const rest = Object.fromEntries(Object.entries(patch).filter(([k]) => !ROOM_KEYS.includes(k)));
+    if (Object.keys(roomPatch).length) {
+      if (!leader) throw new Error("部屋の名前やジャンルは、リーダーだけが変えられます");
+      await wrap(roomRef().set({ name: "行きたいリスト", ...roomMeta, leader: roomMeta.leader || meId, ...roomPatch }));
+    }
+    if (Object.keys(rest).length) await wrap(settingsRef().set({ bases: [], ...settingsDoc, ...rest }));
+  }
 
   return {
     kind: "artifact",
     unavailable: db ? "" : "claude.ai にサインインして開くと、みんなで共有して使えます。",
-    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, memberList: true, lists: Boolean(db && meId), export: false, clipboardRead: false, geolocation: false },
+    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, memberList: true, lists: Boolean(db && meId), leader, owner, preview, export: false, clipboardRead: false, geolocation: false },
     shareNote: "一緒に使う人も claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
     readerNote: aiOn ? "書いたメモや投稿をClaudeが分析します（使う人のClaudeの利用枠を使います）" : "書いたメモをルールで読み取っています",
     subscribe(fn) {
       listener = fn;
+      subscribed = true;
       open(gid);
+    },
+    // ゲストがまだどの部屋にも入っていない（招待コードの入力から始める）
+    needsJoin: () => Boolean(db) && !myGroups.length,
+    // 書き込みの権限がない（閲覧のみで共有された）
+    readOnly: canWrite === false,
+    // リーダーがゲストの画面を確かめる
+    setPreview(on) {
+      try { on ? sessionStorage.setItem(PREVIEW_KEY, "1") : sessionStorage.removeItem(PREVIEW_KEY); } catch {}
+      location.reload();
     },
     me: () => meId,
     setMe() {},
     needsPick: () => false,
     // ニックネームとアイコンはグループの設定に保存し、claude.ai の名前・写真より優先する
-    people: () => idsInUse().map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "" })),
+    people: () => idsInUse().map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "", leader: id === settings?.leader })),
+    leaderId: () => settings?.leader || "",
     renameMember: (id, name) => saveSettings({ nicknames: { ...(settings?.nicknames || {}), [id]: name } }),
     setAvatar: (id, avatar) => saveSettings({ avatars: { ...(settings?.avatars || {}), [id]: avatar } }),
     addSpot: (body) => wrap(spotsCol().add({ ...body, status: "want", likes: meId ? { [meId]: true } : {}, comments: [], addedBy: meId, createdAt: new Date().toISOString() })),
@@ -3941,44 +4235,57 @@ async function artifactBackend() {
     lists: () => myGroups.map((g) => {
       const n = groupNames[g] || {};
       const ids = g === gid ? idsInUse() : n.members || [];
-      return { id: g, name: n.name || "行きたいリスト", type: n.type || "couple", current: g === gid,
+      return { id: g, name: n.name || "行きたいリスト", type: n.type || "couple", current: g === gid, leader: n.leader,
         members: ids.map((id) => ({ id, name: n.nicknames?.[id] || allProfiles[id]?.name || "メンバー", color: allProfiles[id]?.color || "#9a8a8f", avatar: n.avatars?.[id] || allProfiles[id]?.avatarUrl || "" })) };
     }),
     openList: (g) => switchTo(g),
+    // 部屋を作れるのはリーダーだけ
     async createList({ type, name }) {
+      if (!leader) throw new Error("部屋を作れるのはリーダーだけです");
       const g = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-      await wrap(db.doc(`groups/${g}`).set({ name, type, code: newCode(), bases: [], members: meId ? [meId] : [], createdAt: new Date().toISOString() }));
-      noteGroup(g, { name, type, members: meId ? [meId] : [] });
+      await wrap(roomRef(g).set({ name, type, code: newCode(), leader: meId, createdAt: new Date().toISOString() }));
+      await wrap(settingsRef(g).set({ bases: [], members: meId ? [meId] : [], createdAt: new Date().toISOString() }));
+      noteGroup(g, { name, type, leader: meId, members: meId ? [meId] : [] });
       await switchTo(g);
     },
-    async joinByCode(code) {
-      const c = normCode(code);
-      if (c.length < 4) throw new Error("共有コードを入れてください");
-      const main = await db.doc("meta/settings").get().catch(() => null);
-      let g = main?.exists && main.data().code === c ? "main" : null;
-      if (!g) {
-        const q = await db.collection("groups").where("code", "==", c).limit(1).get().catch(() => null);
-        if (q && !q.empty) g = q.docs[0].id;
-      }
-      if (!g) throw new Error("その共有コードのグループは見つかりませんでした。コードを確かめてください");
-      const d = await settingsRef(g).get();
-      noteGroup(g, d.data() || {});
-      await loadProfiles(groupNames[g].members);
-      if (g !== "main" && meId && !(d.data()?.members || []).includes(meId)) await settingsRef(g).update({ members: [...(d.data()?.members || []), meId] }).catch(() => {});
+    // 招待コードから部屋を探して、参加する前に確かめてもらうための情報を返す
+    async peekCode(code) {
+      const g = await findByCode(code);
+      const { room, set } = await roomInfo(g);
+      const info = merge(set || {}, room || {});
+      const ids = [...new Set([info.leader, ...(info.members || [])].filter(Boolean))];
+      await loadProfiles(ids);
+      const who = (id) => ({ id, name: info.nicknames?.[id] || allProfiles[id]?.name || "メンバー", color: allProfiles[id]?.color || "#9a8a8f", avatar: info.avatars?.[id] || allProfiles[id]?.avatarUrl || "", leader: id === info.leader });
+      return { id: g, name: info.name || "行きたいリスト", type: info.type || "friends", leader: info.leader ? who(info.leader) : null, members: ids.map(who), joined: myGroups.includes(g) };
+    },
+    async joinRoom(g) {
+      noteGroup(g, groupNames[g] || {});
+      const d = await settingsRef(g).get().catch(() => null);
+      const mem = d?.exists && Array.isArray(d.data().members) ? d.data().members : [];
+      if (meId && !mem.includes(meId)) await wrap(settingsRef(g).set({ bases: [], ...(d?.exists ? d.data() : {}), members: [...mem, meId] }));
       await switchTo(g);
       return groupNames[g];
     },
-    // 共有コードは必要になったときに作る（古いグループにはまだないため）
+    async joinByCode(code) {
+      const info = await this.peekCode(code);
+      await this.joinRoom(info.id);
+      return info;
+    },
+    // 招待コードはリーダーだけが見られる（古い部屋にはまだないので、そのとき作る）
     async shareCode() {
+      if (!leader) throw new Error("招待できるのはリーダーだけです");
       if (settings?.code) return settings.code;
       const code = newCode();
       await saveSettings({ code });
       return code;
     },
     async leave() {
-      if (myGroups.length <= 1) throw new Error("最後のグループは抜けられません");
+      if (leader && myGroups.length <= 1) throw new Error("最後の部屋は抜けられません");
       myGroups = myGroups.filter((g) => g !== gid);
-      await switchTo(myGroups[0]);
+      gid = myGroups[0] || "";
+      await saveMine();
+      if (!gid) return location.reload();
+      open(gid);
     },
     async readPost({ url = "", text = "", image = null, ai = false }) {
       const cleanUrl = url ? normalizeUrl(url) : "";
