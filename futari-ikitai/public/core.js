@@ -3,7 +3,7 @@
 import { GENRES, analyzeText, parseFreeform, cityShort } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
 import { spotArt, appIcon } from "./art.js";
-import { appLinks, openState, parseHours, seasonOf, buildCourses, buildCoursesRange, MOODS, AREAS, inArea, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
+import { ratingsOf, reviewsOf, placeAvg, overallAvg, wantAgain, AGAIN_MIN, appLinks, openState, parseHours, seasonOf, buildCourses, buildCoursesRange, MOODS, AREAS, inArea, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
 
 const TINT = { cafe: "#efd5bd", sweets: "#f8cfdc", gourmet: "#f4cfae", bar: "#ddc8e6", nature: "#c9e3cf", sightseeing: "#eed7c0", art: "#d3d8f2", event: "#fbdfaa", shopping: "#cfe8ee", stay: "#f1cbc3", activity: "#cfe7c9", other: "#e6dfdc" };
 const STATUS = { want: "行きたい", planned: "予定あり", visited: "行った" };
@@ -242,7 +242,7 @@ export function confirmBox({ title, text = "", ok = "OK", cancel = "やめる", 
 }
 
 // 絞り込みの初期値
-const freshFilters = () => ({ genres: new Set(), price: "", travel: "", dist: "", area: "", who: "", openNow: false, day: "", added: "", deadlineOnly: false, unvoted: false, meh: false, located: false });
+const freshFilters = () => ({ genres: new Set(), price: "", travel: "", dist: "", area: "", who: "", openNow: false, day: "", added: "", deadlineOnly: false, unvoted: false, meh: false, located: false, never: false });
 const DIST = [["d1", "〜1km", 1], ["d3", "〜3km", 3], ["d10", "〜10km", 10], ["d30", "〜30km", 30], ["dfar", "30km〜", Infinity]];
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -319,7 +319,7 @@ export function startApp(backend, mount = document.body) {
     const out = [];
     const st = it.status || "want";
     if (withStatus && st === "planned") out.push(`<span class="tag plan">${it.plannedDate ? jpDate(it.plannedDate) + " 予定" : "予定あり"}</span>`);
-    if (withStatus && st === "visited") out.push(`<span class="tag done">行った</span>`);
+    if (withStatus && st === "visited") out.push(wantAgain(it) ? `<span class="tag again">🔁 また行きたい</span>` : `<span class="tag done">行った</span>`);
     if (st !== "visited") {
       const d = daysUntil(it.deadline);
       if (d != null && d >= 0 && d <= 30) out.push(`<span class="tag soon">${d === 0 ? "今日までみたい" : `あと${d}日くらい`}</span>`);
@@ -368,7 +368,9 @@ export function startApp(backend, mount = document.body) {
   function filtered() {
     const q = S.q.trim();
     // 探すときは行った場所も含める（「前に行ったあそこ」も探せるように）
-    let items = q ? [...S.spots] : S.spots.filter((it) => (it.status || "want") !== "visited");
+    // 行った場所でも、みんなの平均が★2.5以上なら「また行きたい」としてリストに残す
+    let items = q ? [...S.spots] : S.spots.filter((it) => (it.status || "want") !== "visited" || wantAgain(it));
+    if (S.seg === "again") items = items.filter(wantAgain);
     if (S.seg === "both") items = items.filter(isBoth);
     if (S.seg === "planned") items = items.filter((it) => it.status === "planned");
     const f = S.f;
@@ -385,6 +387,7 @@ export function startApp(backend, mount = document.body) {
     if (f.unvoted) items = items.filter((it) => myVote(it) == null);
     if (f.meh) items = items.filter((it) => Object.values(votes(it)).includes("no"));
     if (f.located) items = items.filter((it) => it.lat != null);
+    if (f.never) items = items.filter((it) => (it.status || "want") !== "visited");
     const by = {
       new: (a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""),
       old: (a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""),
@@ -402,7 +405,7 @@ export function startApp(backend, mount = document.body) {
     S.understood = [];
     return items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || by(a, b));
   }
-  const activeFilterCount = () => S.f.genres.size + [S.f.price, S.f.travel, S.f.dist, S.f.area, S.f.who, S.f.openNow, S.f.day !== "", S.f.added, S.f.deadlineOnly, S.f.unvoted, S.f.meh, S.f.located].filter(Boolean).length;
+  const activeFilterCount = () => S.f.genres.size + [S.f.price, S.f.travel, S.f.dist, S.f.area, S.f.who, S.f.openNow, S.f.day !== "", S.f.added, S.f.deadlineOnly, S.f.unvoted, S.f.meh, S.f.located, S.f.never].filter(Boolean).length;
   const daysSince = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : 1e9);
 
   function groupKey(it) {
@@ -441,7 +444,7 @@ export function startApp(backend, mount = document.body) {
           ${area ? `<span>${ic("pin", "sm")}${esc(area)}</span>` : ""}
           ${t ? `<span>${ic("train", "sm")}<b>${formatMinutes(t.best)}</b></span>` : ""}
           ${formatPrice(it) ? `<span>${ic("yen", "sm")}<b>${esc(formatPrice(it))}</b></span>` : ""}
-          ${it.status === "visited" && it.rating ? `<span class="stars-ro">${"★".repeat(it.rating)}</span>` : ""}
+          ${placeAvg(it) != null ? `<span class="stars-ro">★${placeAvg(it).toFixed(1)}<small> ${Object.keys(ratingsOf(it)).length}人</small></span>` : ""}
         </div>
         ${smartTags(it) ? `<div class="tags" style="margin:0">${smartTags(it)}</div>` : ""}
         <div class="card-foot">
@@ -507,7 +510,7 @@ export function startApp(backend, mount = document.body) {
         <div class="rail">${hl.map(({ it, tag }) => `<button class="mini" data-open="${esc(it.id)}"><span ${cover(it, "ph")}>${thumb(it)}</span><span class="tx"><b>${esc(nameOf(it))}</b>${tag}</span></button>`).join("")}</div>` : ""}
       ${S.spots.length ? `
         <div class="section-h"><h2>行きたいリスト</h2>
-          <div class="seg" role="tablist">${[["all", "すべて"], ...(solo() ? [] : [["both", V().all]]), ["planned", "予定あり"]].map(([k, l]) => `<button data-seg="${k}" class="${S.seg === k ? "on" : ""}">${l}</button>`).join("")}</div>
+          <div class="seg" role="tablist">${[["all", "すべて"], ...(solo() ? [] : [["both", V().all]]), ["planned", "予定あり"], ...(S.spots.some(wantAgain) ? [["again", "また行きたい"]] : [])].map(([k, l]) => `<button data-seg="${k}" class="${S.seg === k ? "on" : ""}">${l}</button>`).join("")}</div>
         </div>
         <div class="controls">
           <label class="search">${ic("search", "sm")}<input id="q" type="search" placeholder="あれ、どこだっけ？ うろ覚えでOK" value="${esc(S.q)}" aria-label="検索"></label>
@@ -746,7 +749,7 @@ export function startApp(backend, mount = document.body) {
         <span class="dots">${e.planned.length > 2 ? `<i class="p"></i>` : ""}${e.deadline.length ? `<i class="d"></i>` : ""}${e.visited.length ? `<i class="v"></i>` : ""}</span></button>`;
     };
     const agendaItem = (it, kind) => `<button class="mini" data-open="${esc(it.id)}" style="flex:none;width:100%;margin-bottom:8px"><span ${cover(it, "ph")}>${thumb(it)}</span><span class="tx"><b>${esc(nameOf(it))}</b>
-      ${kind === "planned" ? `<span class="tag plan">${it.planTime ? esc(it.planTime) + " " : ""}予定</span>` : kind === "deadline" ? `<span class="tag soon">このあたりまでの期間限定</span>` : `<span class="tag done">行った${it.rating ? " " + "★".repeat(it.rating) : ""}</span>`}</span></button>`;
+      ${kind === "planned" ? `<span class="tag plan">${it.planTime ? esc(it.planTime) + " " : ""}予定</span>` : kind === "deadline" ? `<span class="tag soon">このあたりまでの期間限定</span>` : `<span class="tag done">行った${placeAvg(it) != null ? ` ★${placeAvg(it).toFixed(1)}` : ""}</span>`}</span></button>`;
     v.innerHTML = `${tabs}
       <div class="panel cal" style="margin-top:12px">
         <div class="cal-head"><button class="ghost-icon" data-cal="-1" aria-label="前の月">‹</button><h2 class="num">${y}年${m}月</h2><button class="ghost-icon" data-cal="1" aria-label="次の月">›</button></div>
@@ -855,7 +858,9 @@ export function startApp(backend, mount = document.body) {
           <div class="time-own"><label for="p-time">時間を指定</label><input id="p-time" type="time" step="300" value="${esc(P.startTime)}">${P.startTime ? `<span class="tag plan">${esc(P.startTime)}から</span>` : `<span class="sub">例: 10:30</span>`}</div></div>
         <div class="field"><label>回る数</label><div class="stops-grid">${Array.from({ length: 10 }, (_, i) => i + 1).map((n) => `<button data-pstops="${n}" class="${P.stops === n ? "on" : ""}">${n}<small>か所</small></button>`).join("")}</div>
           ${P.stops >= 6 ? `<span class="sub">${P.stops}か所だと1日たっぷりのコースになります。朝から出発するのがおすすめです。</span>` : ""}</div>
-        ${solo() ? "" : `<button class="chip ${P.bothOnly ? "on" : ""}" data-act="pboth" style="margin-bottom:12px">♡ ${esc(matchPhrase())}場所だけ</button>`}
+        <div class="chips wrap-chips" style="margin-bottom:12px">${solo() ? "" : `<button class="chip ${P.bothOnly ? "on" : ""}" data-act="pboth">♡ ${esc(matchPhrase())}場所だけ</button>`}
+          <button class="chip ${P.neverOnly ? "on" : ""}" data-act="pnever">🆕 まだ行ったことない場所だけ</button></div>
+        <p class="sub" style="margin:0 0 12px">${P.neverOnly ? "行ったことのある場所は入れません。" : `行ったことのある場所も、みんなの評価が★${AGAIN_MIN}以上なら「また行きたい」として候補に入ります。`}</p>
         <p class="sub" style="margin:0 0 12px">${activeBase() ? `${esc(activeBase().label)}からの行き帰りと、スポット間の移動の交通費も予算に入れて考えます。` : `出発地を登録すると、行き帰りの交通費も予算に入れて考えます。`}</p>
         <button class="btn rose block" data-act="build">${ic("sparkle")}コースを考える</button>
         ${located < 2 ? `<p class="sub" style="margin:10px 0 0">位置がわかっているスポットが2つ以上必要です（いま${located}件）。スポットの「編集」で場所を入れると使えます。</p>` : ""}
@@ -910,15 +915,16 @@ export function startApp(backend, mount = document.body) {
     const prefCount = {};
     for (const it of visited) if (it.prefecture) prefCount[it.prefecture] = (prefCount[it.prefecture] || 0) + 1;
     const wantPref = new Set(S.spots.filter((i) => i.status !== "visited" && i.prefecture).map((i) => i.prefecture));
-    const rated = visited.filter((i) => i.rating);
-    const avg = rated.length ? rated.reduce((s, i) => s + i.rating, 0) / rated.length : 0;
+    // 総合の評価：場所ごとにメンバーの平均を出し、その平均をとる
+    const avg = overallAvg(visited) || 0;
+    const again = visited.filter(wantAgain).sort((a, b) => placeAvg(b) - placeAvg(a));
     const genreCount = GENRES.map((g) => [g, visited.filter((i) => i.genre === g.id).length]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]);
     const maxG = Math.max(1, ...genreCount.map(([, n]) => n));
     const months = new Map();
     for (const it of visited) { const k = it.visitedAt ? `${it.visitedAt.slice(0, 4)}年${Number(it.visitedAt.slice(5, 7))}月` : "日付なし"; if (!months.has(k)) months.set(k, []); months.get(k).push(it); }
     v.innerHTML = `
       <div class="section-h"><h2>${esc(V().us)}の足あと</h2></div>
-      <div class="stats3"><div><b>${visited.length}</b><span>行った場所</span></div><div><b>${Object.keys(prefCount).length}<small style="font-size:13px">/47</small></b><span>都道府県</span></div><div><b>${avg ? avg.toFixed(1) : "–"}</b><span>平均の★</span></div></div>
+      <div class="stats3"><div><b>${visited.length}</b><span>行った場所</span></div><div><b>${Object.keys(prefCount).length}<small style="font-size:13px">/47</small></b><span>都道府県</span></div><div><b>${avg ? avg.toFixed(1) : "–"}</b><span>みんなの平均の★</span></div></div>
       <div class="panel" style="margin-top:12px">
         <div class="japan" role="img" aria-label="行った都道府県の地図">
           ${PREF_TILES.map(([p, c, r]) => { const n = prefCount[p] || 0; return `<div class="pref ${n >= 3 ? "v3" : n === 2 ? "v2" : n === 1 ? "v1" : wantPref.has(p) ? "want" : ""}" style="grid-column:${c + 1};grid-row:${r + 1}" title="${p}${n ? ` ${n}か所` : ""}">${prefShort(p).slice(0, 2)}</div>`; }).join("")}
@@ -926,12 +932,15 @@ export function startApp(backend, mount = document.body) {
         <div class="legend"><span><i style="background:color-mix(in srgb, var(--ok) 35%, var(--surface))"></i>1か所</span><span><i style="background:var(--ok)"></i>3か所〜</span><span><i style="box-shadow:inset 0 0 0 1.5px var(--rose)"></i>行きたい場所あり</span></div>
       </div>
       ${genreCount.length ? `<div class="section-h"><h2>どんなおでかけが多い？</h2></div><div class="panel bars">${genreCount.map(([g, n]) => `<div class="bar-row"><span>${g.emoji} ${g.label}</span><div class="bar-track"><div class="bar-fill" style="width:${(n / maxG) * 100}%"></div></div><span class="num">${n}</span></div>`).join("")}</div>` : ""}
+      ${again.length ? `<div class="section-h"><h2>🔁 また行きたい</h2><span class="sub">みんなの平均★${AGAIN_MIN}以上</span></div>
+        <div class="rail">${again.map((it) => `<button class="mini" data-open="${esc(it.id)}"><span ${cover(it, "ph")}>${thumb(it)}</span><span class="tx"><b>${esc(nameOf(it))}</b><span class="stars-ro">★${placeAvg(it).toFixed(1)}</span><span class="sub">${Object.keys(ratingsOf(it)).length}人が評価</span></span></button>`).join("")}</div>` : ""}
       <div class="section-h"><h2>思い出</h2></div>
       ${visited.length ? [...months].map(([m, list]) => `<h3 class="group-h">${m}</h3><div class="panel" style="padding:4px 14px">${list.map((it) => `
         <div class="memory" data-open="${esc(it.id)}"><span ${cover(it, "ph")}>${thumb(it)}</span>
-          <div style="min-width:0"><b>${esc(nameOf(it))}</b> ${it.rating ? `<span class="stars-ro">${"★".repeat(it.rating)}</span>` : ""}
+          <div style="min-width:0"><b>${esc(nameOf(it))}</b> ${placeAvg(it) != null ? `<span class="stars-ro">★${placeAvg(it).toFixed(1)}</span>` : ""}${wantAgain(it) ? ` <span class="tag again">🔁</span>` : ""}
           <div class="sub">${it.visitedAt ? jpDate(it.visitedAt) : ""}${it.city ? ` ・ ${esc(it.city)}` : ""}</div>
-          ${it.review ? `<div style="font-size:13.5px;margin-top:2px">${esc(it.review)}</div>` : ""}</div></div>`).join("")}</div>`).join("")
+          ${Object.keys(ratingsOf(it)).length ? `<div class="mem-rates">${Object.entries(ratingsOf(it)).map(([id, n]) => `<span>${av(id, "xs")}${"★".repeat(n)}</span>`).join("")}</div>` : ""}
+          ${Object.entries(reviewsOf(it)).slice(0, 2).map(([id, t]) => `<div style="font-size:13.5px;margin-top:2px"><b>${esc(pname(id))}</b>「${esc(t)}」</div>`).join("")}</div></div>`).join("")}</div>`).join("")
         : `<div class="empty"><p>行った場所は、★と感想つきでここに残ります。「どこいく？」が「あそこ良かったね」に変わる場所です。</p></div>`}`;
   }
 
@@ -1310,6 +1319,22 @@ export function startApp(backend, mount = document.body) {
     if ($modal.querySelector(`[data-detail="${it.id}"]`)) openDetail(it.id);
   }
 
+  // ---------- みんなの評価（詳細画面） ----------
+  const starsRo = (n) => `<span class="stars-ro">${"★".repeat(Math.round(n))}<span class="off">${"★".repeat(5 - Math.round(n))}</span></span>`;
+  function reviewBlock(it) {
+    const r = ratingsOf(it), rv = reviewsOf(it);
+    const avg = placeAvg(it);
+    const ids = [...new Set([...peopleList().map((p) => p.id), ...Object.keys(r), ...Object.keys(rv)])].filter((id) => id !== me());
+    return `<div class="reviews">
+      <div class="reviews-h"><b>みんなの評価</b>${avg != null ? `<span class="avg-big">★${avg.toFixed(1)}</span><span class="sub">${Object.keys(r).length}人の平均</span>` : `<span class="sub">まだ評価がありません</span>`}${wantAgain(it) ? `<span class="tag again">🔁 また行きたい</span>` : ""}</div>
+      ${me() ? `<div class="review-row mine">${av(me())}<div class="val"><b>あなた</b>
+          <div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button data-rate="${n}" class="${(r[me()] || 0) >= n ? "on" : ""}" aria-label="${n}つ星">★</button>`).join("")}</div>
+          <textarea id="d-myreview" rows="2" placeholder="感想・思い出（みんなに見えます）">${esc(rv[me()] || "")}</textarea></div></div>` : ""}
+      ${ids.map((id) => `<div class="review-row">${av(id, "xs")}<div class="val"><b>${esc(pname(id))}</b>${r[id] ? ` ${starsRo(r[id])}` : ` <span class="sub">まだ評価していません</span>`}${rv[id] ? `<div class="review-text">${esc(rv[id])}</div>` : ""}</div></div>`).join("")}
+      <p class="sub" style="margin:6px 0 0">平均が★${AGAIN_MIN}以上の場所は「また行きたい」に入り、ホームやプラン作りにも出てきます。</p>
+    </div>`;
+  }
+
   // ---------- 詳細 ----------
   function openDetail(id) {
     const it = S.spots.find((s) => s.id === id);
@@ -1364,8 +1389,8 @@ export function startApp(backend, mount = document.body) {
       ${st === "planned" ? `<div class="row2" style="margin-top:12px"><div class="field"><label for="d-planned">行く日</label><input id="d-planned" type="date" data-field="plannedDate" value="${esc(it.plannedDate || "")}"></div><div class="field"><label for="d-time">時間</label><input id="d-time" type="time" data-field="planTime" value="${esc(it.planTime || "")}"></div></div>` : ""}
       ${st === "visited" ? `<div class="row2" style="margin-top:12px">
           <div class="field"><label for="d-visited">行った日</label><input id="d-visited" type="date" data-field="visitedAt" value="${esc(it.visitedAt || "")}"></div>
-          <div class="field"><label>評価</label><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button data-rate="${n}" class="${(it.rating || 0) >= n ? "on" : ""}" aria-label="${n}つ星">★</button>`).join("")}</div></div></div>
-        <div class="field"><label for="d-review">感想・思い出</label><textarea id="d-review" data-field="review" placeholder="また行きたい！">${esc(it.review || "")}</textarea></div>` : ""}
+          <div></div></div>
+        ${reviewBlock(it)}` : ""}
 
       <div class="label">メモ</div>
       <div class="field"><textarea id="d-memo" data-field="memo" aria-label="メモ" placeholder="予約必須、記念日に、など">${esc(it.memo || "")}</textarea></div>
@@ -1406,7 +1431,7 @@ export function startApp(backend, mount = document.body) {
         if (b.dataset.status === "planned" && !it.plannedDate) body.plannedDate = nextSaturday();
         return patch(it.id, body, b.dataset.status === "visited" ? "思い出に追加しました" : b.dataset.status === "planned" ? "予定に入れました" : "");
       }
-      if (b.dataset.rate) return patch(it.id, { rating: Number(b.dataset.rate) });
+      if (b.dataset.rate) return patch(it.id, { ratings: { [me()]: Number(b.dataset.rate) } });
       if (b.hasAttribute("data-edit")) return openEditor(it, { id: it.id });
       if (b.hasAttribute("data-ics")) {
         const blob = new Blob([icsText(it, calDate)], { type: "text/calendar" });
@@ -1419,6 +1444,7 @@ export function startApp(backend, mount = document.body) {
       }
     });
     root.querySelectorAll("[data-field]").forEach((el) => el.addEventListener("change", () => patch(it.id, { [el.dataset.field]: el.value })));
+    root.querySelector("#d-myreview")?.addEventListener("change", (e) => patch(it.id, { reviews: { [me()]: e.target.value } }));
     root.querySelector(".composer")?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const input = root.querySelector("#d-comment");
@@ -1449,6 +1475,7 @@ export function startApp(backend, mount = document.body) {
           ${solo() ? "" : `<button class="chip ${f.unvoted ? "on" : ""}" data-f="unvoted">まだ答えていない <small>${count((i) => myVote(i) == null)}</small></button>
           <button class="chip ${f.meh ? "on" : ""}" data-f="meh">まあまあ票あり <small>${count((i) => Object.values(votes(i)).includes("no"))}</small></button>`}
           <button class="chip ${f.located ? "on" : ""}" data-f="located">${ic("pin", "sm")}位置がわかる <small>${count((i) => i.lat != null)}</small></button>
+          <button class="chip ${f.never ? "on" : ""}" data-f="never">🆕 まだ行ったことない場所だけ <small>${count((i) => (i.status || "want") !== "visited")}</small></button>
         </div>
         <div class="label">行ける曜日（定休日を除く）</div>
         <div class="chips wrap-chips"><button class="chip ${f.day === "today" ? "on" : ""}" data-f="day" data-v="today">今日</button>${WEEK.map((w, n) => `<button class="chip ${f.day === String(n) ? "on" : ""}" data-f="day" data-v="${n}">${w}</button>`).join("")}</div>
@@ -1472,7 +1499,7 @@ export function startApp(backend, mount = document.body) {
         if (!b) return;
         if (b.hasAttribute("data-reset")) S.f = freshFilters();
         const k = b.dataset.f, v = b.dataset.v;
-        if (["openNow", "deadlineOnly", "unvoted", "meh", "located"].includes(k)) f[k] = !f[k];
+        if (["openNow", "deadlineOnly", "unvoted", "meh", "located", "never"].includes(k)) f[k] = !f[k];
         if (k === "genre") f.genres.has(v) ? f.genres.delete(v) : f.genres.add(v);
         if (["area", "price", "travel", "dist", "who", "day", "added"].includes(k)) f[k] = f[k] === v ? "" : v;
         draw();
@@ -2247,10 +2274,11 @@ export function startApp(backend, mount = document.body) {
     if (a === "clear") { S.f = freshFilters(); S.q = ""; S.seg = "all"; renderView(); }
     if (a === "unskip") { S.skipped.clear(); renderView(); }
     if (a === "pboth") { S.plan.bothOnly = !S.plan.bothOnly; renderView(); }
+    if (a === "pnever") { readPlanForm(); S.plan.neverOnly = !S.plan.neverOnly; renderView(); }
     if (a === "build") {
       readPlanForm();
       const P = S.plan;
-      S.courses = buildCoursesRange(S.spots, { dateFrom: P.dateFrom, dateTo: P.dateTo || null, stops: P.stops, style: P.style, start: planStart(), budget: P.budgetMax ? Number(P.budgetMax) : null, budgetMin: P.budgetMin ? Number(P.budgetMin) : null, bothOnly: P.bothOnly, peopleCount: Math.max(2, peopleList().length), base: activeBase(), moods: P.moods, area: planArea() });
+      S.courses = buildCoursesRange(S.spots, { dateFrom: P.dateFrom, dateTo: P.dateTo || null, stops: P.stops, style: P.style, start: planStart(), budget: P.budgetMax ? Number(P.budgetMax) : null, budgetMin: P.budgetMin ? Number(P.budgetMin) : null, bothOnly: P.bothOnly, peopleCount: Math.max(2, peopleList().length), base: activeBase(), moods: P.moods, area: planArea(), neverOnly: P.neverOnly });
       renderView();
       document.getElementById("courses")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }

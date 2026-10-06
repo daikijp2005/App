@@ -217,3 +217,22 @@ test("コース：気分とエリア", async () => {
   assert.ok(relax[0].stops.some((x) => x.spot.genre === "nature"));
   assert.deepEqual(buildCourses(spots, { stops: 2, area: { prefecture: "大阪府" } }), []);
 });
+
+test("みんなの評価：場所ごとの平均 → 全体の平均、また行きたい", async () => {
+  const { placeAvg, overallAvg, wantAgain, ratingsOf, buildCourses } = await import("../public/smart.js");
+  const a = { id: "a", status: "visited", ratings: { u1: 5, u2: 2 } };          // 平均 3.5
+  const b = { id: "b", status: "visited", ratings: { u1: 1, u2: 2, u3: 3 } };   // 平均 2
+  const c = { id: "c", status: "visited", rating: 4, addedBy: "u1" };           // 昔の形：u1 の 4
+  assert.equal(placeAvg(a), 3.5);
+  assert.equal(placeAvg(b), 2);
+  assert.deepEqual(ratingsOf(c), { u1: 4 });
+  assert.equal(overallAvg([a, b, c]), (3.5 + 2 + 4) / 3); // 全評価の単純平均（23/7）ではない
+  assert.ok(wantAgain(a) && !wantAgain(b) && wantAgain(c));
+  assert.ok(!wantAgain({ status: "want", ratings: { u1: 5 } }));
+  // プランには「また行きたい」の場所も入る。neverOnly なら入らない
+  const yes = { u1: true, u2: true };
+  const spots = [{ ...a, genre: "cafe", lat: 35.66, lng: 139.70, likes: yes }, { id: "d", genre: "art", lat: 35.661, lng: 139.701, likes: yes }, { ...b, genre: "gourmet", lat: 35.662, lng: 139.702, likes: yes }];
+  const ids = buildCourses(spots, { stops: 3 }).flatMap((x) => x.stops.map((s) => s.spot.id));
+  assert.ok(ids.includes("a") && !ids.includes("b"));
+  assert.ok(!buildCourses(spots, { stops: 3, neverOnly: true }).flatMap((x) => x.stops.map((s) => s.spot.id)).includes("a"));
+});

@@ -104,6 +104,35 @@ export function seasonOf(spot, date = new Date()) {
   return null;
 }
 
+// ---------- みんなの評価 ----------
+// ratings: { メンバーID: 1〜5 }、reviews: { メンバーID: 感想 }。昔の1人分の評価（rating）は評価した人（ratedBy、なければ追加した人）の分として扱う
+export const AGAIN_MIN = 2.5;
+export function ratingsOf(s) {
+  const out = {};
+  for (const [id, v] of Object.entries(s.ratings || {})) { const n = Number(v); if (n >= 1 && n <= 5) out[id] = n; }
+  const who = s.ratedBy || s.addedBy;
+  if (s.rating && who && out[who] == null && !(s.ratings && who in s.ratings)) out[who] = Number(s.rating);
+  return out;
+}
+export function reviewsOf(s) {
+  const out = { ...(s.reviews || {}) };
+  const who = s.ratedBy || s.addedBy;
+  if (s.review && who && !out[who] && !(s.reviews && who in s.reviews)) out[who] = s.review;
+  return Object.fromEntries(Object.entries(out).filter(([, t]) => String(t || "").trim()));
+}
+// 1つの場所の評価：メンバーの平均
+export function placeAvg(s) {
+  const v = Object.values(ratingsOf(s));
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+// 全体の評価：場所ごとの平均を出してから、その平均をとる
+export function overallAvg(spots) {
+  const v = spots.map(placeAvg).filter((x) => x != null);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+// 行ったことがあって、みんなの平均が★2.5以上
+export const wantAgain = (s) => s.status === "visited" && (placeAvg(s) ?? 0) >= AGAIN_MIN;
+
 // ---------- デートコース ----------
 const STAY = { cafe: 60, sweets: 45, gourmet: 90, bar: 90, nature: 90, sightseeing: 60, art: 90, event: 90, shopping: 60, stay: 0, activity: 120, other: 60 };
 const IDEAL = { morning: { start: 9 * 60, gourmet: 12 * 60 }, day: { start: 11 * 60, gourmet: 12 * 60 }, afternoon: { start: 14 * 60, gourmet: 18.5 * 60 }, evening: { start: 17 * 60, gourmet: 18.5 * 60 }, night: { start: 19 * 60, gourmet: 19.5 * 60 } };
@@ -208,7 +237,7 @@ export function legInfo(a, b, people = 2) {
   return { mode, min, km: tr.km, fare };
 }
 
-export function buildCourses(spots, { stops = 3, style = "day", start = null, budget = null, budgetMin = null, bothOnly = false, date = null, peopleCount = 2, base = null, limit = 3, moods = [], area = null } = {}) {
+export function buildCourses(spots, { stops = 3, style = "day", start = null, budget = null, budgetMin = null, bothOnly = false, date = null, peopleCount = 2, base = null, limit = 3, moods = [], area = null, neverOnly = false } = {}) {
   const required = requiredYes(peopleCount);
   stops = Math.max(1, Math.min(10, Math.round(stops) || 3));
   const plan = startPlan(style, start);
@@ -216,7 +245,9 @@ export function buildCourses(spots, { stops = 3, style = "day", start = null, bu
   const lateEnough = plan.start + stops * 100 >= 18 * 60;
   const day = date ? new Date(date + "T12:00:00") : new Date();
   const pool = spots.filter((s) => {
-    if ((s.status || "want") === "visited" || s.lat == null || s.lng == null) return false;
+    // 行った場所は「また行きたい」（平均★2.5以上）だけ入れる。neverOnly なら行った場所は入れない
+    if ((s.status || "want") === "visited" && (neverOnly || !wantAgain(s))) return false;
+    if (s.lat == null || s.lng == null) return false;
     const yes = Object.values(s.likes || {}).filter((v) => v === true).length;
     if (bothOnly && yes < required) return false;
     // 半分以上が「うーん」の場所は入れない

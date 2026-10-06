@@ -180,7 +180,7 @@ const ITEM_FIELDS = {
   url: "s", platform: "s", title: "s", caption: "s", image: "s", author: "s", genre: "s", placeName: "s", address: "s",
   prefecture: "s", city: "s", station: "s", walkMin: "n", priceMin: "n", priceMax: "n", priceNote: "s", hours: "s", closed: "s",
   tags: "a", summary: "s", lat: "n", lng: "n", memo: "s", status: "s", plannedDate: "s", visitedAt: "s", rating: "n", review: "s",
-  deadline: "s", pinned: "b", photo: "p", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
+  deadline: "s", pinned: "b", photo: "p", ratings: "m", reviews: "m", ratedBy: "s", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
 };
 
 function sanitizeItem(input) {
@@ -193,6 +193,8 @@ function sanitizeItem(input) {
     else if (type === "a") out[k] = Array.isArray(v) ? v.map(String).slice(0, 20) : [];
     else if (type === "b") out[k] = Boolean(v);
     // 自分で選んだ写真：画面で縮めたJPEG（data URL）か、保存済みの /img/ だけ受け付ける
+    // メンバーごとの値（評価・感想）：送られてきた人の分だけ上書きする
+    else if (type === "m") out[k] = v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).slice(0, 60).map(([id, x]) => [String(id).slice(0, 40), typeof x === "number" ? Math.max(0, Math.min(5, x)) : x == null ? null : String(x).slice(0, 1000)])) : {};
     else if (type === "p") out[k] = v && (/^\/img\/[\w.-]+$/.test(v) || (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 400_000)) ? String(v) : "";
   }
   if (out.status && !["want", "planned", "visited"].includes(out.status)) delete out.status;
@@ -429,6 +431,7 @@ async function handleApi(req, res, url) {
         if (fields.photo) fields.photo = await savePhoto(room.id, item.id, fields.photo, item.photo);
         else if (item.photo?.startsWith("/img/")) fs.unlink(path.join(IMAGES, path.basename(item.photo))).catch(() => {});
       }
+      for (const k of ["ratings", "reviews"]) if (fields[k]) fields[k] = { ...(item[k] || {}), ...fields[k] };
       Object.assign(item, fields, { updatedAt: now() });
       if (body.status === "visited" && !item.visitedAt) item.visitedAt = now().slice(0, 10);
       await saveRoom(room);
