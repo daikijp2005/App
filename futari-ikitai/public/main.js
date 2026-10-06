@@ -48,7 +48,7 @@ function webBackend(room, meta) {
   const meId = () => { const m = local.get(`me.${id}`); return current.members.some((x) => x.id === m) ? m : null; };
   return {
     kind: "web",
-    features: { map: true, thumbnails: true, aiButton: meta.ai, aiRead: meta.ai, codes: true, askAI: meta.ai, routeAI: meta.ai, aiImage: meta.ai, ics: true, invite: true, members: true, memberList: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
+    features: { map: true, thumbnails: true, aiButton: meta.ai, aiRead: meta.ai, suggest: meta.ai, codes: true, askAI: meta.ai, routeAI: meta.ai, aiImage: meta.ai, ics: true, invite: true, members: true, memberList: true, lists: true, export: true, clipboardRead: Boolean(navigator.clipboard?.readText), geolocation: "geolocation" in navigator },
     readerNote: meta.ai ? "リンク先を開いて読み取り、AI（Claude）で整理しています" : "リンク先を開いてルールで読み取っています（サーバーに ANTHROPIC_API_KEY を設定するとAIで読み取ります）",
     subscribe(fn) {
       listener = fn;
@@ -74,6 +74,7 @@ function webBackend(room, meta) {
     async deleteSpot(itemId) { await api(`/rooms/${id}/items/${itemId}`, { method: "DELETE" }); await refresh(); },
     async vote(itemId, value, reason = null) { await api(`/rooms/${id}/items/${itemId}/like`, { method: "POST", body: { memberId: meId(), value, reason } }); await refresh(); },
     route: (q) => api("/route", { method: "POST", body: q }),
+    suggestPlaces: (q) => api("/suggest", { method: "POST", body: q }),
     async comment(itemId, text) { await api(`/rooms/${id}/items/${itemId}/comments`, { method: "POST", body: { memberId: meId(), text } }); await refresh(); },
     async saveSettings(patch) { await api(`/rooms/${id}`, { method: "PATCH", body: patch }); await refresh(); },
     async saveMembers(members) { await api(`/rooms/${id}`, { method: "PATCH", body: { members } }); await refresh(); },

@@ -645,3 +645,22 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .set-sec { padding: 14px 0; border-top: 1px solid var(--line); }
 .set-sec:first-child { border-top: 0; padding-top: 0; }
 .set-h { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-bottom: 10px; }
+
+/* AIの候補 */
+#ai-picks:empty { display: none; }
+#ai-picks { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.cands-h { display: grid; gap: 2px; margin-bottom: 8px; }
+.cands-h b { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.cands { display: grid; gap: 8px; }
+.cand { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: center; width: 100%; padding: 6px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.cand:hover { border-color: color-mix(in srgb, var(--rose) 50%, var(--line)); }
+.cand.on { border-color: var(--rose); box-shadow: inset 0 0 0 1px var(--rose); background: var(--rose-soft); }
+.cand-art { position: relative; width: 64px; height: 52px; border-radius: 10px; overflow: hidden; }
+.cand-tx { display: grid; gap: 2px; min-width: 0; }
+.cand-tx b { font-size: 14px; line-height: 1.35; }
+.cand-tx .branch { color: var(--rose); }
+.cand-tx .sub { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cand-why { font-size: 11.5px; color: var(--ink); opacity: .8; }
+.area-ask { margin-top: 10px; }
+.area-ask label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; }
+.area-ask input { flex: 1; min-width: 0; border: 1.5px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--surface); color: var(--ink); font: inherit; }

@@ -2,7 +2,7 @@
 // 読み取り（aiExtract）・うろ覚え検索（aiAsk）・具体的な行き方（aiRoute）の3つ。
 
 import { GENRES } from "./analyze.js";
-import { GENRE_GUIDE, EXTRACT_RULES, ROUTE_RULES, MEMO_RULES, hintsText } from "./prompts.js";
+import { GENRE_GUIDE, EXTRACT_RULES, ROUTE_RULES, MEMO_RULES, SUGGEST_RULES, hintsText } from "./prompts.js";
 
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
 let clientPromise = null;
@@ -104,6 +104,28 @@ export async function aiRoute({ from, to, mode }) {
       role: "user",
       content: `${ROUTE_RULES}\n\n<from>${JSON.stringify(from)}</from>\n<to>${JSON.stringify(to)}</to>\n<mode>${mode}</mode>`,
     }],
+  });
+  if (response.stop_reason === "refusal") return null;
+  return response.parsed_output || null;
+}
+
+// あいまいなメモ・チェーン店から候補を出す
+export async function aiSuggest({ text, area = "", near = "" }) {
+  if (!aiEnabled()) return null;
+  const { client } = await getClient();
+  const fmt = await format("suggest", (z) => z.object({
+    kind: z.enum(["specific", "vague", "chain"]), needArea: z.boolean(), question: z.string(),
+    candidates: z.array(z.object({
+      name: z.string(), branch: z.string(), genre: z.enum(GENRES.map((g) => g.id)), area: z.string(), address: z.string(), station: z.string(),
+      priceMin: z.number().nullable(), priceMax: z.number().nullable(), hours: z.string(), closed: z.string(),
+      lat: z.number().nullable(), lng: z.number().nullable(), summary: z.string(), reason: z.string(),
+    })),
+  }));
+  const response = await client.messages.parse({
+    model: MODEL(),
+    max_tokens: 6000,
+    output_config: { effort: "medium", format: fmt },
+    messages: [{ role: "user", content: `${SUGGEST_RULES}\n\n<genres>\n${GENRE_GUIDE}\n</genres>\n\n今日は ${new Date().toISOString().slice(0, 10)} です。\n<memo>${text}</memo>\n<area>${area}</area>\n<near>${near}</near>` }],
   });
   if (response.stop_reason === "refusal") return null;
   return response.parsed_output || null;

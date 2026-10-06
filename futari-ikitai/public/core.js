@@ -1075,6 +1075,7 @@ export function startApp(backend, mount = document.body) {
         <textarea id="f-caption" rows="${isNew && !d.url ? 5 : 3}" placeholder="例）&#10;カフェ ルミエール&#10;渋谷区神宮前4-12-10 表参道駅 徒歩5分&#10;1,500円くらい 11時〜20時 火曜休み&#10;10/31までの限定パフェ">${esc(isNew ? d.caption || "" : "")}</textarea>
         <div class="bulk-foot"><span class="sub" id="bulk-status">${isNew && !d.url ? "店名・住所・駅・値段・営業時間・定休日・期限・リンク・メモを見分けます" : ""}</span>
           <span class="bulk-btns">${F.aiButton || (F.askAI && F.aiImage) ? `<button type="button" class="btn sm line" data-ai>${ic("sparkle", "sm")}AIで整理</button>` : ""}${F.aiImage ? `<label class="btn sm line" for="f-shot">${ic("image", "sm")}スクショ<input id="f-shot" type="file" accept="image/*" hidden></label>` : ""}</span></div>
+        <div id="ai-picks" aria-live="polite"></div>
       </div>
       ${isNew || !id ? "" : "</details>"}
       <div class="photo-pick"><div class="ph" data-photo-prev>${thumb(d)}</div>
@@ -1126,10 +1127,90 @@ export function startApp(backend, mount = document.body) {
       bulkTimer = setTimeout(() => fillFrom({ ...parseFreeform(e.target.value), ...(coordsFrom(e.target.value) || {}) }), 250);
     });
     root.querySelector("#f-caption")?.addEventListener("paste", () => setTimeout(() => root.querySelector("#f-caption").dispatchEvent(new Event("input")), 0));
-    const runAI = async (image) => {
+    // ---------- AIの候補（あいまいなメモ・チェーン店） ----------
+    const picks = root.querySelector("#ai-picks");
+    const PREF_RE = /^(北海道|東京都|(?:京都|大阪)府|.{2,3}県)/;
+    const fromCand = (c) => {
+      const area = String(c.area || ""), addr = String(c.address || "");
+      const pref = (addr.match(PREF_RE) || area.match(PREF_RE) || [""])[0];
+      const city = (addr || area).replace(PREF_RE, "");
+      return { placeName: c.branch ? `${c.name} ${c.branch}` : c.name, genre: c.genre, address: addr || area, prefecture: pref, city, station: c.station || "", priceMin: c.priceMin ?? null, priceMax: c.priceMax ?? c.priceMin ?? null, hours: c.hours || "", closed: c.closed || "", lat: c.lat ?? null, lng: c.lng ?? null, summary: c.summary || "", aiUsed: true };
+    };
+    const nearHint = () => { const b = activeBase(); return b ? `${b.label}（${b.address || `${b.lat?.toFixed?.(3)}, ${b.lng?.toFixed?.(3)}`}）` : ""; };
+    const choose = (c, btn) => {
+      // 候補を選んだら、自動で入れた項目は候補の内容に置きかえる（自分で直した項目はそのまま）
+      const keep = parseFreeform(root.querySelector("#f-caption").value || "");
+      fillFrom({ memo: keep.memo, deadline: keep.deadline, ...fromCand(c) }, { overwriteAuto: true });
+      if (c.lat != null && c.lng != null) d.geoNote = "AIが推定した位置です";
+      picks.querySelectorAll(".cand").forEach((x) => x.classList.toggle("on", x === btn));
+      root.querySelector("#bulk-status").innerHTML = `${ic("sparkle", "sm")} 「${esc(fromCand(c).placeName)}」の情報を入れました。違うところは直してください`;
+      setTimeout(() => root.querySelector("form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+    };
+    const drawCands = (res, text, area) => {
+      const list = res.candidates || [];
+      const chain = res.kind === "chain";
+      const title = chain ? `「${esc(list[0]?.name || text)}」の店舗${area ? `（${esc(area)}）` : ""}` : `「${esc(text.slice(0, 24))}」に合いそうな場所`;
+      picks.innerHTML = `<div class="cands-h"><b>${title}</b><span class="sub">タップすると下の項目に入ります</span></div>
+        <div class="cands">${list.map((c, i) => `<button type="button" class="cand" data-cand="${i}">
+          <span class="cand-art">${spotArt({ id: `${c.name}${c.branch}`, genre: c.genre, placeName: c.name, summary: c.summary })}</span>
+          <span class="cand-tx"><b>${esc(c.name)}${c.branch ? ` <span class="branch">${esc(c.branch)}</span>` : ""}</b>
+            <span class="sub">${esc([c.area, c.station].filter(Boolean).join(" ・ "))}${c.priceMin != null ? ` ・ ¥${Number(c.priceMin).toLocaleString("ja-JP")}〜` : ""}</span>
+            ${c.reason || c.summary ? `<span class="cand-why">${esc(c.reason || c.summary)}</span>` : ""}</span></button>`).join("")}</div>
+        ${chain ? areaAsk("別のエリアの店舗を探す", area) : `<p class="sub" style="margin:6px 0 0">AIの知識からの候補です。営業状況は地図アプリなどで確かめてください。</p>`}`;
+      picks.querySelectorAll("[data-cand]").forEach((b) => b.addEventListener("click", () => choose(list[Number(b.dataset.cand)], b)));
+      bindAreaAsk(text);
+    };
+    // チェーン店で場所がわからないとき：どのあたりかを聞く
+    const areaAsk = (label, value = "") => {
+      const bases = (S.settings.bases || []).map((b) => b.address || b.label).filter(Boolean).slice(0, 3);
+      return `<div class="area-ask">${label ? `<label for="ai-area">${esc(label)}</label>` : ""}
+        <div style="display:flex;gap:6px"><input id="ai-area" value="${esc(value)}" placeholder="例: 名古屋市 / 栄駅 / 大阪府" autocomplete="off" aria-label="店舗を探すエリア"><button type="button" class="btn sm rose" data-area-go>探す</button></div>
+        ${bases.length ? `<div class="chips wrap-chips" style="margin-top:6px">${bases.map((b) => `<button type="button" class="chip" data-area-chip="${esc(b)}">${ic("home", "sm")}${esc(b)}</button>`).join("")}</div>` : ""}</div>`;
+    };
+    const bindAreaAsk = (text) => {
+      const go = () => { const v = picks.querySelector("#ai-area")?.value.trim(); if (!v) return toast("都道府県・市・駅などを入れてください"); smartAI(text, v); };
+      picks.querySelector("[data-area-go]")?.addEventListener("click", go);
+      picks.querySelector("#ai-area")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+      picks.querySelectorAll("[data-area-chip]").forEach((c) => c.addEventListener("click", () => { picks.querySelector("#ai-area").value = c.dataset.areaChip; go(); }));
+    };
+    // 書いたメモがあいまい（「名古屋のカフェ」）か、チェーン店（「スタバ」）かをAIに判定してもらい、候補を出す
+    const smartAI = async (text, area = "") => {
       const status = root.querySelector("#bulk-status");
+      root.querySelectorAll("[data-ai]").forEach((b) => (b.disabled = true));
+      status.innerHTML = `<span class="thinking"><span class="spinner"></span>${area ? `「${esc(area)}」の店舗を探しています` : "AIが候補を探しています（10〜30秒ほど）"}</span>`;
+      picks.innerHTML = "";
+      try {
+        const res = await B.suggestPlaces({ text, area, near: nearHint() });
+        const list = res?.candidates || [];
+        if (res?.needArea && !list.length) {
+          status.textContent = "";
+          picks.innerHTML = `<div class="cands-h"><b>${ic("pin", "sm")} 店舗がたくさんあるお店です</b><span class="sub">${esc(res.question || "どのあたりの店舗ですか？（都道府県・市・駅など）")}</span></div>${areaAsk("")}`;
+          bindAreaAsk(text);
+          setTimeout(() => picks.querySelector("#ai-area")?.focus(), 60);
+          return;
+        }
+        if (res?.kind === "specific" && list.length === 1) { choose(list[0], null); return; }
+        if (!list.length) {
+          status.textContent = area ? "その近くの店舗が見つかりませんでした。別の書き方で試してください" : "候補が見つかりませんでした。書いた内容から読み取ります";
+          if (!area) await extractAI(null);
+          if (area) { picks.innerHTML = areaAsk("別のエリアで探す", area); bindAreaAsk(text); }
+          return;
+        }
+        status.innerHTML = `${ic("sparkle", "sm")} 候補が${list.length}件見つかりました`;
+        drawCands(res, text, area);
+      } catch (e) { status.textContent = e?.message || "候補を探せませんでした"; }
+      finally { root.querySelectorAll("[data-ai]").forEach((b) => (b.disabled = false)); }
+    };
+    const runAI = async (image) => {
       const caption = root.querySelector("#f-caption").value;
       if (!caption.trim() && !image && !d.url) return toast("上の欄に書くか、スクショを選んでください");
+      // リンクもスクショもない、書いただけのメモは候補を出す
+      if (F.suggest && B.suggestPlaces && !image && !d.url) return smartAI(caption.trim());
+      return extractAI(image);
+    };
+    const extractAI = async (image) => {
+      const status = root.querySelector("#bulk-status");
+      const caption = root.querySelector("#f-caption").value;
       root.querySelectorAll("[data-ai]").forEach((b) => (b.disabled = true));
       status.innerHTML = `<span class="thinking"><span class="spinner"></span>AIが場所を調べて整理しています（10〜30秒ほど）</span>`;
       try {

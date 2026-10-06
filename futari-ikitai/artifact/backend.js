@@ -218,7 +218,7 @@ async function artifactBackend() {
   return {
     kind: "artifact",
     unavailable: db ? "" : "claude.ai にサインインして開くと、みんなで共有して使えます。",
-    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, memberList: true, lists: Boolean(db && meId && leader), leader, owner, preview, export: false, clipboardRead: false, geolocation: false },
+    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, suggest: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, memberList: true, lists: Boolean(db && meId && leader), leader, owner, preview, export: false, clipboardRead: false, geolocation: false },
     shareNote: "一緒に使う人も claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
     readerNote: aiOn ? "書いたメモや投稿をClaudeが分析します（使う人のClaudeの利用枠を使います）" : "書いたメモをルールで読み取っています",
     subscribe(fn) {
@@ -419,6 +419,19 @@ async function artifactBackend() {
         for (const [k, v] of Object.entries(res)) if (v !== "" && v != null && !(k === "genre" && v === "other")) out[k] = v;
         if (res.lat != null) { out.lat = res.lat; out.lng = res.lng; out.geoNote = "AIが推定した位置です"; }
         return out;
+      } catch (e) {
+        throw new Error(sampleError(e));
+      }
+    },
+    // あいまいなメモ・チェーン店から候補を出す
+    async suggestPlaces({ text, area = "", near = "" }) {
+      if (!aiOn) throw new Error("この表示ではAIを使えません");
+      const prompt = `${SUGGEST_RULES}\n\n<genres>\n${GENRE_GUIDE}\n</genres>\n\n今日は ${new Date().toISOString().slice(0, 10)} です。\n` +
+        `返すJSON: {"kind":"vague","needArea":false,"question":"","candidates":[{"name":"","branch":"","genre":"other","area":"","address":"","station":"","priceMin":null,"priceMax":null,"hours":"","closed":"","lat":null,"lng":null,"summary":"","reason":""}]}\n\n` +
+        `<memo>${String(text).slice(0, 600)}</memo>\n<area>${String(area).slice(0, 80)}</area>\n<near>${String(near).slice(0, 120)}</near>`;
+      try {
+        const r = await sample.json(prompt);
+        return r && typeof r === "object" ? { kind: r.kind || "specific", needArea: Boolean(r.needArea), question: r.question || "", candidates: Array.isArray(r.candidates) ? r.candidates.slice(0, 8) : [] } : { kind: "specific", needArea: false, question: "", candidates: [] };
       } catch (e) {
         throw new Error(sampleError(e));
       }

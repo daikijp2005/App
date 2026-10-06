@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { analyzeText, parseFreeform, cleanAiResult, cityFromAddress, GENRES } from "./lib/analyze.js";
 import { fetchPreview, cleanCaption, normalizeUrl } from "./lib/preview.js";
 import { geocode, geocodePlace } from "./lib/geo.js";
-import { aiEnabled, aiExtract, aiAsk, aiRoute } from "./lib/ai.js";
+import { aiEnabled, aiExtract, aiAsk, aiRoute, aiSuggest } from "./lib/ai.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, "public");
@@ -279,6 +279,13 @@ async function handleApi(req, res, url) {
     if (body.image && !aiEnabled()) return send(res, 400, { error: "スクリーンショットの読み取りにはAIの設定が必要です" });
     const image = body.image ? { data: String(body.image), mediaType: /^image\/(png|jpeg|webp|gif)$/.test(body.mediaType) ? body.mediaType : "image/jpeg" } : null;
     return send(res, 200, await buildDraft({ url: body.url, text: body.text, image }));
+  }
+
+  if (parts[1] === "suggest" && method === "POST") {
+    if (!aiEnabled()) return send(res, 400, { error: "AIで候補を探すには、サーバーに ANTHROPIC_API_KEY の設定が必要です" });
+    const { text, area, near } = await readJson(req);
+    try { return send(res, 200, (await aiSuggest({ text: String(text || "").slice(0, 600), area: String(area || "").slice(0, 80), near: String(near || "").slice(0, 120) })) || { kind: "specific", needArea: false, question: "", candidates: [] }); }
+    catch (e) { console.warn("[ai] suggest", e.message); return send(res, 502, { error: "AIにうまく聞けませんでした。少し待ってからもう一度試してください" }); }
   }
 
   if (parts[1] === "route" && method === "POST") {
