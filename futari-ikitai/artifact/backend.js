@@ -49,6 +49,7 @@ async function artifactBackend() {
     if (d?.exists && Array.isArray(d.data().groups) && d.data().groups.length) {
       myGroups = d.data().groups;
       gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0];
+      if (!leader) myGroups = [gid];
     }
   }
   // 部屋の情報（rooms の内容を優先し、古いデータは部屋の設定から補う）
@@ -172,7 +173,7 @@ async function artifactBackend() {
   return {
     kind: "artifact",
     unavailable: db ? "" : "claude.ai にサインインして開くと、みんなで共有して使えます。",
-    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, memberList: true, lists: Boolean(db && meId), leader, owner, preview, export: false, clipboardRead: false, geolocation: false },
+    features: { map: false, thumbnails: false, aiButton: aiOn, aiRead: aiOn, askAI: aiOn, routeAI: aiOn, aiImage: Boolean(limits?.images), ics: false, invite: false, codes: Boolean(db), members: false, memberList: true, lists: Boolean(db && meId && leader), leader, owner, preview, export: false, clipboardRead: false, geolocation: false },
     shareNote: "一緒に使う人も claude.ai にサインインしている必要があります。サインインなしで使うなら Webアプリ版を使ってください。",
     readerNote: aiOn ? "書いたメモや投稿をClaudeが分析します（使う人のClaudeの利用枠を使います）" : "書いたメモをルールで読み取っています",
     subscribe(fn) {
@@ -240,10 +241,13 @@ async function artifactBackend() {
       return { id: g, name: info.name || "行きたいリスト", type: info.type || "friends", leader: info.leader ? who(info.leader) : null, members: ids.map(who), joined: myGroups.includes(g) };
     },
     async joinRoom(g) {
+      // ゲストが入れる部屋は1つだけ
+      if (!leader && myGroups.length && !myGroups.includes(g)) throw new Error("ゲストが入れる部屋は1つだけです");
       noteGroup(g, groupNames[g] || {});
       const d = await settingsRef(g).get().catch(() => null);
       const mem = d?.exists && Array.isArray(d.data().members) ? d.data().members : [];
       if (meId && !mem.includes(meId)) await wrap(settingsRef(g).set({ bases: [], ...(d?.exists ? d.data() : {}), members: [...mem, meId] }));
+      if (!leader) myGroups = [];
       await switchTo(g);
       return groupNames[g];
     },
@@ -261,7 +265,8 @@ async function artifactBackend() {
       return code;
     },
     async leave() {
-      if (leader && myGroups.length <= 1) throw new Error("最後の部屋は抜けられません");
+      if (!leader) throw new Error("ゲストは部屋を抜けられません。リーダーに相談してください");
+      if (myGroups.length <= 1) throw new Error("最後の部屋は抜けられません");
       myGroups = myGroups.filter((g) => g !== gid);
       gid = myGroups[0] || "";
       await saveMine();

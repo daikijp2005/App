@@ -1419,7 +1419,7 @@ export function startApp(backend, mount = document.body) {
     const meId = me();
     const sorted = [...ppl].sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : (statOf[b.id]?.added || 0) - (statOf[a.id]?.added || 0)));
     const { root } = sheet(`${head(`メンバー <span class="sub" style="font-family:var(--body)">${ppl.length}人</span>`)}
-      <p class="sub" style="margin-top:0">「${esc(S.settings.name)}」に参加している人です。${F.lists ? "ほかの部屋のメンバーは、上の部屋名から確認できます。" : ""}</p>
+      <p class="sub" style="margin-top:0">「${esc(S.settings.name)}」に参加している人です。${F.lists && isLeader() ? "ほかの部屋のメンバーは、上の部屋名から確認できます。" : ""}</p>
       ${best && ppl.length >= 3 ? `<div class="best-combo"><span class="sub">ベストコンビ</span><div class="duo">${av(best.a)}${av(best.b)}</div><b>${esc(pname(best.a))} × ${esc(pname(best.b))}</b><span class="num">相性 ${best.score}%</span></div>` : ""}
       <div class="member-grid">${sorted.map((p) => {
         const st = statOf[p.id] || { titles: [], added: 0, yes: 0, visited: 0 };
@@ -1529,7 +1529,7 @@ export function startApp(backend, mount = document.body) {
     const ppl = peopleList();
     const mine = person(me());
     const { root, close } = sheet(`${head("設定")}
-      ${B.kind === "artifact" ? `<div class="role-line">${isLeader() ? `<span class="tag match">👑 リーダー</span><span class="sub">部屋を作って、招待コードでみんなを招待できます。</span>` : `<span class="tag">ゲスト</span><span class="sub">部屋の作成やジャンルの変更はリーダーが行います。そのほかはみんなと同じように使えます。</span>`}</div>` : ""}
+      ${B.kind === "artifact" ? `<div class="role-line">${isLeader() ? `<span class="tag match">👑 リーダー</span><span class="sub">部屋を作って、招待コードでみんなを招待できます。</span>` : `<span class="tag">ゲスト</span><span class="sub">この部屋のメンバーです。部屋の作成・ジャンルの変更・招待はリーダーが行います。そのほかはみんなと同じように使えます。</span>`}</div>` : ""}
       ${solo() || !isLeader() ? "" : F.invite || F.codes ? `<button class="btn rose block" data-invite>${ic("users", "sm")}${esc(V().label)}を招待する（招待コード）</button>`
         : `<div class="notice">一緒に使う人は、画面上部の共有メニューから「編集できる」で招待してください。${esc(B.shareNote || "")}</div>`}
 
@@ -1573,7 +1573,7 @@ export function startApp(backend, mount = document.body) {
       </div>
       ${F.owner ? `<div class="label">リーダー用</div><div class="panel"><b>ゲストの画面を確かめる</b><p class="sub" style="margin:4px 0 10px">${F.preview ? "いまゲスト画面のプレビュー中です。" : "招待された友人に見える画面（招待コードの入力から）を、このタブで試せます。書き込みはあなたとして行われます。"}</p>
         <button class="btn line block" data-preview>${F.preview ? "プレビューを終わる" : "ゲスト画面をプレビュー"}</button></div>` : ""}
-      ${(F.members && ppl.length > 1 && me()) || (B.kind === "artifact" && !isLeader()) ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
+      ${(F.members && ppl.length > 1 && me()) || (B.kind === "artifact" && isLeader() && B.lists().length > 1) ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
         <div class="notice warn" data-leave-confirm hidden style="margin-top:10px">「${esc(st.name)}」から抜けると、この端末ではリストが開けなくなります（あなたが追加したスポットは残ります）。<div class="actions"><button class="btn line sm" data-leave-cancel>やめる</button><button class="btn danger sm" data-leave-do>抜ける</button></div></div>` : ""}
       <p class="sub" style="margin-top:14px">読み取り: ${esc(B.readerNote)}<br>移動時間は直線距離から出した目安です。正確な時間はスポットの「経路」から確認できます。</p>`);
     if (focus === "bases") setTimeout(() => root.querySelector("#b-label")?.focus(), 60);
@@ -1669,6 +1669,7 @@ export function startApp(backend, mount = document.body) {
 
   // 部屋（リスト）の切り替え・新規作成・招待コードで参加
   function openLists() {
+    if (!isLeader()) return openMembers(); // ゲストは1つの部屋だけ
     const lists = B.lists();
     const row = (l) => {
       const t = GROUP_TYPES[l.type] || GROUP_TYPES.friends;
@@ -1688,7 +1689,7 @@ export function startApp(backend, mount = document.body) {
       ${B.kind === "artifact" ? `<div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-newtype="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
         <form id="new-group" hidden style="margin-top:8px"><div style="display:flex;gap:6px"><input id="ng-name" maxlength="40" required style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn rose">作る</button></div></form>`
         : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しい部屋を作る</a>`}` : `<p class="sub" style="margin-top:12px">新しい部屋は、リーダーが作って招待してくれます。</p>`}
-      ${B.kind === "artifact" ? `<button class="btn line block" style="margin-top:12px" data-join-another>${ic("plus", "sm")}招待コードで別の部屋に参加</button>`
+      ${B.kind === "artifact" && isLeader() ? `<button class="btn line block" style="margin-top:12px" data-join-another>${ic("plus", "sm")}招待コードで別の部屋に参加</button>`
         : F.codes ? `<div class="label">招待コードで参加する</div>
         <form id="join-code"><div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn line">参加</button></div>
         <p class="sub" id="jc-status" style="margin:6px 0 0">誘ってくれた人から聞いた6文字のコードを入れてください。</p></form>` : ""}`);
