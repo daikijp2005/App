@@ -264,7 +264,7 @@ export function startApp(backend, mount = document.body) {
   // ---------- 人 ----------
   const me = () => B.me();
   const peopleList = () => B.people();
-  const person = (id) => peopleList().find((p) => p.id === id) || { id, name: "", color: "#9a8a8f" };
+  const person = (id) => peopleList().find((p) => p.id === id) || B.anyone?.(id) || { id, name: "", color: "#9a8a8f" };
   const pname = (id) => (id && id === me() ? "あなた" : person(id).name || "メンバー");
   const av = (id, cls = "") => {
     const p = person(id);
@@ -1465,6 +1465,7 @@ export function startApp(backend, mount = document.body) {
           ${p.id !== meId && !solo() ? `<div class="compat"><span class="sub">あなたとの相性</span>${c == null ? `<span class="sub">投票が増えるとわかります</span>` : `<div class="meter"><i style="width:${c}%"></i></div><b class="num">${c}%</b><span class="sub">${COMPAT_WORDS.find(([n]) => c >= n)[1]}</span>`}</div>` : ""}
           <div class="actions" style="margin-top:2px">
             ${B.renameMember ? `<button class="btn sm line" data-rename="${esc(p.id)}">${ic("edit", "sm")}名前を変える</button>` : ""}
+            ${B.kind === "artifact" && isLeader() && p.id !== meId && !p.leader ? `<button class="btn sm danger" data-kick="${esc(p.id)}" data-name="${esc(p.name || "ゲスト")}">外す</button>` : ""}
             ${p.id === meId && B.setAvatar ? `<button class="btn sm line" data-avatar>${ic("image", "sm")}アイコン</button>` : ""}
           </div>
         </div>`;
@@ -1474,6 +1475,12 @@ export function startApp(backend, mount = document.body) {
     root.addEventListener("click", (e) => {
       const r = e.target.closest("[data-rename]");
       if (r) return renameSheet(r.dataset.rename);
+      const k = e.target.closest("[data-kick]");
+      if (k) {
+        confirmBox({ title: `${k.dataset.name}さんを部屋から外しますか？`, text: "外すと、この人は自動で部屋から抜けます。追加したスポットは残ります。", ok: "外す", danger: true })
+          .then(async (yes) => { if (yes && await act(() => B.revoke(k.dataset.kick, B.currentRoom()), "外しました")) openMembers(); });
+        return;
+      }
       if (e.target.closest("[data-avatar]")) return avatarSheet();
       if (e.target.closest("[data-act-invite]")) return openInvite();
     });
@@ -1606,7 +1613,8 @@ export function startApp(backend, mount = document.body) {
       </div>
       ${F.owner ? `<div class="label">リーダー用</div><div class="panel"><b>ゲストの画面を確かめる</b><p class="sub" style="margin:4px 0 10px">${F.preview ? "いまゲスト画面のプレビュー中です。" : "招待された友人に見える画面（招待コードの入力から）を、このタブで試せます。書き込みはあなたとして行われます。"}</p>
         <button class="btn line block" data-preview>${F.preview ? "プレビューを終わる" : "ゲスト画面をプレビュー"}</button></div>` : ""}
-      ${(F.members && ppl.length > 1 && me()) || (B.kind === "artifact" && isLeader() && B.lists().length > 1) ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
+      ${B.kind === "artifact" && isLeader() ? `<button class="btn danger block" style="margin-top:14px" data-delete-room>${ic("trash", "sm")}この部屋を削除する</button>` : ""}
+      ${F.members && ppl.length > 1 && me() ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
         ` : ""}
       <p class="sub" style="margin-top:14px">読み取り: ${esc(B.readerNote)}<br>移動時間は直線距離から出した目安です。正確な時間はスポットの「経路」から確認できます。</p>`);
     if (focus === "bases") setTimeout(() => root.querySelector("#b-label")?.focus(), 60);
@@ -1653,6 +1661,13 @@ export function startApp(backend, mount = document.body) {
     const setAccent = (hex) => { local.set("accent", hex === "#df4a72" ? "" : hex); applyAccent(hex === "#df4a72" ? "" : hex); root.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b.dataset.accent === hex)); };
     root.querySelectorAll("[data-accent]").forEach((b) => b.addEventListener("click", () => setAccent(b.dataset.accent)));
     root.querySelector("#accent-custom").addEventListener("input", (e) => setAccent(e.target.value));
+    root.querySelector("[data-delete-room]")?.addEventListener("click", async () => {
+      const guests = ppl.filter((p) => p.id !== me()).length;
+      if (await confirmBox({ title: `「${st.name}」を削除しますか？`, text: `部屋の行きたい場所もすべて消え、元には戻せません。${guests ? `ゲスト${guests}人も自動でこの部屋から抜けます。` : ""}`, ok: "削除する", danger: true })) {
+        close();
+        if (await act(() => B.deleteRoom(), "部屋を削除しました")) render();
+      }
+    });
     root.querySelector("[data-leave]")?.addEventListener("click", async () => {
       if (await confirmBox({ title: `「${st.name}」から抜けますか？`, text: "抜けると、この部屋は一覧に出なくなります（あなたが追加したスポットは残ります）。", ok: "抜ける", danger: true })) act(() => B.leave());
     });
@@ -1723,7 +1738,7 @@ export function startApp(backend, mount = document.body) {
       ${B.kind === "artifact" ? `<div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-newtype="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
         <form id="new-group" hidden style="margin-top:8px"><div style="display:flex;gap:6px"><input id="ng-name" maxlength="40" required style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn rose">作る</button></div></form>`
         : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しい部屋を作る</a>`}` : `<p class="sub" style="margin-top:12px">新しい部屋は、リーダーが作って招待してくれます。</p>`}
-      ${B.kind === "artifact" && isLeader() ? `<button class="btn line block" style="margin-top:12px" data-join-another>${ic("plus", "sm")}招待コードで別の部屋に参加</button>`
+      ${B.kind === "artifact" ? ""
         : F.codes ? `<div class="label">招待コードで参加する</div>
         <form id="join-code"><div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn line">参加</button></div>
         <p class="sub" id="jc-status" style="margin:6px 0 0">誘ってくれた人から聞いた6文字のコードを入れてください。</p></form>` : ""}`);
@@ -1850,6 +1865,29 @@ export function startApp(backend, mount = document.body) {
       <p>「${esc(info.name)}」のリーダーが、今回は参加を見送りました。コードが合っているか、リーダーに確かめてみてください。</p>
       <button class="btn rose block" data-redo style="margin-top:18px">招待コードを入れ直す</button>`);
     el.querySelector("[data-redo]").addEventListener("click", () => codeStep(onJoined));
+  }
+  // リーダーの部屋がひとつもないとき：新しい部屋を作る
+  function createRoomStep(done) {
+    let type = null;
+    const el = screen(`<h1>新しい部屋を作りましょう</h1><p>誰と使う部屋ですか？ 作ったあと、招待コードで友人を招待できます。</p>
+      <div class="type-grid" style="margin-top:16px">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-type="${k}"><span class="emoji">${t.emoji}</span><b>${esc(t.label)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
+      <form id="cr-form" hidden style="margin-top:14px"><div class="field"><label for="cr-name">部屋の名前</label><input id="cr-name" required maxlength="40"></div><button class="btn rose block">作る</button></form>`);
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-type]");
+      if (!b) return;
+      type = b.dataset.type;
+      el.querySelectorAll("[data-type]").forEach((x) => x.classList.toggle("on", x === b));
+      const f = el.querySelector("#cr-form"); f.hidden = false;
+      const inp = el.querySelector("#cr-name"); inp.value = GROUP_TYPES[type].listName; inp.focus(); inp.select();
+    });
+    el.querySelector("#cr-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = el.querySelector("#cr-name").value.trim();
+      if (!name || !type) return;
+      e.submitter && (e.submitter.disabled = true);
+      if (await act(() => B.createList({ type, name }))) { closeScreen(); done(); toast(`「${name}」を作りました。設定の「招待」から招待コードを送れます`); }
+      else if (e.submitter) e.submitter.disabled = false;
+    });
   }
   // ゲストの入口：申請の状態に合わせて始める
   async function guestGate(onJoined) {
@@ -2019,9 +2057,13 @@ export function startApp(backend, mount = document.body) {
       void badge;
       if ($modal.querySelector("[data-notices]")) openNotices();
     });
-    B.watchMyApproval?.(() => {
-      screen(`<div class="wait-art"><span class="room-emoji">🚪</span></div><h1>この部屋から外れました</h1><p>リーダーが参加を取り消しました。もう一度参加するには、招待コードを入れて申請してください。</p><button class="btn rose block" data-reload style="margin-top:18px">はじめに戻る</button>`)
-        .querySelector("[data-reload]").addEventListener("click", () => location.reload());
+    B.watchMyApproval?.((why) => {
+      $modal.innerHTML = "";
+      const el = screen(why === "deleted"
+        ? `<div class="wait-art"><span class="room-emoji">🏠</span></div><h1>部屋がなくなりました</h1><p>リーダーが「${esc(S.settings.name)}」を削除したため、この部屋から自動で抜けました。新しい部屋に招待されたら、招待コードを入れてください。</p>`
+        : `<div class="wait-art"><span class="room-emoji">🚪</span></div><h1>部屋から抜けました</h1><p>リーダーがあなたを「${esc(S.settings.name)}」から外したため、自動で抜けました。もう一度参加するには、招待コードを入れて申請してください。</p>`);
+      el.querySelector(".welcome").insertAdjacentHTML("beforeend", `<button class="btn rose block" data-again style="margin-top:18px">招待コードを入れる</button>`);
+      el.querySelector("[data-again]").addEventListener("click", () => location.reload());
     });
   }
   function openNotices() {
@@ -2195,7 +2237,8 @@ export function startApp(backend, mount = document.body) {
   });
   // ゲストで、まだどの部屋にも入っていないとき：招待コードから始める
   let joining = false;
-  if (B.needsJoin?.()) guestGate(() => { joining = true; boot(); runSetup({ fromCode: true }); startWatches(); });
+  if (B.needsJoin?.() && isLeader()) createRoomStep(() => { boot(); startWatches(); });
+  else if (B.needsJoin?.()) guestGate(() => { joining = true; boot(); runSetup({ fromCode: true }); startWatches(); });
   else { boot(); startWatches(); }
 
   return { openAdd, go, invite: openInvite };

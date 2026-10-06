@@ -47,9 +47,9 @@ async function artifactBackend() {
   const saveMine = () => myDoc()?.set({ groups: myGroups, current: gid }).catch(() => {});
   if (myDoc() && leader) {
     const d = await myDoc().get().catch(() => null);
-    if (d?.exists && Array.isArray(d.data().groups) && d.data().groups.length) {
+    if (d?.exists && Array.isArray(d.data().groups)) {
       myGroups = d.data().groups;
-      gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0];
+      gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0] || "";
     }
   }
   // ---------- ゲストの参加：申請 → リーダーの承認 ----------
@@ -81,18 +81,29 @@ async function artifactBackend() {
     const [r, st] = await Promise.all([roomRef(g).get().catch(() => null), settingsRef(g).get().catch(() => null)]);
     return { room: r?.exists ? r.data() : null, set: st?.exists ? st.data() : null };
   }
+  // メンバーは「リーダー＋その部屋で承認されたゲスト」。approvals はリーダーしか書けないので、ゲストがメンバーを消したり足したりはできない
+  let approvalsAll = [];
+  if (db) {
+    const q = await db.collection("approvals").where("status", "==", "approved").limit(500).get().catch(() => null);
+    approvalsAll = q ? q.docs.map((d) => ({ id: d.id, ...d.data() })) : [];
+  }
+  const approvedIn = (g) => approvalsAll.filter((a) => a.status === "approved" && a.room === g).map((a) => a.id);
+  const roomMembers = (g, leaderId) => [...new Set([leaderId, ...approvedIn(g)].filter(Boolean))];
   // 部屋一覧に出す名前・種類・メンバー（ほかの部屋のメンバーも一覧で見られるように）
   const allProfiles = {};
-  const noteGroup = (g, data = {}) => { groupNames[g] = { name: data.name || "行きたいリスト", type: data.type, leader: data.leader || "", members: Array.isArray(data.members) ? data.members : [], nicknames: data.nicknames || {}, avatars: data.avatars || {} }; };
+  const noteGroup = (g, data = {}) => { groupNames[g] = { name: data.name || "行きたいリスト", type: data.type, leader: data.leader || "", members: roomMembers(g, data.leader || (leader ? meId : "")), nicknames: data.nicknames || {}, avatars: data.avatars || {} }; };
   const loadProfiles = async (ids) => {
     const need = ids.filter((id) => id && !allProfiles[id]);
     if (!user || !need.length) return;
     Object.assign(allProfiles, await user.profiles(need).catch(() => ({})));
   };
-  if (db) for (const g of myGroups) {
+  if (db) for (const g of [...myGroups]) {
     const { room, set } = await roomInfo(g);
+    // 削除された部屋は一覧から外す
+    if (room?.deleted) { myGroups = myGroups.filter((x) => x !== g); continue; }
     noteGroup(g, merge(set || {}, room || {}));
   }
+  if (!myGroups.includes(gid)) gid = myGroups[0] || "";
   await loadProfiles(myGroups.flatMap((g) => [groupNames[g].leader, ...groupNames[g].members]));
 
   let unsubs = [];
@@ -115,15 +126,23 @@ async function artifactBackend() {
     unsubs.push(spotsCol().onSnapshot(async (snap) => {
       const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // 名前を引いてから差し替える（先に差し替えると「相手」と表示されてしまう）
-      if (user) { profiles = await user.profiles(idsInUse(next, true)); Object.assign(allProfiles, profiles); }
+      if (user) { profiles = await user.profiles(idsInUse(next)); Object.assign(allProfiles, profiles); }
       if (g !== gid) return;
       spots = next;
       gotSpots = true;
       if (ready()) emit();
     }, () => { gotSpots = true; if (ready()) emit(); }));
+    unsubs.push(db.collection("approvals").onSnapshot((snap) => {
+      approvalsAll = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
+      if (g !== gid || !gotSettings) return;
+      refreshSettings();
+      if (ready()) emit();
+    }, () => {}));
     unsubs.push(roomRef(g).onSnapshot(async (d) => {
       if (g !== gid) return;
       roomMeta = d.exists ? d.data() : {};
+      // リーダーが部屋を削除した（またはリーダーが抜けた）
+      if (roomMeta.deleted && !leader) return kicked("deleted");
       // リーダーが開いたとき、古い形の部屋（rooms がない）を新しい形にそろえる
       if (!d.exists && owner && gotSettings) migrate(g);
       if (roomMeta.leader && user && !profiles[roomMeta.leader]) { Object.assign(profiles, await user.profiles([roomMeta.leader]).catch(() => ({}))); }
@@ -135,8 +154,6 @@ async function artifactBackend() {
       if (g !== gid) return;
       settingsDoc = d.exists ? d.data() : {};
       // 開いた人をメンバーとして記録する（部屋のメンバー一覧に出すため）
-      const mem = Array.isArray(settingsDoc.members) ? settingsDoc.members : [];
-      if (meId && canWrite !== false && !mem.includes(meId)) settingsRef(g).set({ ...settingsDoc, members: [...mem, meId] }).catch(() => {});
       const first = !gotSettings;
       gotSettings = true;
       if (first && gotRoom && !roomMeta.leader && owner) migrate(g);
@@ -173,8 +190,13 @@ async function artifactBackend() {
   }
 
   const wrap = (p) => p.catch((e) => { throw new Error(DB_ERRORS[e?.code] || "保存できませんでした。少し待ってからもう一度試してください"); });
-  const members = () => (Array.isArray(settings?.members) ? settings.members : Array.isArray(settingsDoc?.members) ? settingsDoc.members : []);
-  const idsInUse = (list = spots, withLeader = false) => [...new Set([meId, settings?.leader || roomMeta.leader, ...members(), ...list.flatMap((s) => [s.addedBy, ...Object.keys(s.likes || {}), ...(s.comments || []).map((c) => c.by)])].filter(Boolean))];
+  const members = () => roomMembers(gid, settings?.leader || roomMeta.leader || (leader ? meId : ""));
+  // 名前を引く対象（メンバーに加えて、スポットを追加した人・投票した人・コメントした人）
+  const idsInUse = (list = spots) => [...new Set([meId, ...members(), ...list.flatMap((s) => [s.addedBy, ...Object.keys(s.likes || {}), ...(s.comments || []).map((c) => c.by)])].filter(Boolean))];
+  // 部屋から外された・部屋がなくなったときに画面へ知らせる
+  let onKicked = () => {};
+  let kickedOnce = false;
+  const kicked = (why) => { if (kickedOnce || leader) return; kickedOnce = true; unsubs.forEach((u) => u()); unsubs = []; onKicked(why); };
   const sampleError = (e) => {
     if (SAMPLE_OFF.includes(e?.code)) { aiOn = false; return "この表示ではAI読み取りを使えません"; }
     if (e?.code === "rate_limited") return "AIの利用が混み合っています。少し時間をおいて試してください";
@@ -231,9 +253,13 @@ async function artifactBackend() {
       try { sessionStorage.setItem(PREVIEW_OK, request.room); } catch {}
     },
     // 使っている途中で承認が取り消されたら知らせる
-    watchMyApproval(onRevoked) {
+    watchMyApproval(onOut) {
+      onKicked = onOut;
       if (leader || preview || !db || !meId) return () => {};
-      return approvalRef().onSnapshot((d) => { const a = d.exists ? d.data() : null; if (!a || a.status !== "approved" || a.room !== gid) onRevoked(); }, () => {});
+      return approvalRef().onSnapshot((d) => {
+        const a = d.exists ? d.data() : null;
+        if (!a || a.status !== "approved" || a.room !== gid) kicked(a?.status === "closed" ? "deleted" : "removed");
+      }, () => {});
     },
     // リーダー：申請の一覧と、承認したゲストの一覧
     watchNotices(fn) {
@@ -281,8 +307,11 @@ async function artifactBackend() {
     setMe() {},
     needsPick: () => false,
     // ニックネームとアイコンはグループの設定に保存し、claude.ai の名前・写真より優先する
-    people: () => idsInUse().map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "", leader: id === settings?.leader })),
+    people: () => [...new Set([meId, ...members()].filter(Boolean))].map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "", leader: id === settings?.leader })),
     leaderId: () => settings?.leader || "",
+    currentRoom: () => gid,
+    // メンバーでなくなった人（外されたゲストなど）の名前
+    anyone: (id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || allProfiles[id]?.name || "", color: profiles[id]?.color || allProfiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "" }),
     renameMember: (id, name) => saveSettings({ nicknames: { ...(settings?.nicknames || {}), [id]: name } }),
     setAvatar: (id, avatar) => saveSettings({ avatars: { ...(settings?.avatars || {}), [id]: avatar } }),
     addSpot: (body) => wrap(spotsCol().add({ ...body, status: "want", likes: meId ? { [meId]: true } : {}, comments: [], addedBy: meId, createdAt: new Date().toISOString() })),
@@ -303,7 +332,7 @@ async function artifactBackend() {
     // ---------- グループの切り替え・作成・共有コード ----------
     lists: () => myGroups.map((g) => {
       const n = groupNames[g] || {};
-      const ids = g === gid ? idsInUse() : n.members || [];
+      const ids = roomMembers(g, n.leader || meId);
       return { id: g, name: n.name || "行きたいリスト", type: n.type || "couple", current: g === gid, leader: n.leader,
         members: ids.map((id) => ({ id, name: n.nicknames?.[id] || allProfiles[id]?.name || "メンバー", color: allProfiles[id]?.color || "#9a8a8f", avatar: n.avatars?.[id] || allProfiles[id]?.avatarUrl || "" })) };
     }),
@@ -353,14 +382,23 @@ async function artifactBackend() {
       await saveSettings({ code });
       return code;
     },
-    async leave() {
-      if (!leader) throw new Error("ゲストは部屋を抜けられません。リーダーに相談してください");
-      if (myGroups.length <= 1) throw new Error("最後の部屋は抜けられません");
-      myGroups = myGroups.filter((g) => g !== gid);
+    // リーダーが部屋を削除する（リーダーが抜ける＝部屋の削除）。ゲストの承認を閉じて、全員が自動で抜ける
+    async deleteRoom(g = gid) {
+      if (!leader) throw new Error("部屋を削除できるのはリーダーだけです");
+      await wrap(roomRef(g).set({ ...(g === gid ? roomMeta : {}), deleted: true, deletedAt: now(), code: "" }));
+      const q = await db.collection("approvals").where("room", "==", g).limit(500).get().catch(() => null);
+      for (const d of q?.docs || []) if (d.data().status === "approved") await approvalRef(d.id).set({ ...d.data(), status: "closed", at: now() }).catch(() => {});
+      const sp = await spotsCol(g).limit(1000).get().catch(() => null);
+      for (const d of sp?.docs || []) await spotsCol(g).doc(d.id).delete().catch(() => {});
+      myGroups = myGroups.filter((x) => x !== g);
       gid = myGroups[0] || "";
       await saveMine();
       if (!gid) return location.reload();
       open(gid);
+    },
+    async leave() {
+      if (!leader) throw new Error("ゲストは部屋を抜けられません。リーダーに相談してください");
+      return this.deleteRoom();
     },
     async readPost({ url = "", text = "", image = null, ai = false }) {
       const cleanUrl = url ? normalizeUrl(url) : "";

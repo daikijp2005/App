@@ -2287,7 +2287,7 @@ function startApp(backend, mount = document.body) {
   // ---------- 人 ----------
   const me = () => B.me();
   const peopleList = () => B.people();
-  const person = (id) => peopleList().find((p) => p.id === id) || { id, name: "", color: "#9a8a8f" };
+  const person = (id) => peopleList().find((p) => p.id === id) || B.anyone?.(id) || { id, name: "", color: "#9a8a8f" };
   const pname = (id) => (id && id === me() ? "あなた" : person(id).name || "メンバー");
   const av = (id, cls = "") => {
     const p = person(id);
@@ -3488,6 +3488,7 @@ function startApp(backend, mount = document.body) {
           ${p.id !== meId && !solo() ? `<div class="compat"><span class="sub">あなたとの相性</span>${c == null ? `<span class="sub">投票が増えるとわかります</span>` : `<div class="meter"><i style="width:${c}%"></i></div><b class="num">${c}%</b><span class="sub">${COMPAT_WORDS.find(([n]) => c >= n)[1]}</span>`}</div>` : ""}
           <div class="actions" style="margin-top:2px">
             ${B.renameMember ? `<button class="btn sm line" data-rename="${esc(p.id)}">${ic("edit", "sm")}名前を変える</button>` : ""}
+            ${B.kind === "artifact" && isLeader() && p.id !== meId && !p.leader ? `<button class="btn sm danger" data-kick="${esc(p.id)}" data-name="${esc(p.name || "ゲスト")}">外す</button>` : ""}
             ${p.id === meId && B.setAvatar ? `<button class="btn sm line" data-avatar>${ic("image", "sm")}アイコン</button>` : ""}
           </div>
         </div>`;
@@ -3497,6 +3498,12 @@ function startApp(backend, mount = document.body) {
     root.addEventListener("click", (e) => {
       const r = e.target.closest("[data-rename]");
       if (r) return renameSheet(r.dataset.rename);
+      const k = e.target.closest("[data-kick]");
+      if (k) {
+        confirmBox({ title: `${k.dataset.name}さんを部屋から外しますか？`, text: "外すと、この人は自動で部屋から抜けます。追加したスポットは残ります。", ok: "外す", danger: true })
+          .then(async (yes) => { if (yes && await act(() => B.revoke(k.dataset.kick, B.currentRoom()), "外しました")) openMembers(); });
+        return;
+      }
       if (e.target.closest("[data-avatar]")) return avatarSheet();
       if (e.target.closest("[data-act-invite]")) return openInvite();
     });
@@ -3629,7 +3636,8 @@ function startApp(backend, mount = document.body) {
       </div>
       ${F.owner ? `<div class="label">リーダー用</div><div class="panel"><b>ゲストの画面を確かめる</b><p class="sub" style="margin:4px 0 10px">${F.preview ? "いまゲスト画面のプレビュー中です。" : "招待された友人に見える画面（招待コードの入力から）を、このタブで試せます。書き込みはあなたとして行われます。"}</p>
         <button class="btn line block" data-preview>${F.preview ? "プレビューを終わる" : "ゲスト画面をプレビュー"}</button></div>` : ""}
-      ${(F.members && ppl.length > 1 && me()) || (B.kind === "artifact" && isLeader() && B.lists().length > 1) ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
+      ${B.kind === "artifact" && isLeader() ? `<button class="btn danger block" style="margin-top:14px" data-delete-room>${ic("trash", "sm")}この部屋を削除する</button>` : ""}
+      ${F.members && ppl.length > 1 && me() ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
         ` : ""}
       <p class="sub" style="margin-top:14px">読み取り: ${esc(B.readerNote)}<br>移動時間は直線距離から出した目安です。正確な時間はスポットの「経路」から確認できます。</p>`);
     if (focus === "bases") setTimeout(() => root.querySelector("#b-label")?.focus(), 60);
@@ -3676,6 +3684,13 @@ function startApp(backend, mount = document.body) {
     const setAccent = (hex) => { local.set("accent", hex === "#df4a72" ? "" : hex); applyAccent(hex === "#df4a72" ? "" : hex); root.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b.dataset.accent === hex)); };
     root.querySelectorAll("[data-accent]").forEach((b) => b.addEventListener("click", () => setAccent(b.dataset.accent)));
     root.querySelector("#accent-custom").addEventListener("input", (e) => setAccent(e.target.value));
+    root.querySelector("[data-delete-room]")?.addEventListener("click", async () => {
+      const guests = ppl.filter((p) => p.id !== me()).length;
+      if (await confirmBox({ title: `「${st.name}」を削除しますか？`, text: `部屋の行きたい場所もすべて消え、元には戻せません。${guests ? `ゲスト${guests}人も自動でこの部屋から抜けます。` : ""}`, ok: "削除する", danger: true })) {
+        close();
+        if (await act(() => B.deleteRoom(), "部屋を削除しました")) render();
+      }
+    });
     root.querySelector("[data-leave]")?.addEventListener("click", async () => {
       if (await confirmBox({ title: `「${st.name}」から抜けますか？`, text: "抜けると、この部屋は一覧に出なくなります（あなたが追加したスポットは残ります）。", ok: "抜ける", danger: true })) act(() => B.leave());
     });
@@ -3746,7 +3761,7 @@ function startApp(backend, mount = document.body) {
       ${B.kind === "artifact" ? `<div class="type-grid compact">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-newtype="${k}"><span class="emoji">${t.emoji}</span>${esc(t.label)}</button>`).join("")}</div>
         <form id="new-group" hidden style="margin-top:8px"><div style="display:flex;gap:6px"><input id="ng-name" maxlength="40" required style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)"><button class="btn rose">作る</button></div></form>`
         : `<a class="btn rose block" href="${esc(B.newListUrl())}">${ic("plus", "sm")}新しい部屋を作る</a>`}` : `<p class="sub" style="margin-top:12px">新しい部屋は、リーダーが作って招待してくれます。</p>`}
-      ${B.kind === "artifact" && isLeader() ? `<button class="btn line block" style="margin-top:12px" data-join-another>${ic("plus", "sm")}招待コードで別の部屋に参加</button>`
+      ${B.kind === "artifact" ? ""
         : F.codes ? `<div class="label">招待コードで参加する</div>
         <form id="join-code"><div style="display:flex;gap:6px"><input id="jc" maxlength="12" placeholder="例: K7M2QX" autocomplete="off" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);text-transform:uppercase;letter-spacing:.15em;font-weight:700"><button class="btn line">参加</button></div>
         <p class="sub" id="jc-status" style="margin:6px 0 0">誘ってくれた人から聞いた6文字のコードを入れてください。</p></form>` : ""}`);
@@ -3873,6 +3888,29 @@ function startApp(backend, mount = document.body) {
       <p>「${esc(info.name)}」のリーダーが、今回は参加を見送りました。コードが合っているか、リーダーに確かめてみてください。</p>
       <button class="btn rose block" data-redo style="margin-top:18px">招待コードを入れ直す</button>`);
     el.querySelector("[data-redo]").addEventListener("click", () => codeStep(onJoined));
+  }
+  // リーダーの部屋がひとつもないとき：新しい部屋を作る
+  function createRoomStep(done) {
+    let type = null;
+    const el = screen(`<h1>新しい部屋を作りましょう</h1><p>誰と使う部屋ですか？ 作ったあと、招待コードで友人を招待できます。</p>
+      <div class="type-grid" style="margin-top:16px">${Object.entries(GROUP_TYPES).map(([k, t]) => `<button class="type-tile" data-type="${k}"><span class="emoji">${t.emoji}</span><b>${esc(t.label)}</b><small>${esc(t.desc)}</small></button>`).join("")}</div>
+      <form id="cr-form" hidden style="margin-top:14px"><div class="field"><label for="cr-name">部屋の名前</label><input id="cr-name" required maxlength="40"></div><button class="btn rose block">作る</button></form>`);
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-type]");
+      if (!b) return;
+      type = b.dataset.type;
+      el.querySelectorAll("[data-type]").forEach((x) => x.classList.toggle("on", x === b));
+      const f = el.querySelector("#cr-form"); f.hidden = false;
+      const inp = el.querySelector("#cr-name"); inp.value = GROUP_TYPES[type].listName; inp.focus(); inp.select();
+    });
+    el.querySelector("#cr-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = el.querySelector("#cr-name").value.trim();
+      if (!name || !type) return;
+      e.submitter && (e.submitter.disabled = true);
+      if (await act(() => B.createList({ type, name }))) { closeScreen(); done(); toast(`「${name}」を作りました。設定の「招待」から招待コードを送れます`); }
+      else if (e.submitter) e.submitter.disabled = false;
+    });
   }
   // ゲストの入口：申請の状態に合わせて始める
   async function guestGate(onJoined) {
@@ -4042,9 +4080,13 @@ function startApp(backend, mount = document.body) {
       void badge;
       if ($modal.querySelector("[data-notices]")) openNotices();
     });
-    B.watchMyApproval?.(() => {
-      screen(`<div class="wait-art"><span class="room-emoji">🚪</span></div><h1>この部屋から外れました</h1><p>リーダーが参加を取り消しました。もう一度参加するには、招待コードを入れて申請してください。</p><button class="btn rose block" data-reload style="margin-top:18px">はじめに戻る</button>`)
-        .querySelector("[data-reload]").addEventListener("click", () => location.reload());
+    B.watchMyApproval?.((why) => {
+      $modal.innerHTML = "";
+      const el = screen(why === "deleted"
+        ? `<div class="wait-art"><span class="room-emoji">🏠</span></div><h1>部屋がなくなりました</h1><p>リーダーが「${esc(S.settings.name)}」を削除したため、この部屋から自動で抜けました。新しい部屋に招待されたら、招待コードを入れてください。</p>`
+        : `<div class="wait-art"><span class="room-emoji">🚪</span></div><h1>部屋から抜けました</h1><p>リーダーがあなたを「${esc(S.settings.name)}」から外したため、自動で抜けました。もう一度参加するには、招待コードを入れて申請してください。</p>`);
+      el.querySelector(".welcome").insertAdjacentHTML("beforeend", `<button class="btn rose block" data-again style="margin-top:18px">招待コードを入れる</button>`);
+      el.querySelector("[data-again]").addEventListener("click", () => location.reload());
     });
   }
   function openNotices() {
@@ -4218,7 +4260,8 @@ function startApp(backend, mount = document.body) {
   });
   // ゲストで、まだどの部屋にも入っていないとき：招待コードから始める
   let joining = false;
-  if (B.needsJoin?.()) guestGate(() => { joining = true; boot(); runSetup({ fromCode: true }); startWatches(); });
+  if (B.needsJoin?.() && isLeader()) createRoomStep(() => { boot(); startWatches(); });
+  else if (B.needsJoin?.()) guestGate(() => { joining = true; boot(); runSetup({ fromCode: true }); startWatches(); });
   else { boot(); startWatches(); }
 
   return { openAdd, go, invite: openInvite };
@@ -4273,9 +4316,9 @@ async function artifactBackend() {
   const saveMine = () => myDoc()?.set({ groups: myGroups, current: gid }).catch(() => {});
   if (myDoc() && leader) {
     const d = await myDoc().get().catch(() => null);
-    if (d?.exists && Array.isArray(d.data().groups) && d.data().groups.length) {
+    if (d?.exists && Array.isArray(d.data().groups)) {
       myGroups = d.data().groups;
-      gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0];
+      gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0] || "";
     }
   }
   // ---------- ゲストの参加：申請 → リーダーの承認 ----------
@@ -4307,18 +4350,29 @@ async function artifactBackend() {
     const [r, st] = await Promise.all([roomRef(g).get().catch(() => null), settingsRef(g).get().catch(() => null)]);
     return { room: r?.exists ? r.data() : null, set: st?.exists ? st.data() : null };
   }
+  // メンバーは「リーダー＋その部屋で承認されたゲスト」。approvals はリーダーしか書けないので、ゲストがメンバーを消したり足したりはできない
+  let approvalsAll = [];
+  if (db) {
+    const q = await db.collection("approvals").where("status", "==", "approved").limit(500).get().catch(() => null);
+    approvalsAll = q ? q.docs.map((d) => ({ id: d.id, ...d.data() })) : [];
+  }
+  const approvedIn = (g) => approvalsAll.filter((a) => a.status === "approved" && a.room === g).map((a) => a.id);
+  const roomMembers = (g, leaderId) => [...new Set([leaderId, ...approvedIn(g)].filter(Boolean))];
   // 部屋一覧に出す名前・種類・メンバー（ほかの部屋のメンバーも一覧で見られるように）
   const allProfiles = {};
-  const noteGroup = (g, data = {}) => { groupNames[g] = { name: data.name || "行きたいリスト", type: data.type, leader: data.leader || "", members: Array.isArray(data.members) ? data.members : [], nicknames: data.nicknames || {}, avatars: data.avatars || {} }; };
+  const noteGroup = (g, data = {}) => { groupNames[g] = { name: data.name || "行きたいリスト", type: data.type, leader: data.leader || "", members: roomMembers(g, data.leader || (leader ? meId : "")), nicknames: data.nicknames || {}, avatars: data.avatars || {} }; };
   const loadProfiles = async (ids) => {
     const need = ids.filter((id) => id && !allProfiles[id]);
     if (!user || !need.length) return;
     Object.assign(allProfiles, await user.profiles(need).catch(() => ({})));
   };
-  if (db) for (const g of myGroups) {
+  if (db) for (const g of [...myGroups]) {
     const { room, set } = await roomInfo(g);
+    // 削除された部屋は一覧から外す
+    if (room?.deleted) { myGroups = myGroups.filter((x) => x !== g); continue; }
     noteGroup(g, merge(set || {}, room || {}));
   }
+  if (!myGroups.includes(gid)) gid = myGroups[0] || "";
   await loadProfiles(myGroups.flatMap((g) => [groupNames[g].leader, ...groupNames[g].members]));
 
   let unsubs = [];
@@ -4341,15 +4395,23 @@ async function artifactBackend() {
     unsubs.push(spotsCol().onSnapshot(async (snap) => {
       const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // 名前を引いてから差し替える（先に差し替えると「相手」と表示されてしまう）
-      if (user) { profiles = await user.profiles(idsInUse(next, true)); Object.assign(allProfiles, profiles); }
+      if (user) { profiles = await user.profiles(idsInUse(next)); Object.assign(allProfiles, profiles); }
       if (g !== gid) return;
       spots = next;
       gotSpots = true;
       if (ready()) emit();
     }, () => { gotSpots = true; if (ready()) emit(); }));
+    unsubs.push(db.collection("approvals").onSnapshot((snap) => {
+      approvalsAll = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
+      if (g !== gid || !gotSettings) return;
+      refreshSettings();
+      if (ready()) emit();
+    }, () => {}));
     unsubs.push(roomRef(g).onSnapshot(async (d) => {
       if (g !== gid) return;
       roomMeta = d.exists ? d.data() : {};
+      // リーダーが部屋を削除した（またはリーダーが抜けた）
+      if (roomMeta.deleted && !leader) return kicked("deleted");
       // リーダーが開いたとき、古い形の部屋（rooms がない）を新しい形にそろえる
       if (!d.exists && owner && gotSettings) migrate(g);
       if (roomMeta.leader && user && !profiles[roomMeta.leader]) { Object.assign(profiles, await user.profiles([roomMeta.leader]).catch(() => ({}))); }
@@ -4361,8 +4423,6 @@ async function artifactBackend() {
       if (g !== gid) return;
       settingsDoc = d.exists ? d.data() : {};
       // 開いた人をメンバーとして記録する（部屋のメンバー一覧に出すため）
-      const mem = Array.isArray(settingsDoc.members) ? settingsDoc.members : [];
-      if (meId && canWrite !== false && !mem.includes(meId)) settingsRef(g).set({ ...settingsDoc, members: [...mem, meId] }).catch(() => {});
       const first = !gotSettings;
       gotSettings = true;
       if (first && gotRoom && !roomMeta.leader && owner) migrate(g);
@@ -4399,8 +4459,13 @@ async function artifactBackend() {
   }
 
   const wrap = (p) => p.catch((e) => { throw new Error(DB_ERRORS[e?.code] || "保存できませんでした。少し待ってからもう一度試してください"); });
-  const members = () => (Array.isArray(settings?.members) ? settings.members : Array.isArray(settingsDoc?.members) ? settingsDoc.members : []);
-  const idsInUse = (list = spots, withLeader = false) => [...new Set([meId, settings?.leader || roomMeta.leader, ...members(), ...list.flatMap((s) => [s.addedBy, ...Object.keys(s.likes || {}), ...(s.comments || []).map((c) => c.by)])].filter(Boolean))];
+  const members = () => roomMembers(gid, settings?.leader || roomMeta.leader || (leader ? meId : ""));
+  // 名前を引く対象（メンバーに加えて、スポットを追加した人・投票した人・コメントした人）
+  const idsInUse = (list = spots) => [...new Set([meId, ...members(), ...list.flatMap((s) => [s.addedBy, ...Object.keys(s.likes || {}), ...(s.comments || []).map((c) => c.by)])].filter(Boolean))];
+  // 部屋から外された・部屋がなくなったときに画面へ知らせる
+  let onKicked = () => {};
+  let kickedOnce = false;
+  const kicked = (why) => { if (kickedOnce || leader) return; kickedOnce = true; unsubs.forEach((u) => u()); unsubs = []; onKicked(why); };
   const sampleError = (e) => {
     if (SAMPLE_OFF.includes(e?.code)) { aiOn = false; return "この表示ではAI読み取りを使えません"; }
     if (e?.code === "rate_limited") return "AIの利用が混み合っています。少し時間をおいて試してください";
@@ -4457,9 +4522,13 @@ async function artifactBackend() {
       try { sessionStorage.setItem(PREVIEW_OK, request.room); } catch {}
     },
     // 使っている途中で承認が取り消されたら知らせる
-    watchMyApproval(onRevoked) {
+    watchMyApproval(onOut) {
+      onKicked = onOut;
       if (leader || preview || !db || !meId) return () => {};
-      return approvalRef().onSnapshot((d) => { const a = d.exists ? d.data() : null; if (!a || a.status !== "approved" || a.room !== gid) onRevoked(); }, () => {});
+      return approvalRef().onSnapshot((d) => {
+        const a = d.exists ? d.data() : null;
+        if (!a || a.status !== "approved" || a.room !== gid) kicked(a?.status === "closed" ? "deleted" : "removed");
+      }, () => {});
     },
     // リーダー：申請の一覧と、承認したゲストの一覧
     watchNotices(fn) {
@@ -4507,8 +4576,11 @@ async function artifactBackend() {
     setMe() {},
     needsPick: () => false,
     // ニックネームとアイコンはグループの設定に保存し、claude.ai の名前・写真より優先する
-    people: () => idsInUse().map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "", leader: id === settings?.leader })),
+    people: () => [...new Set([meId, ...members()].filter(Boolean))].map((id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || "", color: profiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "", leader: id === settings?.leader })),
     leaderId: () => settings?.leader || "",
+    currentRoom: () => gid,
+    // メンバーでなくなった人（外されたゲストなど）の名前
+    anyone: (id) => ({ id, name: settings?.nicknames?.[id] || profiles[id]?.name || allProfiles[id]?.name || "", color: profiles[id]?.color || allProfiles[id]?.color || "#9a8a8f", avatar: settings?.avatars?.[id] || profiles[id]?.avatarUrl || "" }),
     renameMember: (id, name) => saveSettings({ nicknames: { ...(settings?.nicknames || {}), [id]: name } }),
     setAvatar: (id, avatar) => saveSettings({ avatars: { ...(settings?.avatars || {}), [id]: avatar } }),
     addSpot: (body) => wrap(spotsCol().add({ ...body, status: "want", likes: meId ? { [meId]: true } : {}, comments: [], addedBy: meId, createdAt: new Date().toISOString() })),
@@ -4529,7 +4601,7 @@ async function artifactBackend() {
     // ---------- グループの切り替え・作成・共有コード ----------
     lists: () => myGroups.map((g) => {
       const n = groupNames[g] || {};
-      const ids = g === gid ? idsInUse() : n.members || [];
+      const ids = roomMembers(g, n.leader || meId);
       return { id: g, name: n.name || "行きたいリスト", type: n.type || "couple", current: g === gid, leader: n.leader,
         members: ids.map((id) => ({ id, name: n.nicknames?.[id] || allProfiles[id]?.name || "メンバー", color: allProfiles[id]?.color || "#9a8a8f", avatar: n.avatars?.[id] || allProfiles[id]?.avatarUrl || "" })) };
     }),
@@ -4579,14 +4651,23 @@ async function artifactBackend() {
       await saveSettings({ code });
       return code;
     },
-    async leave() {
-      if (!leader) throw new Error("ゲストは部屋を抜けられません。リーダーに相談してください");
-      if (myGroups.length <= 1) throw new Error("最後の部屋は抜けられません");
-      myGroups = myGroups.filter((g) => g !== gid);
+    // リーダーが部屋を削除する（リーダーが抜ける＝部屋の削除）。ゲストの承認を閉じて、全員が自動で抜ける
+    async deleteRoom(g = gid) {
+      if (!leader) throw new Error("部屋を削除できるのはリーダーだけです");
+      await wrap(roomRef(g).set({ ...(g === gid ? roomMeta : {}), deleted: true, deletedAt: now(), code: "" }));
+      const q = await db.collection("approvals").where("room", "==", g).limit(500).get().catch(() => null);
+      for (const d of q?.docs || []) if (d.data().status === "approved") await approvalRef(d.id).set({ ...d.data(), status: "closed", at: now() }).catch(() => {});
+      const sp = await spotsCol(g).limit(1000).get().catch(() => null);
+      for (const d of sp?.docs || []) await spotsCol(g).doc(d.id).delete().catch(() => {});
+      myGroups = myGroups.filter((x) => x !== g);
       gid = myGroups[0] || "";
       await saveMine();
       if (!gid) return location.reload();
       open(gid);
+    },
+    async leave() {
+      if (!leader) throw new Error("ゲストは部屋を抜けられません。リーダーに相談してください");
+      return this.deleteRoom();
     },
     async readPost({ url = "", text = "", image = null, ai = false }) {
       const cleanUrl = url ? normalizeUrl(url) : "";
