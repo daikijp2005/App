@@ -605,3 +605,32 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .role-line .sub { font-size: 12px; }
 .room-ro { display: flex; align-items: center; gap: 12px; }
 .room-ro .room-emoji { font-size: 32px; }
+
+/* 承認待ち */
+.wait-art { position: relative; width: 112px; height: 112px; margin: 10px auto 18px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-sm); }
+.wait-art .room-emoji { font-size: 46px; }
+.spinner.big { position: absolute; inset: -6px; width: auto; height: auto; border-width: 3px; border-radius: 50%; }
+/* 通知 */
+.notice-btn { position: relative; }
+.notice-btn .badge { position: absolute; top: -2px; right: -4px; }
+.notice-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.notice-row:first-child { border-top: 0; }
+.notice-row .val { min-width: 0; }
+.notice-row .val b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notice-row .av.xs { width: 34px; height: 34px; font-size: 14px; }
+.notice-acts { display: flex; gap: 6px; }
+.badge-inline { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: var(--rose); color: var(--rose-ink); font-size: 11px; margin-left: 4px; letter-spacing: 0; }
+/* 画面の真ん中の確認 */
+.confirm-wrap { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: var(--scrim, rgba(20, 12, 15, .45)); animation: cf-in .16s ease both; }
+.confirm-wrap.out { animation: cf-out .16s ease both; }
+.confirm { width: min(340px, 100%); background: var(--surface); color: var(--ink); border-radius: 22px; padding: 22px 20px 18px; box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .45); text-align: center; animation: cf-pop .2s cubic-bezier(.2, .9, .3, 1.2) both; }
+.confirm h3 { font-size: 17px; font-weight: 800; line-height: 1.45; margin: 0 0 8px; word-break: auto-phrase; }
+.confirm p { font-size: 13.5px; color: var(--muted); margin: 0 0 18px; line-height: 1.6; }
+.confirm-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn.danger-fill { background: var(--danger, #d64545); color: #fff; border-color: transparent; }
+@keyframes cf-in { from { opacity: 0; } }
+@keyframes cf-out { to { opacity: 0; } }
+@keyframes cf-pop { from { transform: scale(.92); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .confirm-wrap, .confirm { animation: none; } }
+.notice-btn .badge { position: absolute; top: 0; right: -2px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; background: var(--rose); color: var(--rose-ink); font-size: 10.5px; font-weight: 800; display: grid; place-items: center; line-height: 1; box-shadow: 0 0 0 2px var(--bg); }
+.gate h1 { font-size: 24px; word-break: auto-phrase; line-height: 1.4; }

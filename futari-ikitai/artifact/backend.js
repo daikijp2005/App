@@ -23,6 +23,7 @@ async function artifactBackend() {
   let listener = () => {};
   let reset = false;
   const emit = () => { listener({ settings, spots, reset }); reset = false; };
+  const now = () => new Date().toISOString();
 
   // ---------- 部屋 ----------
   // 部屋の名前・ジャンル・共有コード・リーダーは rooms/<id>（リーダー＝アーティファクトの持ち主だけが書ける）。
@@ -44,14 +45,36 @@ async function artifactBackend() {
   const spotsCol = (g = gid) => (g === "main" ? db.collection("spots") : db.collection(`groups/${g}/spots`));
   const myDoc = () => (db && meId ? db.doc(`data/users/${meId}/${preview ? "preview" : "profile"}`) : null);
   const saveMine = () => myDoc()?.set({ groups: myGroups, current: gid }).catch(() => {});
-  if (myDoc()) {
+  if (myDoc() && leader) {
     const d = await myDoc().get().catch(() => null);
     if (d?.exists && Array.isArray(d.data().groups) && d.data().groups.length) {
       myGroups = d.data().groups;
       gid = myGroups.includes(d.data().current) ? d.data().current : myGroups[0];
-      if (!leader) myGroups = [gid];
     }
   }
+  // ---------- ゲストの参加：申請 → リーダーの承認 ----------
+  // requests/<ゲスト> にゲストが申請を書き、approvals/<ゲスト> にリーダーだけが結果を書く（ルールでリーダー以外は書けない）。
+  // ゲストが入れるのは、承認された1つの部屋だけ。プレビュー中は承認をこのタブだけで済ませる。
+  const approvalRef = (id = meId) => db.doc(`approvals/${id}`);
+  const requestRef = (id = meId) => db.doc(`requests/${id}`);
+  let approval = null;
+  let request = null;
+  const PREVIEW_OK = "spotrip.previewApproved";
+  if (db && meId && !leader) {
+    if (preview) { try { const r = sessionStorage.getItem(PREVIEW_OK); if (r) approval = { status: "approved", room: r }; } catch {} }
+    else {
+      const [a, r] = await Promise.all([approvalRef().get().catch(() => null), requestRef().get().catch(() => null)]);
+      approval = a?.exists ? a.data() : null;
+      request = r?.exists ? r.data() : null;
+    }
+    if (approval?.status === "approved" && approval.room) { gid = approval.room; myGroups = [gid]; }
+  }
+  const joinStage = () => {
+    if (leader || myGroups.length) return "in";
+    if (request && (!approval || (approval.at || "") < (request.at || ""))) return "waiting";
+    if (request && approval?.status === "declined" && approval.room === request.room) return "declined";
+    return "code";
+  };
   // 部屋の情報（rooms の内容を優先し、古いデータは部屋の設定から補う）
   const merge = (set = {}, room = {}) => { const out = { ...set }; for (const k of [...ROOM_KEYS, "leader"]) if (room[k]) out[k] = room[k]; return out; };
   async function roomInfo(g) {
@@ -183,6 +206,70 @@ async function artifactBackend() {
     },
     // ゲストがまだどの部屋にも入っていない（招待コードの入力から始める）
     needsJoin: () => Boolean(db) && !myGroups.length,
+    joinStage,
+    pendingRequest: () => request,
+    // ゲスト：参加を申請して、リーダーの返事を待つ
+    async requestJoin(g) {
+      if (leader) return this.joinRoom(g);
+      request = { room: g, at: now() };
+      if (preview) return request;
+      await wrap(requestRef().set(request));
+      return request;
+    },
+    waitApproval(onResult) {
+      if (preview) return () => {};
+      return approvalRef().onSnapshot((d) => {
+        const a = d.exists ? d.data() : null;
+        if (!a || !request || (a.at || "") < (request.at || "")) return;
+        approval = a;
+        onResult(a.status === "approved" && a.room === request.room ? "approved" : "declined", a);
+      }, () => {});
+    },
+    previewApprove() {
+      if (!preview || !request) return;
+      approval = { status: "approved", room: request.room, at: now() };
+      try { sessionStorage.setItem(PREVIEW_OK, request.room); } catch {}
+    },
+    // 使っている途中で承認が取り消されたら知らせる
+    watchMyApproval(onRevoked) {
+      if (leader || preview || !db || !meId) return () => {};
+      return approvalRef().onSnapshot((d) => { const a = d.exists ? d.data() : null; if (!a || a.status !== "approved" || a.room !== gid) onRevoked(); }, () => {});
+    },
+    // リーダー：申請の一覧と、承認したゲストの一覧
+    watchNotices(fn) {
+      if (!leader || !db) return () => {};
+      let reqs = [], apps = [];
+      const send = async () => {
+        await loadProfiles([...reqs, ...apps].map((x) => x.id));
+        const decided = Object.fromEntries(apps.map((a) => [a.id, a]));
+        const who = (id) => ({ name: allProfiles[id]?.name || "ゲスト", color: allProfiles[id]?.color || "#9a8a8f", avatar: allProfiles[id]?.avatarUrl || "" });
+        const pending = reqs.filter((r) => r.room && (!decided[r.id] || (decided[r.id].at || "") < (r.at || ""))).map((r) => ({ ...r, ...who(r.id), roomName: groupNames[r.room]?.name || "部屋" })).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+        const approved = apps.filter((a) => a.status === "approved").map((a) => ({ ...a, ...who(a.id), roomName: groupNames[a.room]?.name || "部屋" })).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+        fn({ pending, approved });
+      };
+      const u1 = db.collection("requests").onSnapshot((snap) => { reqs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); send(); }, () => {});
+      const u2 = db.collection("approvals").onSnapshot((snap) => { apps = snap.docs.map((d) => ({ id: d.id, ...d.data() })); send(); }, () => {});
+      return () => { u1?.(); u2?.(); };
+    },
+    async approve(id, room) {
+      if (!leader) throw new Error("承認できるのはリーダーだけです");
+      await wrap(approvalRef(id).set({ status: "approved", room, at: now(), by: meId }));
+      const d = await settingsRef(room).get().catch(() => null);
+      const mem = d?.exists && Array.isArray(d.data().members) ? d.data().members : [];
+      if (!mem.includes(id)) await wrap(settingsRef(room).set({ bases: [], ...(d?.exists ? d.data() : {}), members: [...mem, id] }));
+      await requestRef(id).delete().catch(() => {});
+    },
+    async decline(id, room) {
+      if (!leader) throw new Error("リーダーだけが操作できます");
+      await wrap(approvalRef(id).set({ status: "declined", room, at: now(), by: meId }));
+      await requestRef(id).delete().catch(() => {});
+    },
+    async revoke(id, room) {
+      if (!leader) throw new Error("リーダーだけが操作できます");
+      await wrap(approvalRef(id).set({ status: "revoked", room, at: now(), by: meId }));
+      const d = await settingsRef(room).get().catch(() => null);
+      if (d?.exists && Array.isArray(d.data().members)) await wrap(settingsRef(room).set({ ...d.data(), members: d.data().members.filter((m) => m !== id) }));
+    },
     // 書き込みの権限がない（閲覧のみで共有された）
     readOnly: canWrite === false,
     // リーダーがゲストの画面を確かめる
@@ -232,7 +319,9 @@ async function artifactBackend() {
     },
     // 招待コードから部屋を探して、参加する前に確かめてもらうための情報を返す
     async peekCode(code) {
-      const g = await findByCode(code);
+      return this.describeRoom(await findByCode(code));
+    },
+    async describeRoom(g) {
       const { room, set } = await roomInfo(g);
       const info = merge(set || {}, room || {});
       const ids = [...new Set([info.leader, ...(info.members || [])].filter(Boolean))];
@@ -241,13 +330,13 @@ async function artifactBackend() {
       return { id: g, name: info.name || "行きたいリスト", type: info.type || "friends", leader: info.leader ? who(info.leader) : null, members: ids.map(who), joined: myGroups.includes(g) };
     },
     async joinRoom(g) {
-      // ゲストが入れる部屋は1つだけ
-      if (!leader && myGroups.length && !myGroups.includes(g)) throw new Error("ゲストが入れる部屋は1つだけです");
+      // ゲストが入れるのは、リーダーが承認した1つの部屋だけ
+      if (!leader && !(approval?.status === "approved" && approval.room === g)) throw new Error("リーダーの承認を待っています");
       noteGroup(g, groupNames[g] || {});
       const d = await settingsRef(g).get().catch(() => null);
       const mem = d?.exists && Array.isArray(d.data().members) ? d.data().members : [];
       if (meId && !mem.includes(meId)) await wrap(settingsRef(g).set({ bases: [], ...(d?.exists ? d.data() : {}), members: [...mem, meId] }));
-      if (!leader) myGroups = [];
+      if (!leader) { myGroups = []; if (!preview) await requestRef().delete().catch(() => {}); }
       await switchTo(g);
       return groupNames[g];
     },

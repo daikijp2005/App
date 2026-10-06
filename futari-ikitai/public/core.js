@@ -28,6 +28,7 @@ const addDays = (ymd, n) => { const d = new Date(ymd + "T12:00:00"); d.setDate(d
 const yen = (n) => `¥${Math.round(n).toLocaleString("ja-JP")}`;
 
 const ICONS = {
+  bell: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0",
   home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
   heart: "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z",
   plus: "M12 5v14M5 12h14",
@@ -209,6 +210,34 @@ async function shrinkImage(file, max = 640, limit = 140_000) {
   } finally { URL.revokeObjectURL(url); }
 }
 
+// 全画面（ブラウザが許すときだけ。iPhone の Safari やアプリ内の表示では使えないことがある）
+const canFullscreen = () => Boolean(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+const isFullscreen = () => Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+async function toggleFullscreen() {
+  try {
+    if (isFullscreen()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else { const r = document.documentElement; await (r.requestFullscreen ? r.requestFullscreen({ navigationUI: "hide" }) : r.webkitRequestFullscreen()); }
+  } catch {}
+}
+
+// 画面の真ん中に出る確認（削除・退出など）。true / false で答える
+export function confirmBox({ title, text = "", ok = "OK", cancel = "やめる", danger = false } = {}) {
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const el = document.createElement("div");
+    el.className = "confirm-wrap";
+    el.innerHTML = `<div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="cf-t" aria-describedby="cf-d">
+      <h3 id="cf-t">${esc(title)}</h3>${text ? `<p id="cf-d">${esc(text)}</p>` : ""}
+      <div class="confirm-btns"><button class="btn line" data-no>${esc(cancel)}</button><button class="btn ${danger ? "danger-fill" : "rose"}" data-yes>${esc(ok)}</button></div></div>`;
+    const done = (v) => { el.classList.add("out"); setTimeout(() => el.remove(), 160); document.removeEventListener("keydown", key, true); prev?.focus?.(); resolve(v); };
+    const key = (e) => { if (e.key === "Escape") { e.stopPropagation(); done(false); } };
+    el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-no]")) done(false); if (e.target.closest("[data-yes]")) done(true); });
+    document.addEventListener("keydown", key, true);
+    document.body.append(el);
+    setTimeout(() => el.querySelector("[data-no]").focus(), 30);
+  });
+}
+
 // 絞り込みの初期値
 const freshFilters = () => ({ genres: new Set(), price: "", travel: "", dist: "", area: "", who: "", openNow: false, day: "", added: "", deadlineOnly: false, unvoted: false, meh: false, located: false });
 const DIST = [["d1", "〜1km", 1], ["d3", "〜3km", 3], ["d10", "〜10km", 10], ["d30", "〜30km", 30], ["dfar", "30km〜", Infinity]];
@@ -309,6 +338,7 @@ export function startApp(backend, mount = document.body) {
         ${F.lists ? `<button class="brand" data-act="lists" aria-label="リストを切り替える" style="border:0;background:none;padding:0;text-align:left;color:inherit">${LOGO}<h1>${esc(S.settings.name)}</h1>${ic("chev", "sm")}</button>`
           : `<div class="brand">${LOGO}<h1>${esc(S.settings.name)}</h1></div>`}
         <button class="duo" data-act="members" aria-label="メンバー図鑑" style="border:0;background:none;padding:0">${ppl.slice(0, 4).map((p) => av(p.id)).join("")}${ppl.length > 4 ? `<span class="av" style="background:var(--surface-2);color:var(--ink)">+${ppl.length - 4}</span>` : ""}</button>
+        ${B.kind === "artifact" && isLeader() ? `<button class="ghost-icon notice-btn" data-act="notices" aria-label="通知">${ic("bell")}${S.notices?.pending.length ? `<span class="badge num">${S.notices.pending.length}</span>` : ""}</button>` : ""}
         <button class="ghost-icon" data-act="settings" aria-label="設定">${ic("sliders")}</button>
       </div></header>
       <main class="wrap" id="view"></main>
@@ -1266,7 +1296,6 @@ export function startApp(backend, mount = document.body) {
         <button class="btn line" data-edit>${ic("edit", "sm")}編集</button>
         <button class="btn danger" data-delete>${ic("trash", "sm")}削除</button>
       </div>
-      <div class="notice warn" data-confirm hidden style="margin-top:10px">「${esc(nameOf(it))}」を削除すると、${esc(V().others || "ほかのメンバー")}のリストからも消えます。<div class="actions"><button class="btn line sm" data-cancel-del>やめる</button><button class="btn danger sm" data-do-del>削除する</button></div></div>
     </div>`);
 
     root.addEventListener("click", async (e) => {
@@ -1301,9 +1330,9 @@ export function startApp(backend, mount = document.body) {
         setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       }
       if (b.hasAttribute("data-copy")) { try { await navigator.clipboard.writeText(spotShareText(it)); toast("コピーしました"); } catch { toast("コピーできませんでした"); } }
-      if (b.hasAttribute("data-delete")) root.querySelector("[data-confirm]").hidden = false;
-      if (b.hasAttribute("data-cancel-del")) root.querySelector("[data-confirm]").hidden = true;
-      if (b.hasAttribute("data-do-del")) { if (await act(() => B.deleteSpot(it.id), "削除しました")) close(); }
+      if (b.hasAttribute("data-delete") && await confirmBox({ title: `「${nameOf(it)}」を削除しますか？`, text: `削除すると、${V().others || "ほかのメンバー"}のリストからも消えます。元には戻せません。`, ok: "削除する", danger: true })) {
+        if (await act(() => B.deleteSpot(it.id), "削除しました")) close();
+      }
     });
     root.querySelectorAll("[data-field]").forEach((el) => el.addEventListener("change", () => patch(it.id, { [el.dataset.field]: el.value })));
     root.querySelector(".composer")?.addEventListener("submit", async (e) => {
@@ -1569,12 +1598,13 @@ export function startApp(backend, mount = document.body) {
       <div class="actions" style="margin-top:0">
         <button class="btn line" data-tour>${ic("help", "sm")}使い方を見る</button>
         <button class="btn line" data-theme>表示テーマを切り替え</button>
+        ${canFullscreen() ? `<button class="btn line" data-fullscreen>${isFullscreen() ? "全画面をやめる" : "全画面で表示"}</button>` : ""}
         ${F.export ? `<a class="btn line" href="${esc(B.exportUrl())}" download>バックアップ</a>` : ""}
       </div>
       ${F.owner ? `<div class="label">リーダー用</div><div class="panel"><b>ゲストの画面を確かめる</b><p class="sub" style="margin:4px 0 10px">${F.preview ? "いまゲスト画面のプレビュー中です。" : "招待された友人に見える画面（招待コードの入力から）を、このタブで試せます。書き込みはあなたとして行われます。"}</p>
         <button class="btn line block" data-preview>${F.preview ? "プレビューを終わる" : "ゲスト画面をプレビュー"}</button></div>` : ""}
       ${(F.members && ppl.length > 1 && me()) || (B.kind === "artifact" && isLeader() && B.lists().length > 1) ? `<button class="btn danger block" style="margin-top:14px" data-leave>この部屋から抜ける</button>
-        <div class="notice warn" data-leave-confirm hidden style="margin-top:10px">「${esc(st.name)}」から抜けると、この端末ではリストが開けなくなります（あなたが追加したスポットは残ります）。<div class="actions"><button class="btn line sm" data-leave-cancel>やめる</button><button class="btn danger sm" data-leave-do>抜ける</button></div></div>` : ""}
+        ` : ""}
       <p class="sub" style="margin-top:14px">読み取り: ${esc(B.readerNote)}<br>移動時間は直線距離から出した目安です。正確な時間はスポットの「経路」から確認できます。</p>`);
     if (focus === "bases") setTimeout(() => root.querySelector("#b-label")?.focus(), 60);
     let here = null;
@@ -1620,10 +1650,11 @@ export function startApp(backend, mount = document.body) {
     const setAccent = (hex) => { local.set("accent", hex === "#df4a72" ? "" : hex); applyAccent(hex === "#df4a72" ? "" : hex); root.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b.dataset.accent === hex)); };
     root.querySelectorAll("[data-accent]").forEach((b) => b.addEventListener("click", () => setAccent(b.dataset.accent)));
     root.querySelector("#accent-custom").addEventListener("input", (e) => setAccent(e.target.value));
-    root.querySelector("[data-leave]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = false));
-    root.querySelector("[data-leave-cancel]")?.addEventListener("click", () => (root.querySelector("[data-leave-confirm]").hidden = true));
-    root.querySelector("[data-leave-do]")?.addEventListener("click", () => act(() => B.leave()));
+    root.querySelector("[data-leave]")?.addEventListener("click", async () => {
+      if (await confirmBox({ title: `「${st.name}」から抜けますか？`, text: "抜けると、この部屋は一覧に出なくなります（あなたが追加したスポットは残ります）。", ok: "抜ける", danger: true })) act(() => B.leave());
+    });
     root.querySelector("[data-preview]")?.addEventListener("click", () => B.setPreview(!F.preview));
+    root.querySelector("[data-fullscreen]")?.addEventListener("click", async () => { close(); await toggleFullscreen(); });
     root.querySelector("[data-save-name]")?.addEventListener("click", async () => { const name = root.querySelector("#s-name").value.trim() || V().listName; if (await act(() => B.saveSettings({ name }), "保存しました")) { S.settings = { ...S.settings, name }; render(); } });
     root.querySelector("[data-theme]").addEventListener("click", () => {
       const r = document.documentElement;
@@ -1789,9 +1820,43 @@ export function startApp(backend, mount = document.body) {
     el.querySelector("[data-redo]").addEventListener("click", () => codeStep(onJoined, { first: !S.loaded }));
     el.querySelector("[data-ok]").addEventListener("click", async (e) => {
       e.target.disabled = true;
-      if (await act(() => B.joinRoom(info.id))) onJoined(info);
+      if (isLeader()) { if (await act(() => B.joinRoom(info.id))) onJoined(info); else e.target.disabled = false; return; }
+      if (await act(() => B.requestJoin(info.id))) waitingStep(info, onJoined);
       else e.target.disabled = false;
     });
+  }
+  // 2'. リーダーの承認待ち（承認されると自動で次へ）
+  function waitingStep(info, onJoined) {
+    const t = GROUP_TYPES[info.type] || GROUP_TYPES.friends;
+    const el = screen(`${steps(2)}
+      <div class="wait-art"><span class="room-emoji">${t.emoji}</span><span class="spinner big"></span></div>
+      <h1>リーダーの承認を待っています</h1>
+      <p>「${esc(info.name)}」への参加を申請しました。${info.leader ? `リーダーの${esc(info.leader.name)}さん` : "リーダー"}が承認すると、自動で次に進みます。この画面は閉じても大丈夫です。</p>
+      ${F.preview ? `<button class="btn rose block" data-preview-ok style="margin-top:18px">（プレビュー）承認されたことにして進む</button>` : ""}
+      <p class="sub" style="margin-top:18px"><a href="#" data-redo>別の招待コードを入れる</a></p>`);
+    let stop = () => {};
+    const proceed = async () => { stop(); if (await act(() => B.joinRoom(info.id))) onJoined(info); };
+    stop = B.waitApproval((result) => { if (result === "approved") proceed(); else declinedStep(info, onJoined); }) || (() => {});
+    el.querySelector("[data-preview-ok]")?.addEventListener("click", () => { B.previewApprove(); proceed(); });
+    el.querySelector("[data-redo]").addEventListener("click", (e) => { e.preventDefault(); stop(); codeStep(onJoined); });
+  }
+  function declinedStep(info, onJoined) {
+    const el = screen(`${steps(2)}
+      <div class="wait-art"><span class="room-emoji">🙏</span></div>
+      <h1>今回は参加が見送られました</h1>
+      <p>「${esc(info.name)}」のリーダーが、今回は参加を見送りました。コードが合っているか、リーダーに確かめてみてください。</p>
+      <button class="btn rose block" data-redo style="margin-top:18px">招待コードを入れ直す</button>`);
+    el.querySelector("[data-redo]").addEventListener("click", () => codeStep(onJoined));
+  }
+  // ゲストの入口：申請の状態に合わせて始める
+  async function guestGate(onJoined) {
+    const stage = B.joinStage?.() || "code";
+    if (stage === "code") return codeStep(onJoined);
+    const req = B.pendingRequest();
+    const info = await B.describeRoom(req.room).catch(() => null);
+    if (!info) return codeStep(onJoined);
+    if (stage === "waiting") return waitingStep(info, onJoined);
+    declinedStep(info, onJoined);
   }
   // 3. ロゴ・アプリ名・キャッチフレーズ
   function splashStep(next, n = 3, all = 5) {
@@ -1883,6 +1948,50 @@ export function startApp(backend, mount = document.body) {
       toProfile();
     }, 3 - off, all);
   }
+  // リーダー：参加申請の通知。ゲスト：承認が取り消されたら知らせる
+  S.notices = { pending: [], approved: [] };
+  function startWatches() {
+    let known = null;
+    B.watchNotices?.((n) => {
+      const ids = new Set(n.pending.map((r) => r.id));
+      if (known) for (const r of n.pending) if (!known.has(r.id)) toast(`${r.name}さんが「${r.roomName}」への参加を申請しています`);
+      known = ids;
+      S.notices = n;
+      const badge = document.querySelector("[data-act=notices] .badge");
+      const btn = document.querySelector("[data-act=notices]");
+      if (btn) btn.innerHTML = `${ic("bell")}${n.pending.length ? `<span class="badge num">${n.pending.length}</span>` : ""}`;
+      void badge;
+      if ($modal.querySelector("[data-notices]")) openNotices();
+    });
+    B.watchMyApproval?.(() => {
+      screen(`<div class="wait-art"><span class="room-emoji">🚪</span></div><h1>この部屋から外れました</h1><p>リーダーが参加を取り消しました。もう一度参加するには、招待コードを入れて申請してください。</p><button class="btn rose block" data-reload style="margin-top:18px">はじめに戻る</button>`)
+        .querySelector("[data-reload]").addEventListener("click", () => location.reload());
+    });
+  }
+  function openNotices() {
+    const n = S.notices;
+    const time = (iso) => (iso ? relativeDate(iso) : "");
+    const person2 = (x) => avOf({ id: x.id, name: x.name, color: x.color, avatar: x.avatar });
+    const { root } = sheet(`<div data-notices>${head("通知")}
+      <div class="label" style="margin-top:0">参加の申請 ${n.pending.length ? `<span class="badge-inline num">${n.pending.length}</span>` : ""}</div>
+      ${n.pending.length ? `<div class="panel" style="padding:4px 14px">${n.pending.map((r) => `<div class="notice-row">
+          ${person2(r)}<div class="val"><b>${esc(r.name)}</b><div class="sub">「${esc(r.roomName)}」に参加したい ・ ${esc(time(r.at))}</div></div>
+          <div class="notice-acts"><button class="btn sm line" data-decline="${esc(r.id)}" data-room="${esc(r.room)}">見送る</button><button class="btn sm rose" data-approve="${esc(r.id)}" data-room="${esc(r.room)}">承認</button></div></div>`).join("")}</div>`
+        : `<p class="sub" style="margin:0 2px 8px">いま届いている申請はありません。招待コードを入れた人がいると、ここに出ます。</p>`}
+      <div class="label">参加中のゲスト</div>
+      ${n.approved.length ? `<div class="panel" style="padding:4px 14px">${n.approved.map((a) => `<div class="notice-row">
+          ${person2(a)}<div class="val"><b>${esc(a.name)}</b><div class="sub">「${esc(a.roomName)}」 ・ ${esc(time(a.at))}に承認</div></div>
+          <div class="notice-acts"><button class="btn sm line" data-revoke="${esc(a.id)}" data-room="${esc(a.room)}" data-name="${esc(a.name)}">外す</button></div></div>`).join("")}</div>`
+        : `<p class="sub" style="margin:0 2px">まだ承認したゲストはいません。</p>`}
+      <p class="sub" style="margin-top:14px">ゲストは承認された1つの部屋だけに入れます。</p></div>`);
+    root.addEventListener("click", async (e) => {
+      const ap = e.target.closest("[data-approve]"), de = e.target.closest("[data-decline]"), rv = e.target.closest("[data-revoke]");
+      if (ap) { ap.disabled = true; if (await act(() => B.approve(ap.dataset.approve, ap.dataset.room), "承認しました")) return; ap.disabled = false; }
+      if (de && await confirmBox({ title: "参加を見送りますか？", text: "この人には「今回は参加が見送られました」と表示されます。", ok: "見送る", danger: true })) act(() => B.decline(de.dataset.decline, de.dataset.room), "見送りました");
+      if (rv && await confirmBox({ title: `${rv.dataset.name}さんを部屋から外しますか？`, text: "外すと、この人は部屋を開けなくなります。追加したスポットは残ります。", ok: "外す", danger: true })) act(() => B.revoke(rv.dataset.revoke, rv.dataset.room), "外しました");
+    });
+  }
+
   // ほかの部屋の招待コードで参加する（部屋の一覧から）
   function joinAnother() {
     codeStep((info) => { closeScreen(); toast(`「${info.name}」に参加しました`); }, { first: false });
@@ -1945,6 +2054,7 @@ export function startApp(backend, mount = document.body) {
     const a = t.dataset.act;
     if (a === "settings") openSettings();
     if (a === "exit-preview") B.setPreview(false);
+    if (a === "notices") openNotices();
     if (a === "lists") openLists();
     if (a === "invite") openInvite();
     if (a === "ask") openAsk();
@@ -2029,8 +2139,8 @@ export function startApp(backend, mount = document.body) {
   });
   // ゲストで、まだどの部屋にも入っていないとき：招待コードから始める
   let joining = false;
-  if (B.needsJoin?.()) codeStep(() => { joining = true; boot(); runSetup({ fromCode: true }); });
-  else boot();
+  if (B.needsJoin?.()) guestGate(() => { joining = true; boot(); runSetup({ fromCode: true }); startWatches(); });
+  else { boot(); startWatches(); }
 
   return { openAdd, go, invite: openInvite };
 }
