@@ -156,7 +156,10 @@ const TOUR = [
   {
     title: "行った場所は、足あとに",
     text: "★と感想で思い出に残し、都道府県マップで振り返れます。「そろそろ終わりそう」な期間限定や、今が旬の場所もそっとお知らせします。",
-    art: () => `<div class="tour-mock"><div class="japan" style="max-width:240px">${PREF_TILES.map(([p, c, r]) => `<div class="pref ${["東京都", "神奈川県", "京都府"].includes(p) ? "v3" : ["千葉県", "静岡県", "大阪府"].includes(p) ? "v1" : ["北海道", "沖縄県", "福岡県"].includes(p) ? "want" : ""}" style="grid-column:${c + 1};grid-row:${r + 1};font-size:0"></div>`).join("")}</div></div>`,
+    art: () => `<div class="tour-mock">
+      <div class="mini" style="flex:none;width:100%;box-shadow:var(--shadow-sm);margin-bottom:12px"><span class="ph">${spotArt({ id: "tour-memory", genre: "nature", placeName: "ネモフィラの丘", tags: ["ネモフィラ"] })}</span><span class="tx"><b>ネモフィラの丘</b><span style="color:#f2b400;letter-spacing:1px">★★★★★</span><span class="sub">「一面の青、また行こうね」</span></span></div>
+      <div class="tour-japan">${PREF_TILES.map(([p, c, r]) => `<i class="${["東京都", "神奈川県", "京都府"].includes(p) ? "v3" : ["千葉県", "静岡県", "大阪府", "茨城県"].includes(p) ? "v1" : ["北海道", "沖縄県", "福岡県"].includes(p) ? "want" : ""}" style="grid-column:${c + 1};grid-row:${r + 1}"></i>`).join("")}</div>
+      <div class="tags" style="justify-content:center;margin-top:10px"><span class="tag soon">⏳ あと5日くらい</span><span class="tag open">🌸 今が旬</span></div></div>`,
   },
 ];
 
@@ -1882,52 +1885,105 @@ export function startApp(backend, mount = document.body) {
   async function profileStep(next, n = 4, all = 5) {
     await whenLoaded();
     const mine = person(me());
-    let emoji = (mine.avatar || "").startsWith("emoji:") ? mine.avatar.slice(6) : "";
+    // ここで選んだ内容は「次へ」でまとめて保存する（設定画面で変えられるものは全部ここで決められる）
+    let avatar = mine.avatar || "";
     let accent = local.get("accent", "") || "#df4a72";
+    let theme = local.get("theme", null) || "auto";
+    const added = [];
+    const roomBases = S.settings.bases || [];
     const el = screen(`${steps(n, all)}
-      <h1>あなたのこと</h1><p>部屋のみんなに表示される名前などを決めましょう。あとから設定で変えられます。</p>
+      <h1>あなたの設定</h1><p>設定画面で変えられることは、ここで全部決められます。あとからいつでも変えられます。</p>
       <form id="gate-prof">
-        <div class="prof-top"><span class="av lg" id="gp-av" style="background:${esc(mine.color || "#9a8a8f")}"></span>
-          <div class="field" style="flex:1;margin:0"><label for="gp-name">名前（ニックネーム）</label><input id="gp-name" required maxlength="20" value="${esc(mine.name || "")}" placeholder="例: はるか" autocomplete="nickname"></div></div>
-        <div class="field"><label>アイコン（任意）</label><div class="emoji-row">${["", ...AVATAR_EMOJI.slice(0, 15)].map((x) => `<button type="button" data-emo="${x}" class="${x === emoji ? "on" : ""}" aria-label="${x || "名前の頭文字"}">${x || "Aa"}</button>`).join("")}</div></div>
-        <div class="field"><label>テーマカラー</label><div class="swatches">${ACCENTS.map(([hex, label]) => `<button type="button" class="swatch ${accent === hex ? "on" : ""}" style="--sw:${hex}" data-accent="${hex}" aria-label="${label}"><i></i><small>${label}</small></button>`).join("")}</div></div>
-        <div class="field"><label for="gp-where">出発地（任意）</label>
-          <div class="row2" style="margin:0"><input id="gp-label" value="自宅" maxlength="20" aria-label="出発地の名前"><input id="gp-where" placeholder="駅名・住所など" aria-label="出発地の場所"></div>
-          <span class="sub">移動時間やデートコースの交通費の計算に使います。あとからでも登録できます。</span></div>
+        <div class="set-sec"><b class="set-h">${ic("users", "sm")}名前とアイコン</b>
+          <div class="prof-top"><span class="av lg" id="gp-av" style="background:${esc(mine.color || "#9a8a8f")}"></span>
+            <div class="field" style="flex:1;margin:0"><label for="gp-name">名前（ニックネーム）</label><input id="gp-name" required maxlength="20" value="${esc(mine.name || "")}" placeholder="例: はるか" autocomplete="nickname"></div></div>
+          <div class="emoji-row">${["", ...AVATAR_EMOJI].map((x) => `<button type="button" data-emo="${x}" class="${(x ? `emoji:${x}` : "") === avatar ? "on" : ""}" aria-label="${x || "名前の頭文字"}">${x || "Aa"}</button>`).join("")}</div>
+          <label class="btn sm line" for="gp-photo" style="margin-top:8px">${ic("image", "sm")}写真をアイコンにする<input id="gp-photo" type="file" accept="image/*" hidden></label></div>
+        <div class="set-sec"><b class="set-h">${ic("sparkle", "sm")}テーマカラー</b>
+          <div class="swatches">${ACCENTS.map(([hex, label]) => `<button type="button" class="swatch ${accent === hex ? "on" : ""}" style="--sw:${hex}" data-accent="${hex}" aria-label="${label}"><i></i><small>${label}</small></button>`).join("")}
+            <label class="swatch custom" aria-label="好きな色"><input type="color" id="gp-accent" value="${esc(accent)}"><small>好きな色</small></label></div></div>
+        <div class="set-sec"><b class="set-h">${ic("help", "sm")}表示テーマ</b>
+          <div class="seg full">${[["auto", "端末に合わせる"], ["light", "ライト"], ["dark", "ダーク"]].map(([k, l]) => `<button type="button" data-th="${k}" class="${theme === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
+        <div class="set-sec"><b class="set-h">${ic("home", "sm")}出発地（いくつでも・任意）</b>
+          <span class="sub">家・職場・よく集まる駅など。移動時間やデートコースの交通費の計算に使います。出発地は部屋のみんなで共有されます。</span>
+          ${roomBases.length ? `<div class="sub" style="margin-top:6px">この部屋の出発地: ${roomBases.map((b) => esc(b.label)).join("・")}</div>` : ""}
+          <div id="gp-bases"></div>
+          <div class="row2" style="margin:8px 0 0"><div class="field" style="margin:0"><label for="gp-label">名前</label><input id="gp-label" value="自宅" maxlength="20"></div><div class="field" style="margin:0"><label for="gp-where">場所</label><input id="gp-where" placeholder="駅名・住所など"></div></div>
+          <button type="button" class="btn sm line" data-add-base style="margin-top:8px">${ic("plus", "sm")}出発地を追加</button>
+          <p class="sub" id="gp-bst" role="status" style="min-height:1.2em;margin:6px 0 0"></p></div>
+        ${canFullscreen() ? `<div class="set-sec"><b class="set-h">${ic("grid", "sm")}全画面</b><button type="button" class="btn sm line" data-fs>${isFullscreen() ? "全画面をやめる" : "全画面で表示"}</button></div>` : ""}
         <p class="sub" id="gp-st" role="status" style="min-height:1.4em"></p>
-        ${F.preview ? `<p class="sub">プレビュー中なので、ここで入れた内容は保存しません。</p>` : ""}
+        ${F.preview ? `<p class="sub">プレビュー中なので、名前・アイコン・出発地は保存しません（色と表示テーマはこの端末に保存されます）。</p>` : ""}
         <button class="btn rose block">次へ</button>
       </form>`);
-    const drawAv = () => { const a = el.querySelector("#gp-av"); const nm = el.querySelector("#gp-name").value || "?"; a.innerHTML = emoji ? `<span class="emo">${esc(emoji)}</span>` : esc([...nm][0]); a.classList.toggle("is-emoji", Boolean(emoji)); };
+    const drawAv = () => {
+      const a = el.querySelector("#gp-av");
+      const nm = el.querySelector("#gp-name").value || "?";
+      a.classList.toggle("is-emoji", avatar.startsWith("emoji:"));
+      a.innerHTML = avatar.startsWith("emoji:") ? `<span class="emo">${esc(avatar.slice(6))}</span>` : avatar ? `<img src="${esc(avatar)}" alt="">` : esc([...nm][0]);
+    };
+    const drawBases = () => {
+      el.querySelector("#gp-bases").innerHTML = added.map((b, i) => `<div class="base-item" style="margin:8px 0 0">${ic("home", "sm")}<div class="val"><b>${esc(b.label)}</b><div class="sub">${esc(b.address)}</div></div><button type="button" class="btn sm danger" data-del-b="${i}">外す</button></div>`).join("");
+    };
+    const setAccent = (hex) => { accent = hex; el.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b.dataset.accent === hex)); applyAccent(hex === "#df4a72" ? "" : hex); };
+    const setTheme = (k) => { theme = k; el.querySelectorAll("[data-th]").forEach((b) => b.classList.toggle("on", b.dataset.th === k)); if (k === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = k; };
     drawAv();
     el.querySelector("#gp-name").addEventListener("input", drawAv);
-    el.addEventListener("click", (e) => {
+    el.addEventListener("click", async (e) => {
       const em = e.target.closest("[data-emo]");
-      if (em) { emoji = em.dataset.emo; el.querySelectorAll("[data-emo]").forEach((b) => b.classList.toggle("on", b === em)); drawAv(); }
+      if (em) { avatar = em.dataset.emo ? `emoji:${em.dataset.emo}` : ""; el.querySelectorAll("[data-emo]").forEach((b) => b.classList.toggle("on", b === em)); drawAv(); }
       const ac = e.target.closest("[data-accent]");
-      if (ac) { accent = ac.dataset.accent; el.querySelectorAll("[data-accent]").forEach((b) => b.classList.toggle("on", b === ac)); applyAccent(accent === "#df4a72" ? "" : accent); }
+      if (ac) setAccent(ac.dataset.accent);
+      const th = e.target.closest("[data-th]");
+      if (th) setTheme(th.dataset.th);
+      const del = e.target.closest("[data-del-b]");
+      if (del) { added.splice(Number(del.dataset.delB), 1); drawBases(); }
+      if (e.target.closest("[data-fs]")) { await toggleFullscreen(); e.target.closest("[data-fs]").textContent = isFullscreen() ? "全画面をやめる" : "全画面で表示"; }
+      if (e.target.closest("[data-add-base]")) await addBase();
     });
+    el.querySelector("#gp-accent").addEventListener("input", (e) => setAccent(e.target.value));
+    el.querySelector("#gp-photo").addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      try { avatar = await shrinkPhoto(f); el.querySelectorAll("[data-emo]").forEach((b) => b.classList.remove("on")); drawAv(); } catch { toast("この写真は使えませんでした"); }
+    });
+    // 出発地：書いた場所の位置を探して、一覧に足す
+    const addBase = async () => {
+      const st = el.querySelector("#gp-bst");
+      const where = el.querySelector("#gp-where").value.trim();
+      const label = el.querySelector("#gp-label").value.trim() || "自宅";
+      if (!where) { st.textContent = "場所（駅名・住所など）を入れてください"; return false; }
+      st.innerHTML = `<span class="thinking"><span class="spinner"></span>位置を探しています</span>`;
+      const pos = await B.locate(where).catch(() => null);
+      if (!pos) { st.textContent = "位置が見つかりませんでした。別の書き方で試してください"; return false; }
+      added.push({ label, address: /^https?:/.test(where) ? "" : where, lat: pos.lat, lng: pos.lng });
+      el.querySelector("#gp-where").value = "";
+      el.querySelector("#gp-label").value = "";
+      st.textContent = `「${label}」を追加しました`;
+      drawBases();
+      return true;
+    };
+    el.querySelector("#gp-where").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addBase(); } });
     el.querySelector("#gate-prof").addEventListener("submit", async (e) => {
       e.preventDefault();
       const st = el.querySelector("#gp-st");
-      const btn = e.target.querySelector("button.rose");
+      const btn = e.target.querySelector("button.rose.block");
       const name = el.querySelector("#gp-name").value.trim();
-      const where = el.querySelector("#gp-where").value.trim();
-      const label = el.querySelector("#gp-label").value.trim() || "自宅";
-      if (!name) return (st.textContent = "名前を入れてください");
+      if (!name) { st.textContent = "名前を入れてください"; el.querySelector("#gp-name").focus(); return; }
       btn.disabled = true;
+      // 書きかけの出発地も追加する
+      if (el.querySelector("#gp-where").value.trim() && !(await addBase())) { btn.disabled = false; return; }
       local.set("accent", accent === "#df4a72" ? "" : accent);
+      local.set("theme", theme === "auto" ? null : theme);
       if (!F.preview) {
+        st.innerHTML = `<span class="thinking"><span class="spinner"></span>保存しています</span>`;
         if (name !== mine.name && !(await act(() => B.renameMember(me(), name)))) { btn.disabled = false; return; }
-        if ((emoji ? `emoji:${emoji}` : "") !== (mine.avatar || "") && (emoji || (mine.avatar || "").startsWith("emoji:"))) await act(() => B.setAvatar(me(), emoji ? `emoji:${emoji}` : ""));
-        if (where) {
-          st.innerHTML = `<span class="thinking"><span class="spinner"></span>出発地の位置を探しています</span>`;
-          const pos = await B.locate(where).catch(() => null);
-          if (!pos) { st.textContent = "出発地の位置が見つかりませんでした。空のままにするか、別の書き方で試してください"; btn.disabled = false; return; }
-          const id = `b${Date.now().toString(36)}`;
-          const taken = (S.settings.bases || []).some((b) => b.label === label);
-          const bases = [...(S.settings.bases || []), { id, label: taken ? `${name}の${label}` : label, address: /^https?:/.test(where) ? "" : where, lat: pos.lat, lng: pos.lng }];
-          if (await act(() => B.saveSettings({ bases }))) { S.settings = { ...S.settings, bases }; S.baseId = id; local.set("baseId", id); }
+        if (avatar !== (mine.avatar || "") && (avatar || (mine.avatar || "").startsWith("emoji:") || (mine.avatar || "").startsWith("data:"))) await act(() => B.setAvatar(me(), avatar));
+        if (added.length) {
+          const cur = S.settings.bases || [];
+          const fresh = added.map((b, i) => ({ ...b, id: `b${Date.now().toString(36)}${i}`, label: cur.some((c) => c.label === b.label) ? `${name}の${b.label}` : b.label }));
+          const bases = [...cur, ...fresh];
+          if (await act(() => B.saveSettings({ bases }))) { S.settings = { ...S.settings, bases }; S.baseId = fresh[0].id; local.set("baseId", fresh[0].id); }
         }
       }
       next();
