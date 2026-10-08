@@ -322,7 +322,7 @@ async function artifactBackend() {
     // 「まあまあ」には理由（任意）を添える。答え直したら「もう一度聞く」は終わり
     vote(id, value, reason = null) {
       const it = spots.find((s) => s.id === id);
-      const patch = { likes: { [meId]: value }, reasons: { [meId]: value === "no" ? reason || null : null } };
+      const patch = { likes: { [meId]: value }, reasons: { [meId]: value === "no" ? reason || null : null }, voteAt: { [meId]: new Date().toISOString() } };
       if ((value === true || value === "no") && it?.reaskAt) Object.assign(patch, { reaskAt: "", reaskBy: "" });
       return wrap(spotsCol().doc(id).update(patch));
     },

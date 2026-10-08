@@ -180,7 +180,7 @@ const ITEM_FIELDS = {
   url: "s", platform: "s", title: "s", caption: "s", image: "s", author: "s", genre: "s", placeName: "s", address: "s",
   prefecture: "s", city: "s", station: "s", walkMin: "n", priceMin: "n", priceMax: "n", priceNote: "s", hours: "s", closed: "s",
   tags: "a", summary: "s", lat: "n", lng: "n", memo: "s", status: "s", plannedDate: "s", visitedAt: "s", rating: "n", review: "s",
-  deadline: "s", pinned: "b", photo: "p", ratings: "m", reviews: "m", eager: "m", ratedBy: "s", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
+  deadline: "s", pinned: "b", photo: "p", ratings: "m", reviews: "m", eager: "m", ratedBy: "s", memoBy: "s", memoAt: "s", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
 };
 
 function sanitizeItem(input) {
@@ -207,7 +207,7 @@ function sanitizeItem(input) {
 const MEMBER_COLORS = ["#df4a72", "#3b6fd8", "#1d936a", "#c47b0c", "#8a56d6", "#d6561f", "#0f8fa0", "#b0469a"];
 const GROUP_TYPES = ["couple", "friends", "family", "work", "circle", "solo"];
 const MAX_MEMBERS = 50;
-const REASONS = ["far", "budget", "mood", "crowd", "time", "taste"];
+const REASONS = ["far", "budget", "mood", "crowd", "time", "taste", "other"];
 
 function sanitizeMember(m, i) {
   return {
@@ -457,6 +457,7 @@ async function handleApi(req, res, url) {
       if (value === "no" && REASONS.includes(body.reason)) item.reasons[memberId] = body.reason;
       else delete item.reasons[memberId];
       if (value === true || value === "no") { if (item.reaskBy && item.reaskAt) { item.reaskAt = ""; item.reaskBy = ""; } }
+      item.voteAt = { ...(item.voteAt || {}), [memberId]: now() };
       await saveRoom(room);
       return send(res, 200, item);
     }

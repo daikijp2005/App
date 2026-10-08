@@ -711,3 +711,14 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .talk-avs { display: inline-flex; }
 .talk-avs .av { width: 18px; height: 18px; font-size: 9px; border: 1.5px solid rgba(20, 12, 15, .55); }
 .talk-avs .av + .av { margin-left: -6px; }
+/* 通知のお知らせ */
+.act-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.act-row:first-child { border-top: 0; }
+.act-row .av.xs { width: 30px; height: 30px; font-size: 12px; }
+.act-row .val { display: grid; gap: 2px; min-width: 0; }
+.act-line { font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.act-row.unread .act-line { font-weight: 700; }
+.t-yes { color: var(--rose); }
+.t-no { color: var(--muted); }
+.t-quote { color: var(--muted); font-weight: 500; }
+.new-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rose); margin-top: 6px; }

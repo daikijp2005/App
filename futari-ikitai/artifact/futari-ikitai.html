@@ -716,6 +716,17 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .talk-avs { display: inline-flex; }
 .talk-avs .av { width: 18px; height: 18px; font-size: 9px; border: 1.5px solid rgba(20, 12, 15, .55); }
 .talk-avs .av + .av { margin-left: -6px; }
+/* 通知のお知らせ */
+.act-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.act-row:first-child { border-top: 0; }
+.act-row .av.xs { width: 30px; height: 30px; font-size: 12px; }
+.act-row .val { display: grid; gap: 2px; min-width: 0; }
+.act-line { font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.act-row.unread .act-line { font-weight: 700; }
+.t-yes { color: var(--rose); }
+.t-no { color: var(--muted); }
+.t-quote { color: var(--muted); font-weight: 500; }
+.new-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rose); margin-top: 6px; }
 
 </style>
 <div id="boot" class="empty" style="padding-top:30vh"><span class="thinking"><span class="spinner"></span>記憶をたどっています…</span></div>
@@ -2172,6 +2183,7 @@ const MEH = {
   mood: { label: "今は気分じゃない", emoji: "🌙", hint: "気分は変わるもの。少し時間をおいて、もう一度聞いてみよう。" },
   crowd: { label: "混んでそう", emoji: "👥", hint: "平日や朝いち・夜遅めなら、ゆったり楽しめるかも。" },
   time: { label: "時間が合わなそう", emoji: "🗓️", hint: "カレンダーで空いている日を一緒に探してみよう。" },
+  other: { label: "なんとなく", emoji: "💭", hint: "言葉にしにくい日もあるもの。別の日にもう一度聞いてみよう。" },
   taste: { label: "好みがちょっと違う", emoji: "🎨", hint: "好みが違うのも楽しさのうち。相手の♡の場所と“交換こ”で行くのもアリ。" },
 };
 const KIND_WORDS = [
@@ -2499,7 +2511,7 @@ function startApp(backend, mount = document.body) {
         ${F.lists ? `<button class="brand" data-act="lists" aria-label="リストを切り替える" style="border:0;background:none;padding:0;text-align:left;color:inherit">${LOGO}<h1>${esc(S.settings.name)}</h1>${ic("chev", "sm")}</button>`
           : `<div class="brand">${LOGO}<h1>${esc(S.settings.name)}</h1></div>`}
         <button class="duo" data-act="members" aria-label="メンバー図鑑" style="border:0;background:none;padding:0">${ppl.slice(0, 4).map((p) => av(p.id)).join("")}${ppl.length > 4 ? `<span class="av" style="background:var(--surface-2);color:var(--ink)">+${ppl.length - 4}</span>` : ""}</button>
-        ${B.kind === "artifact" && isLeader() ? `<button class="ghost-icon notice-btn" data-act="notices" aria-label="通知">${ic("bell")}${S.notices?.pending.length ? `<span class="badge num">${S.notices.pending.length}</span>` : ""}</button>` : ""}
+        ${!solo() || (B.kind === "artifact" && isLeader()) ? `<button class="ghost-icon notice-btn" data-act="notices" aria-label="通知">${bellInner()}</button>` : ""}
         <button class="ghost-icon" data-act="settings" aria-label="設定">${ic("sliders")}</button>
       </div></header>
       <main class="wrap" id="view"></main>
@@ -2839,10 +2851,16 @@ function startApp(backend, mount = document.body) {
   async function decide(it, choice) {
     const el = $("swipe");
     if (choice === "skip") { S.skipped.add(it.id); return renderView(); }
-    if (el) { el.style.transform = `translateX(${choice === "yes" ? 520 : -520}px) rotate(${choice === "yes" ? 24 : -24}deg)`; el.style.opacity = "0"; }
     const value = choice === "yes" ? true : "no";
+    // 「まあまあ」は理由を選んでから決まる（間違えて左にスワイプしたときは「やめる」で戻せる）
+    let reason = null;
+    if (value === "no") {
+      if (el) { el.style.transform = "translateX(-60px) rotate(-6deg)"; }
+      reason = await mehSheet(it);
+      if (!reason) { if (el) { el.style.transform = ""; el.style.opacity = ""; } return; }
+    }
+    if (el) { el.style.transform = `translateX(${choice === "yes" ? 520 : -520}px) rotate(${choice === "yes" ? 24 : -24}deg)`; el.style.opacity = "0"; }
     const wasMatch = choice === "yes" && yesIds(it).some((id) => id !== me());
-    const reason = value === "no" ? await mehSheet(it) : null;
     await vote(it.id, value, { silent: true, reason });
     if (wasMatch) showMatch(it);
     if (value === "no") toast("「まあまあ」を伝えました。気が変わったらいつでも♡にできます");
@@ -2853,10 +2871,10 @@ function startApp(backend, mount = document.body) {
     return new Promise((resolve) => {
       let done = false;
       const finish = (r) => { if (done) return; done = true; resolve(r); };
-      const { root, close } = sheet(`${head("まあまあ、ですね")}
-        <p class="sub" style="margin-top:0">理由を選ぶと、${esc(pname(it.addedBy))}にやさしく伝わります。選ばなくても大丈夫です。</p>
+      const { root, close } = sheet(`${head("まあまあにしますか？")}
+        <p class="sub" style="margin-top:0">「${esc(nameOf(it))}」を「まあまあ」にするなら、理由を選んでください。理由は${esc(pname(it.addedBy))}にやさしく伝わります。</p>
         <div class="meh-grid">${Object.entries(MEH).map(([k, m]) => `<button data-meh="${k}"><span>${m.emoji}</span>${esc(m.label)}</button>`).join("")}</div>
-        <button class="btn line block" style="margin-top:10px" data-meh="">理由は言わない</button>`, { onClose: () => finish(null) });
+        <button class="btn line block" style="margin-top:10px" data-meh="">やめる（まあまあにしない）</button>`, { onClose: () => finish(null) });
       root.addEventListener("click", (e) => { const b = e.target.closest("[data-meh]"); if (!b) return; finish(b.dataset.meh || null); close(); });
     });
   }
@@ -2874,7 +2892,8 @@ function startApp(backend, mount = document.body) {
       <b>${mine ? "こんなふうに誘ってみては？" : "まあまあの声も、ヒントにしよう"}</b>
       ${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
       ${mine ? (waiting ? `<p class="sub">${jpDate(it.reaskAt)}に、もう一度「どう？」と聞きます。</p>`
-        : `<div class="actions" style="margin-top:4px"><button class="btn sm line" data-reask="7">1週間後にもう一度聞く</button><button class="btn sm line" data-reask="30">1か月後にもう一度聞く</button></div>`) : ""}
+        : it.reaskAt && it.reaskBy === me() ? `<p class="sub">🔁 もう一度「どう？」と聞いています（相手の答え合わせに出ています）。</p>`
+        : `<div class="actions" style="margin-top:4px"><button class="btn sm rose" data-reask="0">今すぐもう一度聞く</button><button class="btn sm line" data-reask="7">1週間後</button><button class="btn sm line" data-reask="30">1か月後</button></div>`) : ""}
     </div>`;
   }
 
@@ -3598,13 +3617,14 @@ function startApp(backend, mount = document.body) {
       if (b.dataset.v === "no") {
         if (myVote(it) === "no") return vote(it.id, null);
         const reason = await mehSheet(it);
+        if (!reason) return openDetail(it.id);
         await vote(it.id, "no", { reason });
         return openDetail(it.id);
       }
       if (b.dataset.reask) {
         const d = new Date(); d.setDate(d.getDate() + Number(b.dataset.reask));
         const at = new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-        return patch(it.id, { reaskAt: at, reaskBy: me() }, `${jpDate(at)}にもう一度聞いてみます`);
+        return patch(it.id, { reaskAt: at, reaskBy: me() }, b.dataset.reask === "0" ? "もう一度「どう？」と聞きました。答え合わせに出ます" : `${jpDate(at)}にもう一度聞いてみます`);
       }
       if (b.dataset.mode) { S.openMode = S.openMode === `${it.id}:${b.dataset.mode}` ? "" : `${it.id}:${b.dataset.mode}`; return openDetail(it.id); }
       if (b.dataset.routeAi) return askRoute(it, b.dataset.routeAi);
@@ -3635,7 +3655,7 @@ function startApp(backend, mount = document.body) {
       }
       if (b.hasAttribute("data-save-memo")) {
         b.disabled = true;
-        const ok = await act(() => B.updateSpot(it.id, { memo: root.querySelector("#d-memo").value }), "メモを保存しました");
+        const ok = await act(() => B.updateSpot(it.id, { memo: root.querySelector("#d-memo").value, memoBy: me(), memoAt: new Date().toISOString() }), "メモを保存しました");
         b.disabled = false;
         if (ok) markSaved("[data-memo-state]");
         return;
@@ -4405,10 +4425,7 @@ function startApp(backend, mount = document.body) {
       if (known) for (const r of n.pending) if (!known.has(r.id)) toast(`${r.name}さんが「${r.roomName}」への参加を申請しています`);
       known = ids;
       S.notices = n;
-      const badge = document.querySelector("[data-act=notices] .badge");
-      const btn = document.querySelector("[data-act=notices]");
-      if (btn) btn.innerHTML = `${ic("bell")}${n.pending.length ? `<span class="badge num">${n.pending.length}</span>` : ""}`;
-      void badge;
+      updateBell();
       if ($modal.querySelector("[data-notices]")) openNotices();
     });
     B.watchMyApproval?.((why) => {
@@ -4420,27 +4437,67 @@ function startApp(backend, mount = document.body) {
       el.querySelector("[data-again]").addEventListener("click", () => location.reload());
     });
   }
+  // ---------- 通知（ベル） ----------
+  // 自分が見つけた場所への「行きたい／まあまあ」、ほかの人のコメントとメモを通知する（新しい場所の追加は通知しない）
+  const seenKey = () => `noticeSeen.${B.currentRoom?.() || S.settings.code || "room"}`;
+  function activity() {
+    const out = [];
+    for (const it of S.spots) {
+      if (it.addedBy === me()) {
+        for (const [id, v] of Object.entries(votes(it))) {
+          const at = it.voteAt?.[id];
+          if (id !== me() && at && (v === true || v === "no")) out.push({ type: v === true ? "yes" : "no", by: id, at, spot: it, reason: it.reasons?.[id] });
+        }
+      }
+      for (const c of it.comments || []) if (c.by && c.by !== me() && c.at) out.push({ type: "comment", by: c.by, at: c.at, spot: it, text: c.text });
+      if (it.memoBy && it.memoBy !== me() && it.memoAt && it.memo) out.push({ type: "memo", by: it.memoBy, at: it.memoAt, spot: it, text: it.memo });
+    }
+    return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50);
+  }
+  const unreadCount = () => { const seen = local.get(seenKey(), ""); return activity().filter((x) => x.at > seen).length + (S.notices?.pending.length || 0); };
+  const bellInner = () => { const n = unreadCount(); return `${ic("bell")}${n ? `<span class="badge num">${n > 99 ? "99+" : n}</span>` : ""}`; };
+  function updateBell() { const b = document.querySelector("[data-act=notices]"); if (b) b.innerHTML = bellInner(); }
   function openNotices() {
-    const n = S.notices;
+    const n = S.notices || { pending: [], approved: [] };
+    const seen = local.get(seenKey(), "");
+    const items = activity();
     const time = (iso) => (iso ? relativeDate(iso) : "");
     const person2 = (x) => avOf({ id: x.id, name: x.name, color: x.color, avatar: x.avatar });
-    const { root } = sheet(`<div data-notices>${head("通知")}
+    const line = (x) => {
+      const who = esc(pname(x.by)), place = `「${esc(nameOf(x.spot))}」`;
+      if (x.type === "yes") return `${who}が${place}を<b class="t-yes">♡ 行きたい</b>にしました`;
+      if (x.type === "no") return `${who}が${place}を<b class="t-no">まあまあ</b>にしました${MEH[x.reason] ? `（${MEH[x.reason].emoji} ${esc(MEH[x.reason].label)}）` : ""}`;
+      if (x.type === "comment") return `${who}が${place}にコメント：<span class="t-quote">${esc(String(x.text || "").slice(0, 60))}</span>`;
+      return `${who}が${place}にメモ：<span class="t-quote">${esc(String(x.text || "").slice(0, 60))}</span>`;
+    };
+    const leaderPart = isLeader() && B.kind === "artifact" ? `
       <div class="label" style="margin-top:0">参加の申請 ${n.pending.length ? `<span class="badge-inline num">${n.pending.length}</span>` : ""}</div>
       ${n.pending.length ? `<div class="panel" style="padding:4px 14px">${n.pending.map((r) => `<div class="notice-row">
           ${person2(r)}<div class="val"><b>${esc(r.name)}</b><div class="sub">「${esc(r.roomName)}」に参加したい ・ ${esc(time(r.at))}</div></div>
           <div class="notice-acts"><button class="btn sm line" data-decline="${esc(r.id)}" data-room="${esc(r.room)}">見送る</button><button class="btn sm rose" data-approve="${esc(r.id)}" data-room="${esc(r.room)}">承認</button></div></div>`).join("")}</div>`
-        : `<p class="sub" style="margin:0 2px 8px">いま届いている申請はありません。招待コードを入れた人がいると、ここに出ます。</p>`}
-      <div class="label">参加中のゲスト</div>
+        : `<p class="sub" style="margin:0 2px 8px">いま届いている申請はありません。</p>`}` : "";
+    const unread = items.filter((x) => x.at > seen).length;
+    const { root } = sheet(`<div data-notices>${head("通知")}
+      ${leaderPart}
+      <div class="label"${leaderPart ? "" : ` style="margin-top:0"`}>お知らせ ${unread ? `<span class="badge-inline num">${unread}</span>` : ""}</div>
+      ${items.length ? `<div class="panel" style="padding:4px 14px">${items.map((x) => `<button class="act-row ${x.at > seen ? "unread" : ""}" data-open-spot="${esc(x.spot.id)}">
+          ${av(x.by, "xs")}<span class="val"><span class="act-line">${line(x)}</span><span class="sub">${esc(time(x.at))}</span></span>${x.at > seen ? `<i class="new-dot" aria-label="未読"></i>` : ""}</button>`).join("")}</div>`
+        : `<p class="sub" style="margin:0 2px">まだお知らせはありません。あなたが見つけた場所に「行きたい」「まあまあ」が付いたときや、コメント・メモが書かれたときに届きます。</p>`}
+      ${isLeader() && B.kind === "artifact" ? `<div class="label">参加中のゲスト</div>
       ${n.approved.length ? `<div class="panel" style="padding:4px 14px">${n.approved.map((a) => `<div class="notice-row">
           ${person2(a)}<div class="val"><b>${esc(a.name)}</b><div class="sub">「${esc(a.roomName)}」 ・ ${esc(time(a.at))}に承認</div></div>
           <div class="notice-acts"><button class="btn sm line" data-revoke="${esc(a.id)}" data-room="${esc(a.room)}" data-name="${esc(a.name)}">外す</button></div></div>`).join("")}</div>`
-        : `<p class="sub" style="margin:0 2px">まだ承認したゲストはいません。</p>`}
-      <p class="sub" style="margin-top:14px">ゲストは承認された1つの部屋だけに入れます。</p></div>`);
+        : `<p class="sub" style="margin:0 2px">まだ承認したゲストはいません。</p>`}` : ""}</div>`);
+    // 開いたら既読にする（一覧の「未読」の印はこの画面を開いている間は残す）
+    if (items.length) local.set(seenKey(), items[0].at > new Date().toISOString() ? items[0].at : new Date().toISOString());
+    updateBell();
     root.addEventListener("click", async (e) => {
+      const sp = e.target.closest("[data-open-spot]");
+      if (sp) return openDetail(sp.dataset.openSpot);
       const ap = e.target.closest("[data-approve]"), de = e.target.closest("[data-decline]"), rv = e.target.closest("[data-revoke]");
       if (ap) { ap.disabled = true; if (await act(() => B.approve(ap.dataset.approve, ap.dataset.room), "承認しました")) return; ap.disabled = false; }
       if (de && await confirmBox({ title: "参加を見送りますか？", text: "この人には「今回は参加が見送られました」と表示されます。", ok: "見送る", danger: true })) act(() => B.decline(de.dataset.decline, de.dataset.room), "見送りました");
-      if (rv && await confirmBox({ title: `${rv.dataset.name}さんを部屋から外しますか？`, text: "外すと、この人は部屋を開けなくなります。追加したスポットは残ります。", ok: "外す", danger: true })) act(() => B.revoke(rv.dataset.revoke, rv.dataset.room), "外しました");
+      if (rv && await confirmBox({ title: `${rv.dataset.name}さんを部屋から外しますか？`, text: "外すと、この人は自動で部屋から抜けます。追加したスポットは残ります。", ok: "外す", danger: true })) act(() => B.revoke(rv.dataset.revoke, rv.dataset.room), "外しました");
     });
   }
 
@@ -4582,7 +4639,7 @@ function startApp(backend, mount = document.body) {
     if (spots) S.spots = spots;
     S.loaded = true;
     if (wasLoaded && spots) {
-      for (const it of spots) if (!before.has(it.id) && it.addedBy && it.addedBy !== me()) toast(`${pname(it.addedBy)}が「${nameOf(it)}」を追加しました`);
+      void before; // 新しい場所の追加は通知しない（通知はベルにまとめる）
     }
     render();
     refreshDetail();
@@ -4923,7 +4980,7 @@ async function artifactBackend() {
     // 「まあまあ」には理由（任意）を添える。答え直したら「もう一度聞く」は終わり
     vote(id, value, reason = null) {
       const it = spots.find((s) => s.id === id);
-      const patch = { likes: { [meId]: value }, reasons: { [meId]: value === "no" ? reason || null : null } };
+      const patch = { likes: { [meId]: value }, reasons: { [meId]: value === "no" ? reason || null : null }, voteAt: { [meId]: new Date().toISOString() } };
       if ((value === true || value === "no") && it?.reaskAt) Object.assign(patch, { reaskAt: "", reaskBy: "" });
       return wrap(spotsCol().doc(id).update(patch));
     },
