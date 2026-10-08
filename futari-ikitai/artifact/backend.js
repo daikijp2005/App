@@ -189,7 +189,7 @@ async function artifactBackend() {
     return g;
   }
 
-  const wrap = (p) => p.catch((e) => { throw new Error(DB_ERRORS[e?.code] || "保存できませんでした。少し待ってからもう一度試してください"); });
+  const wrap = (p) => p.catch((e) => { throw Object.assign(new Error(DB_ERRORS[e?.code] || "保存できませんでした。少し待ってからもう一度試してください"), { code: e?.code }); });
   const members = () => roomMembers(gid, settings?.leader || roomMeta.leader || (leader ? meId : ""));
   // 名前を引く対象（メンバーに加えて、スポットを追加した人・投票した人・コメントした人）
   const idsInUse = (list = spots) => [...new Set([meId, ...members(), ...list.flatMap((s) => [s.addedBy, ...Object.keys(s.likes || {}), ...(s.comments || []).map((c) => c.by)])].filter(Boolean))];
@@ -298,6 +298,8 @@ async function artifactBackend() {
     },
     // 書き込みの権限がない（閲覧のみで共有された）
     readOnly: canWrite === false,
+    // いま開いている claude.ai のアカウント名（招待したメールのアカウントか確かめてもらうため）
+    viewerName: async () => (user ? (await user.me().catch(() => null))?.name || "" : ""),
     // リーダーがゲストの画面を確かめる
     setPreview(on) {
       try { on ? sessionStorage.setItem(PREVIEW_KEY, "1") : sessionStorage.removeItem(PREVIEW_KEY); } catch {}

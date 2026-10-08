@@ -1647,6 +1647,7 @@ export function startApp(backend, mount = document.body) {
     if (!isLeader()) return toast("招待できるのはリーダーだけです");
     const who = esc(V().label === "ひとりで" ? "メンバー" : V().label);
     const { root } = sheet(`${head(`${who}を招待`)}
+      ${B.kind === "artifact" ? `<div class="notice warn" style="text-align:left"><b>招待する前に</b><br>① 右上の「共有」で<b>リンクでの公開をオフ</b>にする（オンだと招待した人も見るだけになります）<br>② 相手のメールアドレスを<b>「編集者」</b>で招待する<br>③ 相手にこの招待コードを伝える</div>` : ""}
       ${F.codes ? `<div class="code-box"><span class="sub">「${esc(S.settings.name)}」の招待コード</span><b class="num" id="s-code"><span class="spinner"></span></b><button class="btn sm line" data-copy-code disabled>コードをコピー</button></div>
         <p class="sub" style="margin:8px 0 14px">${F.invite ? "相手はアプリの最初の画面で「招待コードで参加する」に入れるだけ。" : "このページのリンクを共有したあと、相手にリストの切り替え →「招待コードで参加」でこのコードを入れてもらいます。"}コードは部屋ごとに別なので、恋人用・友達用を混ぜずに使えます。</p>` : ""}
       ${F.invite ? `<div class="label" style="margin-top:0">リンクで招待</div>
@@ -1947,9 +1948,31 @@ export function startApp(backend, mount = document.body) {
     el.querySelector("[data-ok]").addEventListener("click", async (e) => {
       e.target.disabled = true;
       if (isLeader()) { if (await act(() => B.joinRoom(info.id))) onJoined(info); else e.target.disabled = false; return; }
-      if (await act(() => B.requestJoin(info.id))) waitingStep(info, onJoined);
-      else e.target.disabled = false;
+      try { await B.requestJoin(info.id); waitingStep(info, onJoined); }
+      catch (err) {
+        e.target.disabled = false;
+        if (err?.code === "invalid_argument" || B.readOnly) permStep(info, onJoined);
+        else toast(err?.message || "申請できませんでした。もう一度試してください");
+      }
     });
+  }
+  // 書き込みの権限がないとき：原因と直し方を出す（リンク公開中は、メールで招待した人も見るだけになる）
+  async function permStep(info, onJoined) {
+    const who = await B.viewerName?.().catch(() => "") || "";
+    const el = screen(`${steps(2)}
+      <div class="wait-art"><span class="room-emoji">🔒</span></div>
+      <h1>まだ参加できません</h1>
+      <p>このアカウントには、まだ書き込みの権限がありません。リーダーに次の2つを確かめてもらってください。</p>
+      <ol class="perm-list">
+        <li><b>リンクでの公開をオフにする</b><span>右上の「共有」で「リンクを知っている人」がオンだと、メールで招待した人も「見るだけ」になります。</span></li>
+        <li><b>あなたのメールアドレスを「編集者」で招待する</b><span>「閲覧者」「コメント可」では参加できません。</span></li>
+      </ol>
+      <p class="sub">${who ? `いま「${esc(who)}」のアカウントで開いています。` : ""}招待されたメールアドレスのアカウントでサインインしているかも確かめてください。設定が変わったら、このページを開き直してください。</p>
+      <button class="btn rose block" data-reload style="margin-top:14px">開き直す</button>
+      <p class="sub" style="margin-top:14px"><a href="#" data-redo>招待コードを入れ直す</a></p>`);
+    el.querySelector("[data-reload]").addEventListener("click", () => location.reload());
+    el.querySelector("[data-redo]").addEventListener("click", (ev) => { ev.preventDefault(); codeStep(onJoined); });
+    void info;
   }
   // 2'. リーダーの承認待ち（承認されると自動で次へ）
   function waitingStep(info, onJoined) {
