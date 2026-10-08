@@ -180,7 +180,7 @@ const ITEM_FIELDS = {
   url: "s", platform: "s", title: "s", caption: "s", image: "s", author: "s", genre: "s", placeName: "s", address: "s",
   prefecture: "s", city: "s", station: "s", walkMin: "n", priceMin: "n", priceMax: "n", priceNote: "s", hours: "s", closed: "s",
   tags: "a", summary: "s", lat: "n", lng: "n", memo: "s", status: "s", plannedDate: "s", visitedAt: "s", rating: "n", review: "s",
-  deadline: "s", pinned: "b", photo: "p", ratings: "m", reviews: "m", ratedBy: "s", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
+  deadline: "s", pinned: "b", photo: "p", ratings: "m", reviews: "m", eager: "m", ratedBy: "s", planTime: "s", planOrder: "n", reaskAt: "s", reaskBy: "s",
 };
 
 function sanitizeItem(input) {
@@ -431,7 +431,7 @@ async function handleApi(req, res, url) {
         if (fields.photo) fields.photo = await savePhoto(room.id, item.id, fields.photo, item.photo);
         else if (item.photo?.startsWith("/img/")) fs.unlink(path.join(IMAGES, path.basename(item.photo))).catch(() => {});
       }
-      for (const k of ["ratings", "reviews"]) if (fields[k]) fields[k] = { ...(item[k] || {}), ...fields[k] };
+      for (const k of ["ratings", "reviews", "eager"]) if (fields[k]) fields[k] = { ...(item[k] || {}), ...fields[k] };
       Object.assign(item, fields, { updatedAt: now() });
       if (body.status === "visited" && !item.visitedAt) item.visitedAt = now().slice(0, 10);
       await saveRoom(room);

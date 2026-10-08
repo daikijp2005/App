@@ -236,3 +236,10 @@ test("みんなの評価：場所ごとの平均 → 全体の平均、また行
   assert.ok(ids.includes("a") && !ids.includes("b"));
   assert.ok(!buildCourses(spots, { stops: 3, neverOnly: true }).flatMap((x) => x.stops.map((s) => s.spot.id)).includes("a"));
 });
+
+test("行きたい度：メンバーの平均", async () => {
+  const { eagerOf, eagerAvg } = await import("../public/smart.js");
+  assert.deepEqual(eagerOf({ eager: { a: 5, b: 0, c: 3 } }), { a: 5, c: 3 });
+  assert.equal(eagerAvg({ eager: { a: 5, c: 3 } }), 4);
+  assert.equal(eagerAvg({}), null);
+});

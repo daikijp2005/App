@@ -3,7 +3,7 @@
 import { GENRES, analyzeText, parseFreeform, cityShort } from "/lib/analyze.js";
 import { estimateTravel, formatMinutes, formatPrice, relativeDate, priceBucket, travelBucket } from "./util.js";
 import { spotArt, appIcon } from "./art.js";
-import { ratingsOf, reviewsOf, placeAvg, overallAvg, wantAgain, AGAIN_MIN, appLinks, openState, parseHours, seasonOf, buildCourses, buildCoursesRange, MOODS, AREAS, inArea, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
+import { eagerOf, eagerAvg, EAGER_LABELS, ratingsOf, reviewsOf, placeAvg, overallAvg, wantAgain, AGAIN_MIN, appLinks, openState, parseHours, seasonOf, buildCourses, buildCoursesRange, MOODS, AREAS, inArea, courseRouteUrl, calendarUrl, icsText, lineShareUrl, spotShareText, platformLabel, PREF_TILES, prefShort, mapsUrl, GROUP_TYPES, requiredYes, fuzzySearch, memberStats, compatibility, monthGrid, eventsOn, travelModes, yahooTransitUrl, routeUrl } from "./smart.js";
 
 const TINT = { cafe: "#efd5bd", sweets: "#f8cfdc", gourmet: "#f4cfae", bar: "#ddc8e6", nature: "#c9e3cf", sightseeing: "#eed7c0", art: "#d3d8f2", event: "#fbdfaa", shopping: "#cfe8ee", stay: "#f1cbc3", activity: "#cfe7c9", other: "#e6dfdc" };
 const STATUS = { want: "行きたい", planned: "予定あり", visited: "行った" };
@@ -396,6 +396,7 @@ export function startApp(backend, mount = document.body) {
       cheap: (a, b) => (a.priceMin ?? 1e9) - (b.priceMin ?? 1e9),
       love: (a, b) => yesIds(b).length - yesIds(a).length || (b.createdAt || "").localeCompare(a.createdAt || ""),
       deadline: (a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999"),
+      eager: (a, b) => (eagerAvg(b) ?? 0) - (eagerAvg(a) ?? 0),
     }[S.sortBy] || (() => 0);
     if (q) {
       const { results, understood } = fuzzySearch(items, q, { travelOf, genres: GENRES, members: Object.fromEntries(peopleList().map((p) => [p.id, p.name])) });
@@ -428,6 +429,12 @@ export function startApp(backend, mount = document.body) {
     }
   }
 
+  // カードの右下：コメント・感想があればマーク（ジャンルの上）
+  function talkBadges(it) {
+    const c = (it.comments || []).length, r = Object.keys(reviewsOf(it)).length;
+    if (!c && !r) return "";
+    return `<span class="talk">${c ? `<span class="tag glass" title="コメント${c}件">💬 ${c}</span>` : ""}${r ? `<span class="tag glass" title="感想${r}件">📝 ${r}</span>` : ""}</span>`;
+  }
   function card(it) {
     const g = genreOf(it.genre);
     const t = travelOf(it);
@@ -435,8 +442,8 @@ export function startApp(backend, mount = document.body) {
     const liked = myVote(it) === true;
     return `<article class="card" data-open="${esc(it.id)}" tabindex="0">
       <div ${cover(it, "cover")}>${thumb(it)}
-        <div class="tl"><span class="tag genre" style="--tint:${TINT[g.id]}">${g.emoji} ${esc(g.label)}</span></div>
         <div class="tr">${isBoth(it) ? `<span class="tag match">♡ ${esc(matchText(it))}</span>` : it.pinned ? `<span class="tag glass">📌</span>` : ""}</div>
+        <div class="br">${talkBadges(it)}<span class="tag genre" style="--tint:${TINT[g.id]}">${g.emoji} ${esc(g.label)}</span></div>
       </div>
       <div class="body">
         <h3>${esc(nameOf(it))}</h3>
@@ -445,6 +452,7 @@ export function startApp(backend, mount = document.body) {
           ${t ? `<span>${ic("train", "sm")}<b>${formatMinutes(t.best)}</b></span>` : ""}
           ${formatPrice(it) ? `<span>${ic("yen", "sm")}<b>${esc(formatPrice(it))}</b></span>` : ""}
           ${placeAvg(it) != null ? `<span class="stars-ro">★${placeAvg(it).toFixed(1)}<small> ${Object.keys(ratingsOf(it)).length}人</small></span>` : ""}
+          ${eagerAvg(it) != null && it.status !== "visited" ? `<span class="eager-ro" title="行きたい度">🔥<b>${eagerAvg(it).toFixed(1)}</b></span>` : ""}
         </div>
         ${smartTags(it) ? `<div class="tags" style="margin:0">${smartTags(it)}</div>` : ""}
         <div class="card-foot">
@@ -1319,6 +1327,18 @@ export function startApp(backend, mount = document.body) {
     if ($modal.querySelector(`[data-detail="${it.id}"]`)) openDetail(it.id);
   }
 
+  // ---------- 行きたい度（詳細画面） ----------
+  function eagerBlock(it) {
+    const e = eagerOf(it), avg = eagerAvg(it), mine = e[me()] || 0;
+    const ids = [...new Set([...peopleList().map((p) => p.id), ...Object.keys(e)])].filter((id) => id !== me());
+    return `<div class="label">行きたい度 ${avg != null ? `<span class="eager-avg">🔥 ${avg.toFixed(1)}</span><span class="sub" style="letter-spacing:0"> ${Object.keys(e).length}人の平均</span>` : ""}</div>
+      <div class="eager-box">
+        ${me() ? `<div class="eager-pick" role="radiogroup" aria-label="あなたの行きたい度">${[1, 2, 3, 4, 5].map((n) => `<button type="button" role="radio" aria-checked="${mine === n}" data-eager="${n}" class="${mine >= n ? "on" : ""}"><span>${"🔥".repeat(1)}</span><small>${n}</small></button>`).join("")}</div>
+          <div class="sub eager-label">${mine ? `あなた：<b>${esc(EAGER_LABELS[mine])}</b>（✓ 保存済み・もう一度押すと取り消し）` : "押すと保存されます（1：いつか 〜 5：今すぐ行きたい！）"}</div>` : ""}
+        ${ids.length ? `<div class="eager-others">${ids.map((id) => `<span class="chip">${av(id, "xs")}${esc(pname(id))}<small>${e[id] ? `🔥${e[id]} ${esc(EAGER_LABELS[e[id]])}` : "まだ"}</small></span>`).join("")}</div>` : ""}
+      </div>`;
+  }
+
   // ---------- みんなの評価（詳細画面） ----------
   const starsRo = (n) => `<span class="stars-ro">${"★".repeat(Math.round(n))}<span class="off">${"★".repeat(5 - Math.round(n))}</span></span>`;
   function reviewBlock(it) {
@@ -1328,8 +1348,9 @@ export function startApp(backend, mount = document.body) {
     return `<div class="reviews">
       <div class="reviews-h"><b>みんなの評価</b>${avg != null ? `<span class="avg-big">★${avg.toFixed(1)}</span><span class="sub">${Object.keys(r).length}人の平均</span>` : `<span class="sub">まだ評価がありません</span>`}${wantAgain(it) ? `<span class="tag again">🔁 また行きたい</span>` : ""}</div>
       ${me() ? `<div class="review-row mine">${av(me())}<div class="val"><b>あなた</b>
-          <div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button data-rate="${n}" class="${(r[me()] || 0) >= n ? "on" : ""}" aria-label="${n}つ星">★</button>`).join("")}</div>
-          <textarea id="d-myreview" rows="2" placeholder="感想・思い出（みんなに見えます）">${esc(rv[me()] || "")}</textarea></div></div>` : ""}
+          <div class="stars" data-my-stars="${r[me()] || 0}">${[1, 2, 3, 4, 5].map((n) => `<button data-rate="${n}" class="${(r[me()] || 0) >= n ? "on" : ""}" aria-label="${n}つ星">★</button>`).join("")}</div>
+          <textarea id="d-myreview" rows="2" placeholder="感想・思い出（みんなに見えます）">${esc(rv[me()] || "")}</textarea>
+          <div class="save-row"><span class="sub" data-review-state>${r[me()] || rv[me()] ? "✓ 保存済み" : "★と感想を入れて「保存」を押してください"}</span><button type="button" class="btn sm rose" data-save-review>保存</button></div></div></div>` : ""}
       ${ids.map((id) => `<div class="review-row">${av(id, "xs")}<div class="val"><b>${esc(pname(id))}</b>${r[id] ? ` ${starsRo(r[id])}` : ` <span class="sub">まだ評価していません</span>`}${rv[id] ? `<div class="review-text">${esc(rv[id])}</div>` : ""}</div></div>`).join("")}
       <p class="sub" style="margin:6px 0 0">平均が★${AGAIN_MIN}以上の場所は「また行きたい」に入り、ホームやプラン作りにも出てきます。</p>
     </div>`;
@@ -1357,7 +1378,7 @@ export function startApp(backend, mount = document.body) {
       <div class="apps" aria-label="ほかのアプリで開く">${appLinks(it, base, { fromName: base ? (base.address && !/^https?:|現在地/.test(base.address) ? base.address : /駅$/.test(base.label) ? base.label : "") : "", calDate }).map((g) => `
         <div class="apps-h">${esc(g.section)}</div>
         ${g.apps.map((a) => `<div class="app-row">${appIcon(a.app)}<b class="app-name">${esc(a.name)}</b><div class="app-acts">${a.actions.filter((x) => x.act !== "ics" || F.ics).map((x) => x.url
-          ? `<a class="app-act" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a>`
+          ? `<a class="app-act" href="${esc(x.url)}" target="_blank" rel="noopener"${x.copy ? ` data-copy-name="${esc(x.copy)}"` : ""}>${esc(x.label)}</a>`
           : `<button class="app-act" data-${x.act}>${esc(x.label)}</button>`).join("")}</div></div>`).join("")}`).join("")}
       </div>
 
@@ -1371,6 +1392,7 @@ export function startApp(backend, mount = document.body) {
           ${others.length ? `<div class="chips wrap-chips">${others.map((p) => { const v = votes(it)[p.id]; return `<span class="chip ${v === true ? "on" : ""}">${av(p.id, "xs")}${esc(pname(p.id))}<small>${mark(v, p.id)}</small></span>`; }).join("")}</div>` : `<p class="sub" style="margin:0">まだほかのメンバーがいません。設定から招待できます。</p>`}
         </div>${kindBox(it)}`;
       })()}
+      ${st !== "visited" ? eagerBlock(it) : ""}
 
       <div class="info">
         <div class="info-row">${ic("pin")}<div class="val">${esc([it.address || [it.prefecture, it.city].join(""), it.station && `${it.station}${it.walkMin ? ` 徒歩${it.walkMin}分` : ""}`].filter(Boolean).join(" ・ ") || "場所が未設定です")}</div></div>
@@ -1393,7 +1415,8 @@ export function startApp(backend, mount = document.body) {
         ${reviewBlock(it)}` : ""}
 
       <div class="label">メモ</div>
-      <div class="field"><textarea id="d-memo" data-field="memo" aria-label="メモ" placeholder="予約必須、記念日に、など">${esc(it.memo || "")}</textarea></div>
+      <div class="field"><textarea id="d-memo" aria-label="メモ" placeholder="予約必須、記念日に、など">${esc(it.memo || "")}</textarea>
+        <div class="save-row"><span class="sub" data-memo-state>${it.memo ? "✓ 保存済み" : "書いたら「保存」を押してください"}</span><button type="button" class="btn sm rose" data-save-memo>保存</button></div></div>
 
       ${solo() ? "" : `<div class="label">コメント</div>
       <div class="comments">${(it.comments || []).map((c) => `<div class="comment ${c.by && c.by === me() ? "mine" : ""}">${av(c.by, "xs")}<div class="bubble">${esc(c.text)}<time>${esc(pname(c.by))} ・ ${fmt(c.at)}</time></div></div>`).join("") || `<p class="sub" style="margin:0">「いつ行く？」など、ここで相談できます</p>`}</div>
@@ -1431,7 +1454,38 @@ export function startApp(backend, mount = document.body) {
         if (b.dataset.status === "planned" && !it.plannedDate) body.plannedDate = nextSaturday();
         return patch(it.id, body, b.dataset.status === "visited" ? "思い出に追加しました" : b.dataset.status === "planned" ? "予定に入れました" : "");
       }
-      if (b.dataset.rate) return patch(it.id, { ratings: { [me()]: Number(b.dataset.rate) } });
+      // ★は「保存」を押すまで決まらない（押し間違いを防ぐ）
+      if (b.dataset.rate) {
+        const n = Number(b.dataset.rate);
+        const box = b.closest("[data-my-stars]");
+        box.dataset.myStars = String(n);
+        box.querySelectorAll("[data-rate]").forEach((x) => x.classList.toggle("on", Number(x.dataset.rate) <= n));
+        return markDirty("[data-review-state]");
+      }
+      if (b.hasAttribute("data-save-review")) {
+        const n = Number(root.querySelector("[data-my-stars]")?.dataset.myStars || 0);
+        const text = root.querySelector("#d-myreview").value.trim();
+        if (!n && !text) return toast("★か感想を入れてください");
+        b.disabled = true;
+        const ok = await act(() => B.updateSpot(it.id, { ...(n ? { ratings: { [me()]: n } } : {}), reviews: { [me()]: text } }), "評価と感想を保存しました");
+        b.disabled = false;
+        if (ok) markSaved("[data-review-state]");
+        return;
+      }
+      if (b.hasAttribute("data-save-memo")) {
+        b.disabled = true;
+        const ok = await act(() => B.updateSpot(it.id, { memo: root.querySelector("#d-memo").value }), "メモを保存しました");
+        b.disabled = false;
+        if (ok) markSaved("[data-memo-state]");
+        return;
+      }
+      if (b.dataset.eager) {
+        const n = Number(b.dataset.eager);
+        const mine = eagerOf(it)[me()];
+        const next = mine === n ? 0 : n;
+        if (await act(() => B.updateSpot(it.id, { eager: { [me()]: next || null } }), next ? `行きたい度「${EAGER_LABELS[next]}」を保存しました` : "行きたい度を取り消しました")) openDetail(it.id);
+        return;
+      }
       if (b.hasAttribute("data-edit")) return openEditor(it, { id: it.id });
       if (b.hasAttribute("data-ics")) {
         const blob = new Blob([icsText(it, calDate)], { type: "text/calendar" });
@@ -1444,7 +1498,15 @@ export function startApp(backend, mount = document.body) {
       }
     });
     root.querySelectorAll("[data-field]").forEach((el) => el.addEventListener("change", () => patch(it.id, { [el.dataset.field]: el.value })));
-    root.querySelector("#d-myreview")?.addEventListener("change", (e) => patch(it.id, { reviews: { [me()]: e.target.value } }));
+    // 書いている途中は「未保存」と出す
+    const markDirty = (sel) => { const el = root.querySelector(sel); if (el) { el.textContent = "● まだ保存していません"; el.classList.add("dirty"); } };
+    const markSaved = (sel) => { const el = root.querySelector(sel); if (el) { el.textContent = "✓ 保存しました"; el.classList.remove("dirty"); } };
+    root.querySelector("#d-myreview")?.addEventListener("input", () => markDirty("[data-review-state]"));
+    root.querySelector("#d-memo")?.addEventListener("input", () => markDirty("[data-memo-state]"));
+    // SNSの検索：名前をコピーしておく（アプリで検索欄に文字が入らなかったとき、貼り付けられるように）
+    root.querySelectorAll("[data-copy-name]").forEach((a) => a.addEventListener("click", () => {
+      navigator.clipboard?.writeText(a.dataset.copyName).then(() => toast(`「${a.dataset.copyName}」をコピーしました。検索欄に貼り付けられます`)).catch(() => {});
+    }));
     root.querySelector(".composer")?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const input = root.querySelector("#d-comment");
@@ -1465,7 +1527,7 @@ export function startApp(backend, mount = document.body) {
       const f = S.f;
       const { root } = sheet(`${head("絞り込み・並べ替え")}
         <div class="row2">
-          <div class="field"><label for="fl-sort">並べ替え</label><select id="fl-sort">${opt("new", "新しい順", S.sortBy)}${opt("old", "古い順", S.sortBy)}${opt("near", "移動時間が短い順", S.sortBy)}${opt("dist", "距離が近い順", S.sortBy)}${opt("cheap", "安い順", S.sortBy)}${opt("love", "♡が多い順", S.sortBy)}${opt("deadline", "期限が近い順", S.sortBy)}</select></div>
+          <div class="field"><label for="fl-sort">並べ替え</label><select id="fl-sort">${opt("new", "新しい順", S.sortBy)}${opt("old", "古い順", S.sortBy)}${opt("near", "移動時間が短い順", S.sortBy)}${opt("dist", "距離が近い順", S.sortBy)}${opt("cheap", "安い順", S.sortBy)}${opt("love", "♡が多い順", S.sortBy)}${opt("deadline", "期限が近い順", S.sortBy)}${opt("eager", "行きたい度が高い順", S.sortBy)}</select></div>
           <div class="field"><label for="fl-group">グループ分け</label><select id="fl-group">${opt("date", "追加日", S.groupBy)}${opt("genre", "ジャンル", S.groupBy)}${opt("area", "エリア", S.groupBy)}${opt("travel", "移動時間", S.groupBy)}${opt("price", "予算", S.groupBy)}${opt("who", "見つけた人", S.groupBy)}${opt("platform", "共有元（SNS）", S.groupBy)}${opt("none", "分けない", S.groupBy)}</select></div>
         </div>
         <div class="label">いま・条件</div>

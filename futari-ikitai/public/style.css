@@ -684,3 +684,24 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 .perm-list { text-align: left; margin: 14px 0 10px; padding-left: 1.4em; display: grid; gap: 10px; }
 .perm-list b { display: block; }
 .perm-list span { font-size: 13px; color: var(--muted); }
+
+/* カード：ジャンルは右下、その上にコメント・感想のマーク */
+.cover .br { position: absolute; right: 9px; bottom: 9px; z-index: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: calc(100% - 18px); }
+.cover .br .talk { display: flex; gap: 4px; }
+.cover .tr { max-width: calc(100% - 18px); }
+.eager-ro { color: #e8643c; font-size: 12.5px; }
+.eager-ro b { color: var(--ink); margin-left: 1px; }
+/* 行きたい度 */
+.eager-avg { color: #e8643c; letter-spacing: 0; margin-left: 4px; }
+.eager-box { background: var(--surface); border-radius: var(--r-md); padding: 12px; display: grid; gap: 8px; }
+.eager-pick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.eager-pick button { border: 1.5px solid var(--line); background: var(--bg); border-radius: 12px; padding: 6px 0 4px; display: grid; justify-items: center; line-height: 1.1; filter: grayscale(1); opacity: .55; transition: filter .15s, opacity .15s, transform .1s; }
+.eager-pick button span { font-size: 20px; }
+.eager-pick button small { font-size: 10.5px; color: var(--muted); font-weight: 700; }
+.eager-pick button.on { filter: none; opacity: 1; border-color: #e8643c; background: color-mix(in srgb, #e8643c 12%, var(--surface)); }
+.eager-pick button:active { transform: scale(.94); }
+.eager-label b { color: var(--ink); }
+.eager-others { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 保存ボタン */
+.save-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.save-row .sub.dirty { color: var(--warn); font-weight: 700; }

@@ -133,6 +133,18 @@ export function overallAvg(spots) {
 // 行ったことがあって、みんなの平均が★2.5以上
 export const wantAgain = (s) => s.status === "visited" && (placeAvg(s) ?? 0) >= AGAIN_MIN;
 
+// ---------- 行きたい度（メンバーそれぞれ1〜5） ----------
+export const EAGER_LABELS = ["", "いつか", "ちょっと気になる", "行きたい", "かなり行きたい", "今すぐ行きたい！"];
+export function eagerOf(s) {
+  const out = {};
+  for (const [id, v] of Object.entries(s.eager || {})) { const n = Number(v); if (n >= 1 && n <= 5) out[id] = n; }
+  return out;
+}
+export function eagerAvg(s) {
+  const v = Object.values(eagerOf(s));
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+
 // ---------- デートコース ----------
 const STAY = { cafe: 60, sweets: 45, gourmet: 90, bar: 90, nature: 90, sightseeing: 60, art: 90, event: 90, shopping: 60, stay: 0, activity: 120, other: 60 };
 const IDEAL = { morning: { start: 9 * 60, gourmet: 12 * 60 }, day: { start: 11 * 60, gourmet: 12 * 60 }, afternoon: { start: 14 * 60, gourmet: 18.5 * 60 }, evening: { start: 17 * 60, gourmet: 18.5 * 60 }, night: { start: 19 * 60, gourmet: 19.5 * 60 } };
@@ -161,6 +173,9 @@ function loveScore(spot, required) {
     if (d >= 0 && d <= 21) s += 1.5;
   }
   if (spot.pinned) s += 0.5;
+  // 行きたい度が高い場所ほど選ばれやすく
+  const e = eagerAvg(spot);
+  if (e != null) s += (e - 3) * 0.6;
   return s;
 }
 
@@ -445,9 +460,12 @@ export function appLinks(s, base, { fromName = "", calDate = "" } = {}) {
   if (fromName && toName) map.push({ app: "transit", name: "乗換案内", actions: [{ label: "経路と運賃", url: yahooTransitUrl(fromName, toName) }] });
   const sns = [];
   if (q || post) {
-    sns.push({ app: "instagram", name: "Instagram", actions: [...(plat === "instagram" && post ? [post] : []), ...(q ? [{ label: "ほかの投稿", url: `https://www.instagram.com/explore/search/keyword/?q=${enc(name)}` }] : [])] });
-    sns.push({ app: "tiktok", name: "TikTok", actions: [...(plat === "tiktok" && post ? [post] : []), ...(q ? [{ label: "動画を探す", url: `https://www.tiktok.com/search?q=${enc(name)}` }] : [])] });
-    sns.push({ app: "x", name: "X", actions: [...(plat === "x" && post ? [post] : []), ...(q ? [{ label: "口コミを探す", url: `https://x.com/search?q=${enc(name)}` }] : [])] });
+    // SNSのアプリは検索画面のリンクだと文字が入らないことがあるので、ハッシュタグのページ（その名前の投稿が並ぶ）を先に出す。
+    // copy: 押したときに名前をコピーして、検索欄に貼れるようにする
+    const tag = hashtagOf(name);
+    sns.push({ app: "instagram", name: "Instagram", actions: [...(plat === "instagram" && post ? [post] : []), ...(tag ? [{ label: `#${tag}`, url: `https://www.instagram.com/explore/tags/${enc(tag)}/`, copy: name }] : []), ...(q ? [{ label: "キーワード検索", url: `https://www.instagram.com/explore/search/keyword/?q=${enc(name)}`, copy: name }] : [])] });
+    sns.push({ app: "tiktok", name: "TikTok", actions: [...(plat === "tiktok" && post ? [post] : []), ...(tag ? [{ label: `#${tag}`, url: `https://www.tiktok.com/tag/${enc(tag)}`, copy: name }] : []), ...(q ? [{ label: "動画を検索", url: `https://www.tiktok.com/search/video?q=${enc(name)}`, copy: name }] : [])] });
+    sns.push({ app: "x", name: "X", actions: [...(plat === "x" && post ? [post] : []), ...(q ? [{ label: "口コミを検索", url: `https://x.com/search?q=${enc(name)}&src=typed_query&f=live`, copy: name }] : [])] });
     if (plat === "youtube" || ["sightseeing", "nature", "stay", "activity", "event"].includes(s.genre)) sns.push({ app: "youtube", name: "YouTube", actions: [...(plat === "youtube" && post ? [post] : []), ...(q ? [{ label: "動画を探す", url: `https://www.youtube.com/results?search_query=${enc(q)}` }] : [])] });
     if (food || plat === "tabelog") sns.push({ app: "tabelog", name: "食べログ", actions: [...(plat === "tabelog" && post ? [post] : []), ...(q ? [{ label: "口コミ・予約", url: `https://tabelog.com/rstLst/?sw=${enc(name)}` }] : [])] });
     if (post && !["instagram", "tiktok", "x", "youtube", "tabelog"].includes(plat)) sns.unshift({ app: ["threads", "lemon8", "googlemaps", "facebook"].includes(plat) ? plat : "web", name: platformLabel(plat), actions: [post] });
@@ -463,6 +481,11 @@ export function appLinks(s, base, { fromName = "", calDate = "" } = {}) {
     { section: "SNS・口コミ", apps: sns.filter((a) => a.actions.length) },
     { section: "予定・共有", apps: share },
   ].filter((g) => g.apps.length);
+}
+
+// 店名からハッシュタグを作る（空白や記号を取り除く）
+export function hashtagOf(name) {
+  return String(name || "").replace(/[\s　・･\-‐–—_()（）「」『』【】\[\]'’"“”!！?？.,、。:：;；/／&＆+＋~〜#＃@＠*＊]/g, "").slice(0, 40);
 }
 
 export function platformLabel(p) {
