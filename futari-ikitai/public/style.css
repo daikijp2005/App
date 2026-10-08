@@ -705,3 +705,9 @@ body:has(.overlay) #toast { bottom: auto; top: calc(14px + env(safe-area-inset-t
 /* 保存ボタン */
 .save-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .save-row .sub.dirty { color: var(--warn); font-weight: 700; }
+/* カード：メモとコメントした人 */
+.card-memo { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); background: var(--surface-2); border-radius: 10px; padding: 5px 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.talk-c { gap: 5px; padding-left: 3px; }
+.talk-avs { display: inline-flex; }
+.talk-avs .av { width: 18px; height: 18px; font-size: 9px; border: 1.5px solid rgba(20, 12, 15, .55); }
+.talk-avs .av + .av { margin-left: -6px; }

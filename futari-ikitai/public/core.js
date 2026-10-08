@@ -433,7 +433,9 @@ export function startApp(backend, mount = document.body) {
   function talkBadges(it) {
     const c = (it.comments || []).length, r = Object.keys(reviewsOf(it)).length;
     if (!c && !r) return "";
-    return `<span class="talk">${c ? `<span class="tag glass" title="コメント${c}件">💬 ${c}</span>` : ""}${r ? `<span class="tag glass" title="感想${r}件">📝 ${r}</span>` : ""}</span>`;
+    // コメントした人のアイコン（新しい順に3人まで）
+    const who = [...new Set((it.comments || []).map((x) => x.by).filter(Boolean).reverse())].slice(0, 3);
+    return `<span class="talk">${c ? `<span class="tag glass talk-c" title="コメント${c}件">${who.length ? `<span class="talk-avs">${who.map((id) => av(id, "xs")).join("")}</span>` : ""}💬 ${c}</span>` : ""}${r ? `<span class="tag glass" title="感想${r}件">📝 ${r}</span>` : ""}</span>`;
   }
   function card(it) {
     const g = genreOf(it.genre);
@@ -454,6 +456,7 @@ export function startApp(backend, mount = document.body) {
           ${placeAvg(it) != null ? `<span class="stars-ro">★${placeAvg(it).toFixed(1)}<small> ${Object.keys(ratingsOf(it)).length}人</small></span>` : ""}
           ${eagerAvg(it) != null && it.status !== "visited" ? `<span class="eager-ro" title="行きたい度">🔥<b>${eagerAvg(it).toFixed(1)}</b></span>` : ""}
         </div>
+        ${it.memo ? `<p class="card-memo" title="メモ">🗒️ ${esc(it.memo)}</p>` : ""}
         ${smartTags(it) ? `<div class="tags" style="margin:0">${smartTags(it)}</div>` : ""}
         <div class="card-foot">
           <span class="who">${it.addedBy ? av(it.addedBy, "xs") : ""}<span>${esc(pname(it.addedBy))} ・ ${esc(platformLabel(it.platform))} ・ ${relativeDate(it.createdAt || new Date().toISOString())}</span></span>
