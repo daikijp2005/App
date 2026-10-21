@@ -3,37 +3,255 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>課題管理アプリ</title>
+<title>時間割・課題管理</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="page">
     <header class="app-header">
-      <p class="eyebrow">Assignment Tracker</p>
-      <h1>課題管理アプリ</h1>
+      <div>
+        <p class="eyebrow">Timetable &amp; Assignments</p>
+        <h1>時間割・課題管理</h1>
+      </div>
+      <button id="open-settings" class="icon-btn" title="設定" aria-label="設定">⚙</button>
     </header>
+
+    <section id="today-panel" class="today-panel"></section>
 
     <div class="stats" id="stats"></div>
 
-    <form id="task-form" class="task-form">
-      <div class="form-row">
-        <input type="text" id="subject" placeholder="科目名（例: 経済学）" required>
-        <input type="text" id="content" placeholder="課題内容（例: レポート提出）" required>
-        <input type="date" id="due-date" required>
-        <button type="submit">追加</button>
+    <nav class="view-tabs" role="tablist">
+      <button class="view-tab active" data-view="timetable" role="tab">時間割</button>
+      <button class="view-tab" data-view="tasks" role="tab">課題</button>
+    </nav>
+
+    <section id="view-timetable" class="view">
+      <div class="timetable-wrap">
+        <table class="timetable" id="timetable"></table>
       </div>
-    </form>
+      <p class="hint">空いているコマをタップすると授業を追加できます。授業をタップすると、基本情報・授業メモ・欠席連絡・課題を開きます。</p>
+    </section>
 
-    <div class="filters" role="tablist">
-      <button class="filter-btn active" data-filter="all">すべて</button>
-      <button class="filter-btn" data-filter="active">未完了</button>
-      <button class="filter-btn" data-filter="done">完了</button>
-    </div>
+    <section id="view-tasks" class="view" hidden>
+      <form id="task-form" class="task-form">
+        <div class="form-row">
+          <select id="task-course" aria-label="授業"></select>
+          <input type="text" id="subject" placeholder="科目名（例: 経済学）" hidden>
+          <input type="text" id="content" placeholder="課題内容（例: レポート提出）" required>
+          <input type="date" id="due-date" required aria-label="締切日">
+          <input type="time" id="due-time" value="23:59" aria-label="締切時刻">
+          <button type="submit">追加</button>
+        </div>
+      </form>
 
-    <ul id="task-list" class="task-list"></ul>
+      <details class="import-box">
+        <summary>お知らせ文から課題を自動登録</summary>
+        <p class="hint">LMSのお知らせやメールの文面を貼り付けると、締切（「10/28まで」「来週金曜まで」など）を含む行を課題として読み取ります。授業名が含まれる行はその授業に自動で振り分けます。</p>
+        <textarea id="import-text" rows="5" placeholder="例: 経済学 第5回レポートを10/28 23:59までに提出してください"></textarea>
+        <div class="form-row">
+          <select id="import-course" aria-label="振り分け先の授業"></select>
+          <button type="button" id="import-parse" class="btn-secondary">読み取る</button>
+        </div>
+        <div id="import-preview"></div>
+      </details>
 
-    <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
+      <div class="list-toolbar">
+        <div class="filters" role="tablist">
+          <button class="filter-btn active" data-filter="all">すべて</button>
+          <button class="filter-btn" data-filter="active">未完了</button>
+          <button class="filter-btn" data-filter="done">完了</button>
+        </div>
+        <div class="toolbar-actions">
+          <button type="button" class="btn-ghost notify-btn" hidden>🔔 通知をオン</button>
+          <button type="button" id="export-ics" class="btn-ghost" title="スマホ等のカレンダーに取り込むと、アプリを閉じていてもリマインドされます">カレンダーに書き出し</button>
+        </div>
+      </div>
+
+      <ul id="task-list" class="task-list"></ul>
+
+      <p id="empty-message" class="empty-message" hidden>課題はまだ登録されていません。上のフォームから追加してください。</p>
+    </section>
   </div>
+
+  <dialog id="course-dialog" class="sheet">
+    <header class="sheet-header">
+      <div>
+        <p class="eyebrow" id="course-slot"></p>
+        <h2 id="course-title"></h2>
+      </div>
+      <button type="button" class="icon-btn" data-close aria-label="閉じる">✕</button>
+    </header>
+
+    <nav class="sheet-tabs" role="tablist">
+      <button type="button" class="sheet-tab active" data-tab="info">基本情報</button>
+      <button type="button" class="sheet-tab" data-tab="sessions">授業メモ・出欠</button>
+      <button type="button" class="sheet-tab" data-tab="absence">欠席連絡</button>
+      <button type="button" class="sheet-tab" data-tab="tasks">課題</button>
+    </nav>
+
+    <div class="sheet-body">
+      <section data-panel="info">
+        <form id="info-form" class="stack">
+          <label class="field"><span>授業名</span><input name="name" required placeholder="例: 経済学入門"></label>
+          <div class="grid-2">
+            <label class="field"><span>曜日</span><select name="day"></select></label>
+            <label class="field"><span>時限</span><select name="period"></select></label>
+            <label class="field"><span>教室</span><input name="room" placeholder="例: 3号館 301"></label>
+            <label class="field"><span>単位数</span><input name="credits" type="number" min="0" step="0.5"></label>
+            <label class="field"><span>教員名</span><input name="teacher" placeholder="例: 山田 太郎"></label>
+            <label class="field"><span>教員メールアドレス</span><input name="teacherEmail" type="email" placeholder="欠席連絡の宛先"></label>
+            <label class="field"><span>欠席上限（回）</span><input name="absenceLimit" type="number" min="0" placeholder="例: 4"></label>
+            <label class="field"><span>授業ページURL</span><input name="url" type="url" placeholder="https://"></label>
+          </div>
+          <fieldset class="field-group">
+            <legend>色</legend>
+            <div class="swatches" id="color-swatches"></div>
+          </fieldset>
+          <fieldset class="field-group">
+            <legend>成績配分</legend>
+            <div id="grading-rows" class="grading-rows"></div>
+            <div class="grading-bar" id="grading-bar"></div>
+            <div class="grading-foot">
+              <button type="button" id="add-grading" class="btn-ghost">＋ 項目を追加</button>
+              <span id="grading-total" class="grading-total"></span>
+            </div>
+          </fieldset>
+          <label class="field"><span>備考</span><textarea name="note" rows="2" placeholder="持ち物、評価の注意点など"></textarea></label>
+          <p id="course-link" class="hint"></p>
+          <div class="sheet-actions">
+            <button type="button" id="delete-course" class="btn-danger-ghost">この授業を削除</button>
+            <button type="submit" class="btn-primary">保存</button>
+          </div>
+        </form>
+      </section>
+
+      <section data-panel="sessions" hidden>
+        <div id="attendance-summary" class="attendance-summary"></div>
+        <form id="session-form" class="card stack">
+          <input type="hidden" name="sessionId">
+          <div class="grid-3">
+            <label class="field"><span>回</span><input name="number" type="number" min="1" required></label>
+            <label class="field"><span>日付</span><input name="date" type="date" required></label>
+            <label class="field"><span>出欠</span>
+              <select name="attendance">
+                <option value="present">出席</option>
+                <option value="late">遅刻</option>
+                <option value="absent">欠席</option>
+              </select>
+            </label>
+          </div>
+          <label class="field"><span>メモ</span><textarea name="memo" rows="4" placeholder="授業内容や連絡事項。&#10;「課題: レポート 10/28まで」「次回までに小テストの予習」のように書くと課題に自動登録されます"></textarea></label>
+          <div class="sheet-actions">
+            <button type="button" id="session-cancel" class="btn-ghost" hidden>編集をやめる</button>
+            <button type="submit" class="btn-primary">記録する</button>
+          </div>
+        </form>
+        <ul id="session-list" class="session-list"></ul>
+      </section>
+
+      <section data-panel="absence" hidden>
+        <form id="absence-form" class="stack">
+          <div class="grid-2">
+            <label class="field"><span>欠席する日</span><input name="date" type="date" required></label>
+            <label class="field"><span>理由</span><select name="reason"></select></label>
+          </div>
+          <label class="field"><span>補足（任意）</span><input name="detail" placeholder="例: 診断書は後日提出いたします"></label>
+          <label class="check"><input type="checkbox" name="askMaterials" checked> 配布資料・課題の確認をお願いする</label>
+          <label class="field"><span>件名</span><input name="subject"></label>
+          <label class="field"><span>本文</span><textarea name="body" rows="12"></textarea></label>
+          <p id="absence-hint" class="hint"></p>
+          <div class="sheet-actions">
+            <button type="button" id="absence-copy" class="btn-ghost">文面をコピー</button>
+            <button type="button" id="absence-mail" class="btn-primary">メールを作成して記録</button>
+          </div>
+        </form>
+      </section>
+
+      <section data-panel="tasks" hidden>
+        <form id="course-task-form" class="form-row">
+          <input name="content" placeholder="課題内容" required>
+          <input name="dueDate" type="date" required aria-label="締切日">
+          <input name="dueTime" type="time" value="23:59" aria-label="締切時刻">
+          <button type="submit">追加</button>
+        </form>
+        <ul id="course-task-list" class="task-list"></ul>
+        <p id="course-task-empty" class="empty-message" hidden>この授業の課題はまだありません。</p>
+
+        <form id="recurring-form" class="card stack">
+          <h3>毎回の課題を自動登録</h3>
+          <label class="check"><input type="checkbox" name="enabled"> 授業のたびに課題を自動で追加する</label>
+          <label class="field"><span>課題名</span><input name="title" placeholder="例: リアクションペーパー"></label>
+          <div class="grid-2">
+            <label class="field"><span>締切</span>
+              <select name="mode">
+                <option value="next">次回の授業開始まで</option>
+                <option value="days">授業日から指定日数後</option>
+              </select>
+            </label>
+            <label class="field" id="recurring-days"><span>日数</span><input name="days" type="number" min="0" value="6"></label>
+          </div>
+          <div class="sheet-actions">
+            <button type="submit" class="btn-primary">保存</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="settings-dialog" class="sheet">
+    <header class="sheet-header">
+      <div>
+        <p class="eyebrow">Settings</p>
+        <h2>設定</h2>
+      </div>
+      <button type="button" class="icon-btn" data-close aria-label="閉じる">✕</button>
+    </header>
+    <div class="sheet-body">
+      <form id="settings-form" class="stack">
+        <fieldset class="field-group">
+          <legend>学生情報（欠席連絡の文面に使います）</legend>
+          <div class="grid-2">
+            <label class="field"><span>氏名</span><input name="studentName"></label>
+            <label class="field"><span>学籍番号</span><input name="studentId"></label>
+          </div>
+        </fieldset>
+        <fieldset class="field-group">
+          <legend>学期</legend>
+          <div class="grid-2">
+            <label class="field"><span>開始日</span><input name="termStart" type="date"></label>
+            <label class="field"><span>終了日</span><input name="termEnd" type="date"></label>
+          </div>
+          <p class="hint">開始日を入れると、授業回（第○回）を日付から自動で数えます。</p>
+        </fieldset>
+        <fieldset class="field-group">
+          <legend>時間割</legend>
+          <div class="grid-2">
+            <label class="field"><span>時限数</span>
+              <select name="periodCount">
+                <option value="4">4限まで</option>
+                <option value="5">5限まで</option>
+                <option value="6">6限まで</option>
+                <option value="7">7限まで</option>
+              </select>
+            </label>
+            <label class="check check--inline"><input type="checkbox" name="showSaturday"> 土曜日を表示</label>
+          </div>
+          <div id="period-times" class="period-times"></div>
+        </fieldset>
+        <fieldset class="field-group">
+          <legend>リマインドのタイミング</legend>
+          <div id="reminder-days" class="chip-checks"></div>
+          <p class="hint">締切が近づくと自動で通知します（アプリを開いている間）。アプリを閉じていても通知を受けたい場合は「カレンダーに書き出し」でスマホのカレンダーに取り込んでください。</p>
+          <button type="button" class="btn-ghost notify-btn" hidden>🔔 通知をオン</button>
+        </fieldset>
+        <div class="sheet-actions">
+          <button type="submit" class="btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="script.js"></script>
 </body>
