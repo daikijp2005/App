@@ -514,7 +514,7 @@ function calendarUrl(task) {
     action: "TEMPLATE",
     text: `【締切】${taskCourseName(task)} ${task.content}`,
     dates: `${fmt(start)}/${fmt(end)}`,
-    details: "時間割・課題管理アプリから追加",
+    details: "ClassNest から追加",
   });
   return `https://calendar.google.com/calendar/render?${params}`;
 }
