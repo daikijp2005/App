@@ -56,6 +56,7 @@
     --c-teal: #7ccdca;
     --c-teal-soft: #1c3534;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
   }
 }
 
@@ -86,6 +87,7 @@
   --c-teal: #7ccdca;
   --c-teal-soft: #1c3534;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
 }
 
 * {
@@ -100,7 +102,9 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
   background: var(--paper);
   margin: 0;
-  padding: 2.5rem 1rem;
+  padding-block: 2.5rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
   color: var(--ink);
 }
 
@@ -221,6 +225,38 @@ textarea {
   color: var(--ink);
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+.btn-danger {
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--danger);
+  color: var(--surface);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+a.btn-ghost {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.task-due a {
+  color: var(--accent);
+}
+
+.sheet--small {
+  width: min(400px, calc(100vw - 32px));
+}
+
+.confirm-message {
+  margin: 0;
+  white-space: pre-line;
+  line-height: 1.7;
+  font-size: 0.92rem;
 }
 
 .btn-danger-ghost {
@@ -951,6 +987,7 @@ textarea:focus-visible {
 
 .sheet-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 0.5rem;
@@ -1350,7 +1387,7 @@ textarea:focus-visible {
 .toasts {
   position: fixed;
   left: 50%;
-  bottom: 1.2rem;
+  bottom: calc(1.2rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -1395,14 +1432,18 @@ textarea:focus-visible {
 
 @media (max-width: 640px) {
   body {
-    padding: 1rem 0;
+    padding-block: 1rem;
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .page {
     border-radius: 0;
     border-left: none;
     border-right: none;
-    padding: 1.25rem 16px 1.5rem;
+    padding-block: 1.25rem 1.5rem;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
 
   .today-panel {

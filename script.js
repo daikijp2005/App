@@ -33,6 +33,9 @@ const DEFAULT_SETTINGS = {
 // メモやお知らせ文の中で「課題らしい行」を見分けるためのキーワード
 const TASK_KEYWORDS = /課題|宿題|レポート|提出|小テスト|テスト|予習|復習|リアクションペーパー|リアペ|発表|レジュメ|ワークシート|演習問題/;
 
+// アーティファクトなどの埋め込み表示ではブラウザ通知やファイルの書き出しが使えない
+const IN_FRAME = window.self !== window.top;
+
 function load(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -43,7 +46,11 @@ function load(key, fallback) {
 }
 
 function save(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // 保存できない環境（プライベートモードなど）でも画面はそのまま使える
+  }
 }
 
 let tasks = load(KEYS.tasks, []);
@@ -59,11 +66,111 @@ let draftGrading = [];
 let draftColor = COLORS[0];
 let importDrafts = [];
 
-const saveTasks = () => save(KEYS.tasks, tasks);
-const saveCourses = () => save(KEYS.courses, courses);
-const saveSessions = () => save(KEYS.sessions, sessions);
-const saveSettings = () => save(KEYS.settings, settings);
-const saveAutoKeys = () => save(KEYS.autoKeys, [...autoKeys]);
+const saveTasks = () => persist("tasks");
+const saveCourses = () => persist("courses");
+const saveSessions = () => persist("sessions");
+const saveSettings = () => persist("settings");
+const saveAutoKeys = () => persist("autoKeys");
+
+// ---------- クラウド保存（Claude のアーティファクトとして開いたとき） ----------
+// localStorage はこの端末だけの控え。アーティファクトでは本人だけが読み書きできる db に保存し、
+// どの端末から開いても同じ時間割・課題を使えるようにする
+
+const STATE_KEYS = Object.keys(KEYS);
+const remote = { db: null, uid: null, writing: {}, queued: {}, retried: {}, readOnly: false };
+
+function currentValue(key) {
+  if (key === "tasks") return tasks;
+  if (key === "courses") return courses;
+  if (key === "sessions") return sessions;
+  if (key === "settings") return settings;
+  return [...autoKeys];
+}
+
+function applyState(key, value) {
+  const copy = JSON.parse(JSON.stringify(value));
+  if (key === "tasks") tasks = copy;
+  else if (key === "courses") courses = copy;
+  else if (key === "sessions") sessions = copy;
+  else if (key === "settings") settings = { ...DEFAULT_SETTINGS, ...copy };
+  else autoKeys = new Set(copy);
+  save(KEYS[key], currentValue(key));
+}
+
+const remoteDoc = (key) => remote.db.collection(`data/users/${remote.uid}`).doc(key);
+
+function persist(key) {
+  const value = JSON.parse(JSON.stringify(currentValue(key)));
+  save(KEYS[key], value);
+  if (!remote.db || remote.readOnly) return;
+  remote.queued[key] = value;
+  flush(key);
+}
+
+// 同じドキュメントへの書き込みは1件ずつ。書き込み中に変更があれば最新の内容だけを続けて送る
+async function flush(key) {
+  if (remote.writing[key] || !(key in remote.queued)) return;
+  const value = remote.queued[key];
+  delete remote.queued[key];
+  remote.writing[key] = true;
+  try {
+    await remoteDoc(key).set({ value });
+    remote.retried[key] = false;
+  } catch (e) {
+    if (e?.code === "unavailable" && !remote.retried[key]) {
+      remote.retried[key] = true;
+      setTimeout(() => {
+        if (!(key in remote.queued)) remote.queued[key] = value;
+        flush(key);
+      }, 1000 + Math.random() * 1500);
+    } else if (e?.code === "quota_exceeded") {
+      showToast("保存容量の上限に達しました。完了した課題や古い記録を削除してください");
+    } else if (e?.code === "invalid_argument") {
+      remote.readOnly = true;
+      showToast("このアプリを編集する権限がないため、変更はこの端末にだけ保存されます");
+    } else {
+      showToast("クラウドへの保存に失敗しました。変更はこの端末に残っています");
+    }
+  } finally {
+    remote.writing[key] = false;
+    flush(key);
+  }
+}
+
+async function connectRemote() {
+  if (!window.claude?.use) return;
+  try {
+    const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    const uid = db && user ? await user.id() : null;
+    if (!uid) return;
+    remote.db = db;
+    remote.uid = uid;
+
+    const snaps = await Promise.all(STATE_KEYS.map((key) => remoteDoc(key).get()));
+    if (snaps.some((snap) => snap.exists)) {
+      snaps.forEach((snap, i) => snap.exists && applyState(STATE_KEYS[i], snap.data().value));
+    } else if (tasks.length || courses.length || sessions.length) {
+      // この端末に以前のデータがあれば、初回にクラウドへ移す
+      STATE_KEYS.forEach(persist);
+    }
+
+    // 別の端末で変更されたら反映する
+    STATE_KEYS.forEach((key) => {
+      remoteDoc(key).onSnapshot(
+        (snap) => {
+          if (!snap.exists || snap.metadata.hasPendingWrites || remote.writing[key] || key in remote.queued) return;
+          const value = snap.data().value;
+          if (JSON.stringify(value) === JSON.stringify(currentValue(key))) return;
+          applyState(key, value);
+          renderAll();
+        },
+        () => {},
+      );
+    });
+  } catch {
+    // クラウドが使えないときはこの端末の保存だけで動かす
+  }
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -394,8 +501,22 @@ async function enableNotifications() {
 }
 
 function updateNotifyButtons() {
-  const show = "Notification" in window && Notification.permission === "default";
+  const show = !IN_FRAME && "Notification" in window && Notification.permission === "default";
   document.querySelectorAll(".notify-btn").forEach((btn) => (btn.hidden = !show));
+}
+
+// Googleカレンダーの予定作成画面へのリンク（カレンダー側の通知で、アプリを閉じていてもリマインドされる）
+function calendarUrl(task) {
+  const end = dueDateTime(task);
+  const start = new Date(end - 30 * 60000);
+  const fmt = (d) => `${toDateStr(d).replace(/-/g, "")}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `【締切】${taskCourseName(task)} ${task.content}`,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details: "時間割・課題管理アプリから追加",
+  });
+  return `https://calendar.google.com/calendar/render?${params}`;
 }
 
 function icsEscape(str) {
@@ -551,7 +672,7 @@ function taskItemHtml(task, showCourse = true) {
       <div class="task-content">
         ${title}
         <span class="task-text">${escapeHtml(task.content)}${source}</span>
-        <span class="task-due">締切 ${formatDate(task.dueDate)} ${task.dueTime || ""}</span>
+        <span class="task-due">締切 ${formatDate(task.dueDate)} ${task.dueTime || ""}${task.done ? "" : ` · <a href="${calendarUrl(task)}" target="_blank" rel="noopener">カレンダーに追加</a>`}</span>
       </div>
       <span class="due-label">${task.done ? "完了" : urgency.label}</span>
       <button class="delete-btn" data-id="${task.id}" title="削除" aria-label="削除">✕</button>
@@ -588,6 +709,8 @@ function courseOptions() {
 
 function renderCourseSelects() {
   fillSelect(taskCourseSelect, `${courseOptions()}<option value="">その他（科目名を入力）</option>`);
+  // 授業を登録したら、科目名が未入力の「その他」より授業を優先して選んでおく
+  if (!taskCourseSelect.value && !subjectInput.value && courses.length) taskCourseSelect.selectedIndex = 0;
   fillSelect($("import-course"), `<option value="">振り分け先: 自動判定</option>${courseOptions()}`);
   toggleSubjectInput();
 }
@@ -632,6 +755,18 @@ function showToast(message, { actionLabel, onAction } = {}) {
   }
   toastsEl.appendChild(el);
   setTimeout(() => el.remove(), actionLabel ? 8000 : 4500);
+}
+
+// ブラウザ標準の confirm() は埋め込み表示で使えないため、ページ内の確認ダイアログを使う
+function askConfirm(message, okLabel = "削除する") {
+  const dialog = $("confirm-dialog");
+  $("confirm-message").textContent = message;
+  $("confirm-ok").textContent = okLabel;
+  dialog.returnValue = "";
+  dialog.showModal();
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "yes"), { once: true });
+  });
 }
 
 // ---------- 授業の詳細ダイアログ ----------
@@ -770,10 +905,10 @@ function saveInfo(e) {
   showToast("保存しました");
 }
 
-function deleteCourse() {
+async function deleteCourse() {
   const course = activeCourse();
   if (!course) return;
-  if (!confirm(`「${course.name}」を削除しますか？\nこの授業の授業メモ・出欠記録・課題もすべて削除されます。`)) return;
+  if (!(await askConfirm(`「${course.name}」を削除しますか？\nこの授業の授業メモ・出欠記録・課題もすべて削除されます。`))) return;
   courses = courses.filter((c) => c.id !== course.id);
   sessions = sessions.filter((s) => s.courseId !== course.id);
   tasks = tasks.filter((t) => t.courseId !== course.id);
@@ -901,8 +1036,8 @@ function saveSession(e) {
   renderAll();
 }
 
-function deleteSession(id) {
-  if (!confirm("この記録を削除しますか？")) return;
+async function deleteSession(id) {
+  if (!(await askConfirm("この授業回の記録を削除しますか？"))) return;
   sessions = sessions.filter((s) => s.id !== id);
   saveSessions();
   renderAll();
@@ -951,8 +1086,10 @@ function updateAbsenceText() {
   const course = activeCourse();
   if (!absenceForm.date.value) return;
   const { subject, body } = buildAbsenceMail(course, absenceParams());
+  absenceForm.to.value = course.teacherEmail || "";
   absenceForm.subject.value = subject;
   absenceForm.body.value = body;
+  $("absence-mail").href = `mailto:${course.teacherEmail || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body.replace(/\n/g, "\r\n"))}`;
 
   const hints = [];
   if (!settings.studentName || !settings.studentId) hints.push("⚙ 設定で氏名・学籍番号を入力すると文面に自動で入ります。");
@@ -980,26 +1117,29 @@ function recordAbsence() {
   showToast(`${formatDate(date)}を欠席（連絡済み）として記録しました。欠席${count}回${limit ? ` / 上限${limit}回` : ""}`);
 }
 
-function sendAbsenceMail() {
-  if (!absenceForm.reportValidity()) return;
+// 手直しした本文もメールアプリに渡せるよう、開く直前にリンクを作り直す
+function refreshMailLink() {
   const course = activeCourse();
   const subject = encodeURIComponent(absenceForm.subject.value);
   const body = encodeURIComponent(absenceForm.body.value.replace(/\n/g, "\r\n"));
-  window.location.href = `mailto:${course.teacherEmail || ""}?subject=${subject}&body=${body}`;
-  recordAbsence();
+  $("absence-mail").href = `mailto:${course.teacherEmail || ""}?subject=${subject}&body=${body}`;
 }
 
 async function copyAbsenceMail() {
-  if (!absenceForm.reportValidity()) return;
-  const text = `件名: ${absenceForm.subject.value}\n\n${absenceForm.body.value}`;
+  const to = absenceForm.to.value;
+  const text = `${to ? `宛先: ${to}\n` : ""}件名: ${absenceForm.subject.value}\n\n${absenceForm.body.value}`;
   try {
     await navigator.clipboard.writeText(text);
+    showToast("文面をコピーしました。メールやLMSに貼り付けて送信し、送ったら「連絡済みとして記録」を押してください");
   } catch {
     absenceForm.body.select();
-    document.execCommand("copy");
+    showToast("本文を選択しました。コピーしてメールやLMSに貼り付けてください");
   }
+}
+
+function recordAbsenceClick() {
+  if (!absenceForm.reportValidity()) return;
   recordAbsence();
-  showToast("文面をコピーしました。LMSやメールに貼り付けて送信してください");
 }
 
 // --- 授業ごとの課題 ---
@@ -1291,8 +1431,14 @@ $("session-list").addEventListener("click", (e) => {
 ["date", "reason", "detail", "askMaterials"].forEach((name) => {
   absenceForm[name].addEventListener(name === "detail" ? "input" : "change", updateAbsenceText);
 });
-$("absence-mail").addEventListener("click", sendAbsenceMail);
+$("absence-mail").addEventListener("click", refreshMailLink);
 $("absence-copy").addEventListener("click", copyAbsenceMail);
+$("absence-record").addEventListener("click", recordAbsenceClick);
+$("confirm-dialog").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-confirm]");
+  if (btn) $("confirm-dialog").close(btn.dataset.confirm);
+  else if (e.target.id === "confirm-dialog") $("confirm-dialog").close("no");
+});
 
 recurringForm.addEventListener("submit", saveRecurring);
 recurringForm.mode.addEventListener("change", toggleRecurringDays);
@@ -1316,10 +1462,15 @@ function tick() {
   renderAll();
 }
 
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") tick();
-});
-setInterval(tick, 60000);
-
 updateNotifyButtons();
-tick();
+$("export-ics").hidden = IN_FRAME;
+renderAll();
+
+// クラウドのデータを読み込んでから自動登録・リマインドを始める（読み込み前の空の状態で動かないように）
+connectRemote().finally(() => {
+  tick();
+  setInterval(tick, 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") tick();
+  });
+});

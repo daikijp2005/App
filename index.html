@@ -157,12 +157,14 @@
           </div>
           <label class="field"><span>補足（任意）</span><input name="detail" placeholder="例: 診断書は後日提出いたします"></label>
           <label class="check"><input type="checkbox" name="askMaterials" checked> 配布資料・課題の確認をお願いする</label>
+          <label class="field"><span>宛先</span><input name="to" readonly placeholder="基本情報で教員のメールアドレスを登録できます"></label>
           <label class="field"><span>件名</span><input name="subject"></label>
           <label class="field"><span>本文</span><textarea name="body" rows="12"></textarea></label>
           <p id="absence-hint" class="hint"></p>
           <div class="sheet-actions">
             <button type="button" id="absence-copy" class="btn-ghost">文面をコピー</button>
-            <button type="button" id="absence-mail" class="btn-primary">メールを作成して記録</button>
+            <a id="absence-mail" class="btn-ghost" href="mailto:" target="_blank" rel="noopener">メールアプリで開く</a>
+            <button type="button" id="absence-record" class="btn-primary">連絡済みとして記録</button>
           </div>
         </form>
       </section>
@@ -241,13 +243,23 @@
         <fieldset class="field-group">
           <legend>リマインドのタイミング</legend>
           <div id="reminder-days" class="chip-checks"></div>
-          <p class="hint">締切が近づくと自動で通知します（アプリを開いている間）。アプリを閉じていても通知を受けたい場合は「カレンダーに書き出し」でスマホのカレンダーに取り込んでください。</p>
+          <p class="hint">締切が近づくと、アプリを開いたときや開いている間に自動でお知らせします。アプリを閉じていても通知を受けたい場合は、各課題の「カレンダーに追加」からGoogleカレンダーに登録してください。</p>
           <button type="button" class="btn-ghost notify-btn" hidden>🔔 通知をオン</button>
         </fieldset>
         <div class="sheet-actions">
           <button type="submit" class="btn-primary">保存</button>
         </div>
       </form>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="sheet sheet--small">
+    <div class="sheet-body stack">
+      <p id="confirm-message" class="confirm-message"></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn-ghost" data-confirm="no">キャンセル</button>
+        <button type="button" id="confirm-ok" class="btn-danger" data-confirm="yes">削除する</button>
+      </div>
     </div>
   </dialog>
 
