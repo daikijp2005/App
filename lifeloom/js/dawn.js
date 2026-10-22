@@ -340,10 +340,11 @@
       if (act === "settings") openSettings();
       const del = ev.target.closest("[data-del]");
       if (del) {
-        if (confirm(`${LL.fmtMD(del.dataset.del)}の記録を消しますか？`)) {
+        LL.ask({ message: `${LL.fmtMD(del.dataset.del)}の記録を消しますか？`, okLabel: "消す", danger: true }).then((ok) => {
+          if (!ok) return;
           delete LL.state.days[del.dataset.del];
           LL.commit();
-        }
+        });
         return;
       }
       const row = ev.target.closest("tr[data-date]");

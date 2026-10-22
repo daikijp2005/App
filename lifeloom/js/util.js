@@ -202,10 +202,12 @@ window.LL = window.LL || {};
         if (res !== false) LL.closeModal();
       }
       if (e.target.closest("[data-delete]")) {
-        if (!confirmDelete || confirm("本当に削除しますか？")) {
+        const run = () => {
           onDelete();
           LL.closeModal();
-        }
+        };
+        if (!confirmDelete) run();
+        else LL.ask({ message: "本当に削除しますか？", okLabel: "削除する", danger: true }).then((ok) => ok && run());
       }
     };
     modal.querySelector("form").onsubmit = (e) => {
@@ -229,6 +231,39 @@ window.LL = window.LL || {};
     };
   };
 
+  // confirm() / prompt() の代わり（アーティファクトの中では標準のダイアログが出ないため）
+  // input を渡すと入力欄つき。キャンセルは null、OK は true（入力欄があれば文字列）
+  LL.ask = ({ message, input, value = "", okLabel = "OK", danger = false }) =>
+    new Promise((resolve) => {
+      const box = document.createElement("div");
+      box.className = "ask";
+      box.innerHTML = `<div class="ask-card" role="alertdialog" aria-modal="true">
+          <p>${LL.esc(message)}</p>
+          ${input ? `<input id="ask-input" value="${LL.esc(value)}" placeholder="${LL.esc(input)}">` : ""}
+          <div class="ask-btns">
+            <button type="button" class="btn ghost" data-ask="no">キャンセル</button>
+            <button type="button" class="btn ${danger ? "danger-fill" : "primary"}" data-ask="yes">${LL.esc(okLabel)}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(box);
+      const field = box.querySelector("#ask-input");
+      (field || box.querySelector("[data-ask=yes]")).focus();
+      const done = (ok) => {
+        box.remove();
+        resolve(ok ? (field ? field.value.trim() : true) : null);
+      };
+      box.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-ask]");
+        if (b) done(b.dataset.ask === "yes");
+        else if (e.target === box) done(false);
+      });
+      box.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") done(true);
+        if (e.key === "Escape") done(false);
+      });
+    });
+
   LL.closeModal = () => {
     const modal = document.getElementById("modal");
     modal.hidden = true;
@@ -250,13 +285,31 @@ window.LL = window.LL || {};
     el.classList.add("capturing");
     try {
       const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: null, useCORS: true });
-      const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
-      a.download = filename;
-      a.click();
+      const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+      await LL.saveFile(filename, blob);
     } finally {
       el.classList.remove("capturing");
     }
+  };
+
+  // ファイルを保存する。アーティファクトの中では downloads 機能で確認を出し、
+  // ふつうのブラウザではリンクから保存する
+  LL.saveFile = async (filename, data) => {
+    const dl = window.claude && window.claude.use ? await window.claude.use("downloads").catch(() => null) : null;
+    if (dl) {
+      try {
+        await dl.save({ filename, data });
+        LL.toast("保存しました");
+      } catch (err) {
+        if (err && err.code !== "declined") LL.toast("この画面では保存できませんでした");
+      }
+      return;
+    }
+    if (window.claude) return LL.toast("この画面では保存できませんでした");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
+    a.download = filename;
+    a.click();
   };
 
   // ---------- 通知 ----------

@@ -1,0 +1,53 @@
+<!-- アーティファクト用のページ（index.html と同じ中身。doctype・head・body は公開時に付く） -->
+<title>Lifeloom</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a2230'/%3E%3Cpath d='M6 11h20' stroke='%23f0a93b' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M6 16h14' stroke='%234a8fb8' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M6 21h18' stroke='%23c9407e' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script>document.body.dataset.view = "dawn";</script>
+<header class="app-header">
+    <a class="brand" href="#dawn" aria-label="Lifeloom">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <rect width="40" height="40" rx="11" fill="#2a2230"/>
+        <path d="M8 13h24" stroke="#f0a93b" stroke-width="4" stroke-linecap="round"/>
+        <path d="M8 20h16" stroke="#4a8fb8" stroke-width="4" stroke-linecap="round"/>
+        <path d="M8 27h21" stroke="#c9407e" stroke-width="4" stroke-linecap="round"/>
+        <path d="M14 8v24M26 8v24" stroke="#f5eee4" stroke-width="1.6" stroke-dasharray="2.6 4.4" opacity=".55"/>
+      </svg>
+      <span class="brand-text"><b>Lifeloom</b><small>明日も、季節も、歳月も。</small></span>
+    </a>
+
+    <nav class="scales" aria-label="時間のスケール">
+      <a class="scale-tab" data-view="dawn" href="#dawn" style="--c:#f0a93b">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17h18M7 17a5 5 0 0 1 10 0M12 6v2.5M5.2 9.6l1.7 1.7M18.8 9.6l-1.7 1.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span><b>Dawn</b><small>あしたの設計図</small></span>
+      </a>
+      <a class="scale-tab" data-view="season" href="#season" style="--c:#4a8fb8">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="7" y="13" width="6" height="3.5" rx="1" fill="currentColor"/></svg>
+        <span><b>Season</b><small>数ヶ月の航路</small></span>
+      </a>
+      <a class="scale-tab" data-view="journey" href="#journey" style="--c:#c9407e">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h9M6 12h13M10 17h11" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M15 4v16" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 2"/></svg>
+        <span><b>Journey</b><small>歳月の年表</small></span>
+      </a>
+    </nav>
+
+    <div class="header-right">
+      <div class="today-chip" id="today-chip"></div>
+      <button class="icon-btn" id="data-btn" aria-label="データと通知" title="データと通知">⋯</button>
+    </div>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <div id="modal" class="modal" hidden></div>
+  <div id="toast" class="toast-box" aria-live="polite"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <script src="js/util.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/dawn.js"></script>
+  <script src="js/season.js"></script>
+  <script src="js/journey.js"></script>
+  <script src="js/app.js"></script>

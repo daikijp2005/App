@@ -39,7 +39,11 @@
     const perm = "Notification" in window ? Notification.permission : "unsupported";
     LL.openPanel(
       "データと通知",
-      `<p class="muted">データはこのブラウザの中（localStorage）に保存されています。別の端末へ移すときは書き出し→読み込みを使ってください。</p>
+      `<p class="muted">${
+        LL.cloudStatus === "cloud"
+          ? "データはあなたのアカウントの自分専用の場所に保存されています（ほかの人には見えません）。別の端末でこのページを開いても同じデータが出ます。"
+          : "データはこのブラウザの中にだけ保存されています。別の端末へ移すときは書き出し→読み込みを使ってください。"
+      }</p>
        <div class="panel-actions left">
          <button class="btn ghost" data-x="export">↓ 書き出す（JSON）</button>
          <label class="btn ghost">↑ 読み込む<input type="file" accept="application/json" data-x="import" hidden></label>
@@ -52,18 +56,16 @@
       (e) => {
         const x = e.target.closest("[data-x]")?.dataset.x;
         if (x === "export") {
-          const blob = new Blob([JSON.stringify(LL.state, null, 2)], { type: "application/json" });
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = `lifeloom-${LL.today()}.json`;
-          a.click();
+          LL.saveFile(`lifeloom-${LL.today()}.json`, JSON.stringify(LL.state, null, 2));
         }
-        if (x === "reset" && confirm("いまのデータを消して、初期データに戻しますか？")) {
-          LL.resetAll();
-          LL.closeModal();
-          LL.rerender();
-          LL.toast("初期データに戻しました");
-        }
+        if (x === "reset")
+          LL.ask({ message: "いまのデータを消して、初期データに戻しますか？", okLabel: "初期データに戻す", danger: true }).then((ok) => {
+            if (!ok) return;
+            LL.resetAll();
+            LL.closeModal();
+            LL.rerender();
+            LL.toast("初期データに戻しました");
+          });
         if (x === "perm") Notification.requestPermission().then(() => LL.closeModal());
       }
     );
@@ -93,4 +95,5 @@
 
   show(location.hash.slice(1) || "dawn");
   tick();
+  LL.connectCloud();
 })(window.LL);

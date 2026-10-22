@@ -724,8 +724,12 @@
       },
       onDelete: isNew
         ? null
-        : () => {
-            const reason = t.dropReason || prompt("やめる理由（任意）") || "";
+        : async () => {
+            let reason = t.dropReason || "";
+            if (t.status !== "dropped" && !reason) {
+              reason = await LL.ask({ message: `「${t.text}」をやめます。理由を残しておきますか？（任意）`, input: "例: 別の目標に集中するため", okLabel: "やめる" });
+              if (reason === null) return;
+            }
             t.status = t.status === "dropped" ? "active" : "dropped";
             t.dropReason = reason;
             log(plan, t.status === "dropped" ? `タスク「${t.text}」をやめた${reason ? `（${reason}）` : ""}` : `タスク「${t.text}」を戻した`);
@@ -1020,12 +1024,16 @@
         <button class="btn ghost" data-cand-edit="${cg.id}">比較の名前・基準を編集</button>
         <button class="btn primary" data-cand-add="${cg.id}">＋ 候補を追加</button>
       </div>`;
-    LL.openPanel(`⚖ ${cg.title}`, html, (e) => {
+    LL.openPanel(`⚖ ${cg.title}`, html, async (e) => {
       const st = e.target.closest("[data-cand-status]");
       if (st) {
         const it = cg.items.find((i) => i.id === st.dataset.candStatus);
         if (it.status !== st.dataset.s) {
-          const reason = st.dataset.s === "やめた" ? prompt("やめる理由（任意）", it.reason || "") ?? it.reason : it.reason;
+          let reason = it.reason;
+          if (st.dataset.s === "やめた") {
+            reason = await LL.ask({ message: `「${it.name}」をやめた理由（任意）`, input: "例: 1つに絞るため", value: it.reason || "", okLabel: "やめたにする" });
+            if (reason === null) return;
+          }
           it.status = st.dataset.s;
           it.reason = reason;
           it.date = LL.today();

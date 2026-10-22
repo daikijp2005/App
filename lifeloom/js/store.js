@@ -229,28 +229,99 @@
     };
   }
 
+  function normalize(s) {
+    s.settings = { ...LL.DEFAULT_SETTINGS, ...s.settings };
+    s.meta = s.meta || {};
+    return s;
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const s = JSON.parse(raw);
-        s.settings = { ...LL.DEFAULT_SETTINGS, ...s.settings };
-        s.meta = s.meta || {};
-        return s;
-      }
+      if (raw) return normalize(JSON.parse(raw));
     } catch (_) {
-      /* 壊れていたら初期データで作り直す */
+      /* 読めない・壊れているときは初期データで作り直す */
     }
     return seed();
   }
 
-  LL.state = load();
-  LL.save = () => {
+  // ---------- アカウントへの保存（Claude のアーティファクトで開いたとき） ----------
+  // 自分専用の領域 data/users/<id>/state に計画データを丸ごと1つの文書として置く。
+  // ブラウザの localStorage は、すぐに表示するための控えとして使う
+  let cloud = null;
+  let pending = false;
+  let writing = false;
+  let timer = null;
+  LL.cloudStatus = "local";
+
+  async function flush() {
+    if (!cloud || writing) return;
+    writing = true;
+    let retried = false;
+    while (pending && cloud) {
+      pending = false;
+      try {
+        await cloud.set({ state: JSON.parse(JSON.stringify(LL.state)), savedAt: new Date().toISOString() });
+        LL.cloudStatus = "cloud";
+      } catch (err) {
+        if (err && err.code === "unavailable" && !retried) {
+          retried = true;
+          pending = true;
+          await new Promise((r) => setTimeout(r, 800 + Math.random() * 800));
+        } else {
+          LL.cloudStatus = "local";
+          cloud = null;
+          LL.toast("アカウントに保存できませんでした。このブラウザにだけ保存します");
+        }
+      }
+    }
+    writing = false;
+  }
+
+  LL.connectCloud = async () => {
+    if (!window.claude || !window.claude.use) return;
+    const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    if (!db || !user) return;
+    const id = await user.id();
+    if (!id) return;
+    const ref = db.doc(`data/users/${id}/state`);
+    let snap;
+    try {
+      snap = await ref.get();
+    } catch (_) {
+      return;
+    }
+    cloud = ref;
+    LL.cloudStatus = "cloud";
+    const body = snap.exists ? snap.data() : null;
+    if (body && body.state) {
+      LL.state = normalize(JSON.parse(JSON.stringify(body.state)));
+      writeLocal();
+      if (LL.rerender) LL.rerender();
+    } else {
+      // 初めて開いたとき：今のデータ（初期データ）をアカウントに置く
+      pending = true;
+      flush();
+    }
+  };
+
+  function writeLocal() {
     try {
       localStorage.setItem(KEY, JSON.stringify(LL.state));
+      return true;
     } catch (_) {
-      LL.toast("保存できませんでした（ブラウザの保存領域を確認してください）");
+      return false;
     }
+  }
+
+  LL.state = load();
+  LL.save = () => {
+    const ok = writeLocal();
+    if (cloud) {
+      pending = true;
+      clearTimeout(timer);
+      timer = setTimeout(flush, 700);
+    } else if (!ok) LL.toast("保存できませんでした（ブラウザの保存領域を確認してください）");
   };
   LL.resetAll = () => {
     LL.state = seed();
