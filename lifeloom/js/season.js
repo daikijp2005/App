@@ -11,12 +11,11 @@
   };
   // 集中期間に入っていても警告しない種類（本番は集中期間の最終日にあって当然）
   const NO_WARN = ["本番", "結果発表"];
-  const CAND_STATUS = { 採用: "adopt", 予備: "keep", やめた: "drop" };
+  const CAND_STATUS = { 採用: "adopt", 予備: "keep" };
 
   let sub = "today";
   let selectMode = false;
   const selected = new Set();
-  let showArchive = false;
   const calSize = () => LL.ui().calSize || "m";
 
   // ---------- 計算 ----------
@@ -27,7 +26,7 @@
   const phaseOn = (plan, date) => blocksOn(plan, date).find((b) => b.kind !== "focus");
   const isFocusDay = (plan, date) => !!focusOn(plan, date);
   const stoppedOn = (plan, date) => new Set(blocksOn(plan, date).flatMap((b) => b.stopGoals || []));
-  const liveTasks = (plan) => plan.tasks.filter((t) => t.status !== "dropped");
+  const liveTasks = (plan) => plan.tasks;
   const goalColor = (plan, id) => goalOf(plan, id)?.color || "#8a8390";
 
   function warnings(plan) {
@@ -104,10 +103,6 @@
       st.end = d;
       cursor = LL.addDays(d, 1);
     });
-  }
-
-  function log(plan, text) {
-    plan.history.push({ date: LL.today(), text });
   }
 
   // 毎朝のリマインド文（「今日・今週」と同じ中身）
@@ -307,7 +302,7 @@
             <h3>毎朝のリマインド</h3>
             <button class="toggle ${r.on ? "on" : ""}" data-act="toggle-remind" aria-pressed="${r.on}"><i></i>${r.on ? "ON" : "OFF"}</button>
           </header>
-          <p class="muted">${r.on ? `毎朝 ${LL.fmtTime(r.time)} に通知（${r.daysAhead}日先まで・${r.amount === "full" ? "くわしく" : "かんたん"}）` : r.stoppedAt ? `${LL.fmtMD(r.stoppedAt)}に中止しています。1タップで再開できます。` : "オフです"}</p>
+          <p class="muted">${r.on ? `毎朝 ${LL.fmtTime(r.time)} に通知（${r.daysAhead}日先まで・${r.amount === "full" ? "くわしく" : "かんたん"}）` : "オフです。右上のボタンでオンにできます。"}</p>
           <div class="remind-preview">${reminderText(plan).map((l) => `<p>${LL.esc(l)}</p>`).join("")}</div>
           <button class="chip-btn" data-act="remind-settings">時刻・内容を変える</button>
         </section>
@@ -344,10 +339,9 @@
     const g = goalOf(plan, t.goalId);
     const cd = t.due ? LL.countdown(t.due) : null;
     const dim = stopped && stopped.has(t.goalId);
-    const ext = t.history && t.history.length;
-    return `<li class="task ${t.done ? "done" : ""} ${dim ? "dim" : ""} ${t.status === "dropped" ? "dropped" : ""}" style="--c:${g ? g.color : "#999"}">
+    return `<li class="task ${t.done ? "done" : ""} ${dim ? "dim" : ""}" style="--c:${g ? g.color : "#999"}">
       ${
-        selectMode && !t.done && t.status !== "dropped"
+        selectMode && !t.done
           ? `<label class="sel"><input type="checkbox" data-sel="${t.id}" ${selected.has(t.id) ? "checked" : ""}><span></span></label>`
           : `<button class="tick-box" data-toggle="${t.id}" aria-label="完了"></button>`
       }
@@ -356,7 +350,6 @@
         ${dim ? `<em class="mini">集中期間中は休止</em>` : ""}
       </button>
       <span class="task-meta">
-        ${ext ? `<span class="mini ext" title="${t.history.map((h) => `${LL.fmtMD(h.from)}→${LL.fmtMD(h.to)}`).join("、")}">延長${t.history.length > 1 ? `×${t.history.length}` : ""}</span>` : ""}
         ${t.due ? `<span class="due ${t.done ? "" : cd.level}">${LL.fmtMD(t.due)}${t.done ? "" : ` ・ ${cd.label}`}</span>` : `<span class="due none">日付なし</span>`}
       </span>
     </li>`;
@@ -521,13 +514,13 @@
   function renderBoard(plan) {
     const today = LL.today();
     const stopped = stoppedOn(plan, today);
-    const goals = plan.goals.filter((g) => g.status !== "dropped" || showArchive);
+    const goals = plan.goals;
     const cols = goals
       .map((g) => {
         const ts = plan.tasks
-          .filter((t) => t.goalId === g.id && (t.status !== "dropped" || showArchive))
+          .filter((t) => t.goalId === g.id)
           .sort((a, b) => (a.done - b.done) || (a.due || "9999").localeCompare(b.due || "9999"));
-        const live = ts.filter((t) => t.status !== "dropped");
+        const live = ts;
         const done = live.filter((t) => t.done).length;
         const evs = plan.events.filter((e) => e.goalId === g.id).sort((a, b) => a.date.localeCompare(b.date));
         const seqs = (plan.sequences || []).filter((s) => s.goalId === g.id);
@@ -537,7 +530,7 @@
           <header class="goal-head">
             <div class="goal-title">
               <button class="link h" data-edit-goal="${g.id}">${LL.esc(g.title)}</button>
-              ${isStopped ? `<span class="mini">いまは休止中</span>` : g.status === "done" ? `<span class="mini ok">達成</span>` : g.status === "dropped" ? `<span class="mini">やめた</span>` : ""}
+              ${isStopped ? `<span class="mini">いまは休止中</span>` : g.status === "done" ? `<span class="mini ok">達成</span>` : ""}
             </div>
             <p class="vision">${LL.esc(g.vision || "")}</p>
             <div class="goal-meter"><i style="width:${live.length ? (done / live.length) * 100 : 0}%"></i></div>
@@ -565,13 +558,11 @@
       })
       .join("");
 
-    const dropped = plan.tasks.filter((t) => t.status === "dropped");
     return `
       <div class="board-toolbar">
-        <button class="btn ghost" data-act="add-goal" ${plan.goals.filter((g) => g.status !== "dropped").length >= 5 ? 'title="大目標は3〜5個がおすすめ"' : ""}>＋ 大目標</button>
+        <button class="btn ghost" data-act="add-goal" ${plan.goals.length >= 5 ? 'title="大目標は3〜5個がおすすめ"' : ""}>＋ 大目標</button>
         <button class="btn ${selectMode ? "primary" : "ghost"}" data-act="select-mode">${selectMode ? `${selected.size}件を選択中 ― 延長先を決める` : "まとめて延長"}</button>
         ${selectMode ? `<button class="btn ghost" data-act="select-cancel">やめる</button>` : ""}
-        <label class="switch-line"><input type="checkbox" data-act="archive" ${showArchive ? "checked" : ""}><span>やめたものも表示</span></label>
       </div>
       <div class="board">${cols}</div>
 
@@ -597,15 +588,6 @@
             .reverse()
             .map((v, i) => `<button class="review" data-review="${plan.reviews.length - 1 - i}"><b>${LL.fmtMD(v.date)}</b>${v.answers.map((a, j) => `<p><span>${j + 1}</span>${LL.esc(a || "—")}</p>`).join("")}</button>`)
             .join("")}</div>` : `<p class="empty">まだ振り返りはありません。${LL.esc(plan.reviewQuestions.join(" ／ "))}</p>`}
-        </section>
-        <section class="card">
-          <header class="card-head"><h3>変更の記録</h3><p class="muted">やめた・延長した・中止したことも残します</p></header>
-          <ol class="history-list">${plan.history
-            .slice()
-            .reverse()
-            .map((h) => `<li><time>${LL.fmtMD(h.date)}</time><span>${LL.esc(h.text)}</span></li>`)
-            .join("")}</ol>
-          ${dropped.length ? `<p class="muted small">やめたタスク：${dropped.map((t) => `${LL.esc(t.text)}（${LL.esc(t.dropReason || "")}）`).join(" ／ ")}</p>` : ""}
         </section>
       </div>`;
   }
@@ -668,7 +650,6 @@
             reviewDay: 0,
             reviewQuestions: ["今週やったこと", "新しく知ったこと・気持ちが動いたこと", "来週やる3つ"],
             remind: { on: false, time: LL.parseTime("9:00"), daysAhead: 7, amount: "full" },
-            history: [{ date: LL.today(), text: "計画を作成" }],
           };
           LL.state.plans.push(p);
           LL.state.activePlanId = p.id;
@@ -705,19 +686,25 @@
           options: [
             { value: "active", label: "進行中" },
             { value: "done", label: "達成" },
-            { value: "dropped", label: "やめた（記録は残す）" },
           ],
         },
       ],
       onSave: (v) => {
         if (!v.title) return false;
         if (isNew) plan.goals.push({ id: "g-" + LL.uid(), ...v });
-        else {
-          if (g.status !== v.status && v.status !== "active") log(plan, `大目標「${v.title}」を${v.status === "done" ? "達成" : "やめた"}にした`);
-          Object.assign(g, v);
-        }
+        else Object.assign(g, v);
         LL.commit();
       },
+      onDelete: isNew
+        ? null
+        : () => {
+            // 目標を消すときは、その目標のタスク・締切・手順なども一緒に消す
+            const keep = (x) => x.goalId !== g.id;
+            plan.goals = plan.goals.filter((x) => x !== g);
+            ["tasks", "events", "sequences", "paces", "counters", "candidates"].forEach((k) => (plan[k] = plan[k].filter(keep)));
+            plan.blocks.forEach((b) => (b.stopGoals = (b.stopGoals || []).filter((id) => id !== g.id)));
+            LL.commit();
+          },
     });
   }
 
@@ -730,32 +717,19 @@
         { key: "text", label: "やること", full: true },
         { key: "goalId", label: "大目標", type: "select", options: goalOptions(plan) },
         { key: "due", label: "期限（なしでもOK）", type: "date" },
-        ...(isNew ? [] : [{ key: "dropReason", label: "やめる場合の理由", placeholder: "例: 別の目標に集中するため", full: true }]),
       ],
       onSave: (v) => {
         if (!v.text) return false;
-        if (isNew) plan.tasks.push({ id: LL.uid(), done: false, status: "active", history: [], ...v });
-        else {
-          if (t.due && v.due && t.due !== v.due) t.history.push({ date: LL.today(), from: t.due, to: v.due });
-          Object.assign(t, v);
-        }
+        if (isNew) plan.tasks.push({ id: LL.uid(), done: false, ...v });
+        else Object.assign(t, v);
         LL.commit();
       },
       onDelete: isNew
         ? null
-        : async () => {
-            let reason = t.dropReason || "";
-            if (t.status !== "dropped" && !reason) {
-              reason = await LL.ask({ message: `「${t.text}」をやめます。理由を残しておきますか？（任意）`, input: "例: 別の目標に集中するため", okLabel: "やめる" });
-              if (reason === null) return;
-            }
-            t.status = t.status === "dropped" ? "active" : "dropped";
-            t.dropReason = reason;
-            log(plan, t.status === "dropped" ? `タスク「${t.text}」をやめた${reason ? `（${reason}）` : ""}` : `タスク「${t.text}」を戻した`);
+        : () => {
+            plan.tasks = plan.tasks.filter((x) => x !== t);
             LL.commit();
           },
-      deleteLabel: t && t.status === "dropped" ? "やめたのを戻す" : "やめる（記録は残る）",
-      confirmDelete: false,
     });
   }
 
@@ -784,7 +758,6 @@
         ? null
         : () => {
             plan.events = plan.events.filter((e) => e !== ev);
-            log(plan, `予定「${ev.title}」(${LL.fmtMD(ev.date)}) を削除`);
             LL.commit();
           },
     });
@@ -827,14 +800,12 @@
         if (!v.name || !v.start || !v.end) return LL.toast("名前と期間を入れてください"), false;
         if (isNew) plan.blocks.push({ id: "b-" + LL.uid(), ...v });
         else Object.assign(b, v);
-        log(plan, `期間ブロック「${v.name}」を${isNew ? "追加" : "変更"}（${LL.fmtMD(v.start)}〜${LL.fmtMD(v.end)}）`);
         LL.commit();
       },
       onDelete: isNew
         ? null
         : () => {
             plan.blocks = plan.blocks.filter((x) => x !== b);
-            log(plan, `期間ブロック「${b.name}」を削除`);
             LL.commit();
           },
     });
@@ -865,10 +836,8 @@
         ? null
         : () => {
             plan.paces = plan.paces.filter((x) => x !== p);
-            log(plan, `ペース目標「${p.title}」を中止（${p.log.length}/${p.target}）`);
             LL.commit();
           },
-      deleteLabel: "中止する",
     });
   }
 
@@ -947,7 +916,6 @@
       fields: [{ key: "rules", label: "ルール（1行に1つ）", type: "list", rows: 8 }],
       onSave: (v) => {
         plan.rules = v.rules;
-        log(plan, "ルールを変更");
         LL.commit();
       },
     });
@@ -1012,29 +980,26 @@
 
   function toggleLog(plan) {
     if (plan.remind.on) {
-      log(plan, "毎朝のリマインドを再開");
       if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
     } else {
-      plan.remind.stoppedAt = LL.today();
-      log(plan, "毎朝のリマインドを中止");
     }
   }
 
   function openCandidates(plan, cg) {
     const statuses = Object.keys(CAND_STATUS);
     const html = `
-      <p class="muted">基準で比べて「採用／予備／やめた」を選びます。やめたものも理由つきで残ります。</p>
-      <div class="table-scroll"><table class="ctable">
-        <thead><tr><th>候補</th>${cg.criteria.map((c) => `<th>${LL.esc(c)}</th>`).join("")}<th>判断</th><th>理由</th></tr></thead>
+      <p class="muted">基準で比べて「採用」か「予備」を選びます。いらなくなった候補は、名前を押して削除できます。</p>
+      <div class="ctable-wrap"><table class="ctable">
+        <thead><tr><th>候補</th>${cg.criteria.map((c) => `<th>${LL.esc(c)}</th>`).join("")}<th>判断</th><th>メモ</th></tr></thead>
         <tbody>${cg.items
           .slice()
           .sort((a, b) => statuses.indexOf(a.status) - statuses.indexOf(b.status))
           .map(
-            (it) => `<tr class="${CAND_STATUS[it.status]}">
-            <td><button class="link" data-cand-item="${it.id}">${LL.esc(it.name)}</button></td>
-            ${cg.criteria.map((c) => `<td>${LL.esc(it.values[c] || "—")}</td>`).join("")}
-            <td><div class="seg">${statuses.map((s) => `<button class="${it.status === s ? "on " + CAND_STATUS[s] : ""}" data-cand-status="${it.id}" data-s="${s}">${s}</button>`).join("")}</div></td>
-            <td class="small">${LL.esc(it.reason || "")}${it.date ? ` <span class="muted">${LL.fmtMD(it.date)}</span>` : ""}</td>
+            (it) => `<tr class="${CAND_STATUS[it.status] || "keep"}">
+            <td class="c-name"><button class="link" data-cand-item="${it.id}">${LL.esc(it.name)}</button></td>
+            ${cg.criteria.map((c) => `<td data-label="${LL.esc(c)}">${LL.esc(it.values[c] || "—")}</td>`).join("")}
+            <td data-label="判断"><div class="seg">${statuses.map((s) => `<button class="${it.status === s ? "on " + CAND_STATUS[s] : ""}" data-cand-status="${it.id}" data-s="${s}">${s}</button>`).join("")}</div></td>
+            <td data-label="メモ" class="small ${it.reason ? "" : "c-empty"}">${LL.esc(it.reason || "")}</td>
           </tr>`
           )
           .join("")}</tbody>
@@ -1043,20 +1008,12 @@
         <button class="btn ghost" data-cand-edit="${cg.id}">比較の名前・基準を編集</button>
         <button class="btn primary" data-cand-add="${cg.id}">＋ 候補を追加</button>
       </div>`;
-    LL.openPanel(`比較：${cg.title}`, html, async (e) => {
+    LL.openPanel(`比較：${cg.title}`, html, (e) => {
       const st = e.target.closest("[data-cand-status]");
       if (st) {
         const it = cg.items.find((i) => i.id === st.dataset.candStatus);
         if (it.status !== st.dataset.s) {
-          let reason = it.reason;
-          if (st.dataset.s === "やめた") {
-            reason = await LL.ask({ message: `「${it.name}」をやめた理由（任意）`, input: "例: 1つに絞るため", value: it.reason || "", okLabel: "やめたにする" });
-            if (reason === null) return;
-          }
           it.status = st.dataset.s;
-          it.reason = reason;
-          it.date = LL.today();
-          log(plan, `「${cg.title}」で「${it.name}」を${it.status}に`);
           LL.save();
           LL.rerender();
           openCandidates(plan, cg);
@@ -1080,14 +1037,14 @@
         { key: "name", label: "候補", full: true },
         ...cg.criteria.map((c, i) => ({ key: `c${i}`, label: c })),
         { key: "status", label: "判断", type: "select", options: Object.keys(CAND_STATUS).map((s) => ({ value: s, label: s })) },
-        { key: "reason", label: "理由", full: true },
+        { key: "reason", label: "メモ", full: true },
       ],
       onSave: (v) => {
         if (!v.name) return false;
         const values = {};
         cg.criteria.forEach((c, i) => (values[c] = v[`c${i}`] || ""));
         const rec = { name: v.name, status: v.status, reason: v.reason || "", values };
-        if (isNew) cg.items.push({ id: LL.uid(), date: LL.today(), ...rec });
+        if (isNew) cg.items.push({ id: LL.uid(), ...rec });
         else Object.assign(it, rec);
         LL.save();
         LL.rerender();
@@ -1132,21 +1089,13 @@
     if (!selected.size) return LL.toast("延長するタスクを選んでください");
     LL.openForm({
       title: `${selected.size}件をまとめて延長`,
-      subtitle: "移した記録はタスクと計画の記録に残ります。",
-      value: { to: LL.addDays(LL.today(), 7), note: "" },
-      fields: [
-        { key: "to", label: "新しい期限", type: "date" },
-        { key: "note", label: "メモ（任意）", full: true },
-      ],
+      value: { to: LL.addDays(LL.today(), 7) },
+      fields: [{ key: "to", label: "新しい期限", type: "date" }],
       saveLabel: "延長する",
       onSave: (v) => {
         if (!v.to) return false;
         const ts = plan.tasks.filter((t) => selected.has(t.id));
-        ts.forEach((t) => {
-          t.history.push({ date: LL.today(), from: t.due, to: v.to, note: v.note || "" });
-          t.due = v.to;
-        });
-        log(plan, `${ts.length}件のタスクを${LL.fmtMD(v.to)}まで延長${v.note ? `（${v.note}）` : ""}`);
+        ts.forEach((t) => (t.due = v.to));
         const f = focusOn(plan, v.to);
         if (f) LL.toast(`注意：新しい期限が集中期間「${f.name}」に入っています`);
         selected.clear();
@@ -1292,10 +1241,6 @@
       if (e.target.matches("[data-act=pick-plan]")) {
         LL.state.activePlanId = e.target.value;
         LL.commit();
-      }
-      if (e.target.matches("[data-act=archive]")) {
-        showArchive = e.target.checked;
-        LL.rerender();
       }
     };
   }

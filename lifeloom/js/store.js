@@ -22,8 +22,7 @@
   // ---------- 初期データ：2026年 残り3ヶ月の計画（plan-2026-q4.md より） ----------
   function seedPlan() {
     const g = { exam: "g-exam", script: "g-script", contest: "g-contest", pf: "g-pf", job: "g-job" };
-    const task = (goalId, text, due, extra = {}) => ({ id: LL.uid(), goalId, text, due, done: false, status: "active", history: [], ...extra });
-    const ext = (from) => ({ history: [{ date: "2026-10-18", from, to: "2026-10-24", note: "10/18分の延長" }] });
+    const task = (goalId, text, due, extra = {}) => ({ id: LL.uid(), goalId, text, due, done: false, ...extra });
 
     return {
       id: "plan-2026-q4",
@@ -80,17 +79,17 @@
         task(g.exam, "集中期間の前に締切のあるものを片付ける（12/16の区切り）", "2026-12-16"),
         // 目標2 サークル脚本
         task(g.script, "構成（3部・23シーン）とタイトルを決める", "2026-10-17", { done: true }),
-        task(g.script, "冬作品の小説の書き出し", "2026-10-24", ext("2026-10-18")),
+        task(g.script, "冬作品の小説の書き出し", "2026-10-24"),
         task(g.script, "小説 → 劇伴・主題歌3曲 → 脚本を一通り仕上げる（完璧でなくてよい）", "2026-10-31"),
         task(g.script, "脚本を見直して手直し", "2026-11-03"),
         task(g.script, "脚本を提出", "2026-11-04"),
         task(g.script, "絵コンテ → 撮影 → 編集（サークルの予定に合わせる）", null),
         // 目標3 コンテスト
-        task(g.contest, "課題提供企業の一覧を見て、素材のパスワードを取る", "2026-10-24", ext("2026-10-18")),
+        task(g.contest, "課題提供企業の一覧を見て、素材のパスワードを取る", "2026-10-24"),
         task(g.contest, "課題を1つ選び、案出し・ラフ", "2026-11-18"),
         task(g.contest, "制作して提出", "2026-12-16"),
         // 目標4 ポートフォリオ
-        task(g.pf, "過去のグラフィック作品を1つのフォルダに集め、載せたいものに印をつける", "2026-10-24", ext("2026-10-18")),
+        task(g.pf, "過去のグラフィック作品を1つのフォルダに集め、載せたいものに印をつける", "2026-10-24"),
         task(g.pf, "個人の映像制作を始める", "2026-10-26"),
         task(g.pf, "ゼミの広報係として発信したものを作品として記録する", null),
         task(g.pf, "ポートフォリオの構成（表紙・自己紹介・ジャンル別・連絡先）を決める", "2026-12-16"),
@@ -99,7 +98,7 @@
         task(g.pf, "ポートフォリオ PDF 第1版を完成", "2026-12-31"),
         task(g.pf, "深めたい分野を1つ決める", "2026-12-31"),
         // 目標5 就活と進路
-        task(g.job, "◎5社（ブラザー・カゴメ・ポッカサッポロ・興和・サンゲツ）の秋冬インターンの締切を確認し、1〜2社に応募", "2026-10-24", ext("2026-10-18")),
+        task(g.job, "◎5社（ブラザー・カゴメ・ポッカサッポロ・興和・サンゲツ）の秋冬インターンの締切を確認し、1〜2社に応募", "2026-10-24"),
         task(g.job, "JR東海エージェンシーの課題ドキュメント 4と6", "2026-10-29"),
         task(g.job, "冬インターンに1〜2社応募", "2026-11-11"),
         task(g.job, "ガクチカ・自己PRを400字で下書き", "2026-11-11"),
@@ -143,11 +142,7 @@
           title: "応募するコンテスト",
           criteria: ["優勝賞金", "学生限定", "作るもの"],
           items: [
-            { id: LL.uid(), name: "日本学生BtoB新聞広告大賞", values: { 優勝賞金: "金賞30万円", 学生限定: "○", 作るもの: "BtoB企業の課題で新聞1ページ広告" }, status: "採用", reason: "1つに絞るならこれ。作品をそのままポートフォリオに", date: "2026-10-13" },
-            { id: LL.uid(), name: "OAC", values: {}, status: "やめた", reason: "BtoB新聞広告の1つに絞ったため", date: "2026-10-13" },
-            { id: LL.uid(), name: "毎日広告デザイン賞", values: {}, status: "やめた", reason: "BtoB新聞広告の1つに絞ったため", date: "2026-10-13" },
-            { id: LL.uid(), name: "大垣まつり", values: {}, status: "やめた", reason: "BtoB新聞広告の1つに絞ったため", date: "2026-10-13" },
-            { id: LL.uid(), name: "Metro Ad", values: {}, status: "やめた", reason: "BtoB新聞広告の1つに絞ったため", date: "2026-10-13" },
+            { id: LL.uid(), name: "日本学生BtoB新聞広告大賞", values: { 優勝賞金: "金賞30万円", 学生限定: "○", 作るもの: "BtoB企業の課題で新聞1ページ広告" }, status: "採用", reason: "作品をそのままポートフォリオに使う" },
           ],
         },
         {
@@ -156,28 +151,19 @@
           title: "深める分野の候補",
           criteria: ["つながる仕事", "大学院で深めるなら"],
           items: [
-            { id: LL.uid(), name: "グラフィック・エディトリアル（雑誌）", values: { つながる仕事: "広告・販促物、パッケージ", 大学院で深めるなら: "デザイン系の研究科" }, status: "予備", reason: "", date: "" },
-            { id: LL.uid(), name: "映像・モーショングラフィックス", values: { つながる仕事: "企業の宣伝部、Web・SNS動画", 大学院で深めるなら: "映像メディア表現" }, status: "予備", reason: "", date: "" },
-            { id: LL.uid(), name: "サウンド・楽曲", values: { つながる仕事: "広告・展示・映像の音", 大学院で深めるなら: "サウンドアート、メディアアート" }, status: "予備", reason: "", date: "" },
-            { id: LL.uid(), name: "脚本・物語", values: { つながる仕事: "広告の企画、ブランドのストーリーづくり", 大学院で深めるなら: "メディア表現" }, status: "予備", reason: "", date: "" },
-            { id: LL.uid(), name: "VR/AR・空間展示、メディアアート", values: { つながる仕事: "印刷大手の展示・XR、イベント企画", 大学院で深めるなら: "IAMAS、芸術大学の大学院" }, status: "予備", reason: "", date: "" },
-            { id: LL.uid(), name: "UI/UX、プロダクト・パッケージ", values: { つながる仕事: "メーカーのデザイン職・商品企画", 大学院で深めるなら: "情報デザイン・芸術工学" }, status: "予備", reason: "", date: "" },
+            { id: LL.uid(), name: "グラフィック・エディトリアル（雑誌）", values: { つながる仕事: "広告・販促物、パッケージ", 大学院で深めるなら: "デザイン系の研究科" }, status: "予備", reason: "" },
+            { id: LL.uid(), name: "映像・モーショングラフィックス", values: { つながる仕事: "企業の宣伝部、Web・SNS動画", 大学院で深めるなら: "映像メディア表現" }, status: "予備", reason: "" },
+            { id: LL.uid(), name: "サウンド・楽曲", values: { つながる仕事: "広告・展示・映像の音", 大学院で深めるなら: "サウンドアート、メディアアート" }, status: "予備", reason: "" },
+            { id: LL.uid(), name: "脚本・物語", values: { つながる仕事: "広告の企画、ブランドのストーリーづくり", 大学院で深めるなら: "メディア表現" }, status: "予備", reason: "" },
+            { id: LL.uid(), name: "VR/AR・空間展示、メディアアート", values: { つながる仕事: "印刷大手の展示・XR、イベント企画", 大学院で深めるなら: "IAMAS、芸術大学の大学院" }, status: "予備", reason: "" },
+            { id: LL.uid(), name: "UI/UX、プロダクト・パッケージ", values: { つながる仕事: "メーカーのデザイン職・商品企画", 大学院で深めるなら: "情報デザイン・芸術工学" }, status: "予備", reason: "" },
           ],
         },
       ],
       reviews: [],
       reviewDay: 0,
       reviewQuestions: ["今週やったこと（試験勉強、脚本・制作、コンテスト、就活）", "新しく知ったこと・気持ちが動いたこと", "来週やる3つ"],
-      remind: { on: false, time: T("9:00"), daysAhead: 7, amount: "full", stoppedAt: "2026-10-21" },
-      history: [
-        { date: "2026-09-30", text: "計画を作成" },
-        { date: "2026-10-11", text: "計画を全面改訂。YouTubeは年内に10本撮影、1月に3日に1本投稿と決定" },
-        { date: "2026-10-13", text: "コンテストを日本学生BtoB新聞広告大賞の1つに絞った（OAC・毎日広告デザイン賞・大垣まつり・Metro Adをやめた）" },
-        { date: "2026-10-17", text: "冬作品の制作手順を決定：小説→劇伴・主題歌→脚本→絵コンテ→撮影→編集" },
-        { date: "2026-10-18", text: "集中期間の配分を「その試験8割・ほか2割」に変更" },
-        { date: "2026-10-18", text: "10/18分のタスク4件を10/24（土）まで延長" },
-        { date: "2026-10-21", text: "毎朝のリマインドを中止" },
-      ],
+      remind: { on: false, time: T("9:00"), daysAhead: 7, amount: "full" },
     };
   }
 
@@ -232,6 +218,22 @@
   function normalize(s) {
     s.settings = { ...LL.DEFAULT_SETTINGS, ...s.settings };
     s.meta = s.meta || {};
+    // 以前の版で持っていた「延長・やめた・変更の記録」は使わないので取り除く
+    (s.plans || []).forEach((p) => {
+      delete p.history;
+      if (p.remind) delete p.remind.stoppedAt;
+      p.goals = (p.goals || []).filter((g) => g.status !== "dropped");
+      p.tasks = (p.tasks || []).filter((t) => t.status !== "dropped");
+      p.tasks.forEach((t) => {
+        delete t.history;
+        delete t.status;
+        delete t.dropReason;
+      });
+      (p.candidates || []).forEach((c) => {
+        c.items = c.items.filter((i) => i.status !== "やめた");
+        c.items.forEach((i) => delete i.date);
+      });
+    });
     return s;
   }
 
