@@ -152,7 +152,7 @@ window.LL = window.LL || {};
       <div class="modal-card" role="dialog" aria-modal="true">
         <header class="modal-head">
           <div><h3>${LL.esc(title)}</h3>${subtitle ? `<p>${LL.esc(subtitle)}</p>` : ""}</div>
-          <button class="icon-btn" data-close aria-label="閉じる">✕</button>
+          <button class="icon-btn" data-close aria-label="閉じる">×</button>
         </header>
         <form class="modal-body form-grid">${fieldHtml}</form>
         <footer class="modal-foot">
@@ -221,7 +221,7 @@ window.LL = window.LL || {};
     const modal = document.getElementById("modal");
     modal.innerHTML = `
       <div class="modal-card" role="dialog" aria-modal="true">
-        <header class="modal-head"><div><h3>${LL.esc(title)}</h3></div><button class="icon-btn" data-close aria-label="閉じる">✕</button></header>
+        <header class="modal-head"><div><h3>${LL.esc(title)}</h3></div><button class="icon-btn" data-close aria-label="閉じる">×</button></header>
         <div class="modal-body">${html}</div>
       </div>`;
     modal.hidden = false;
@@ -275,21 +275,52 @@ window.LL = window.LL || {};
 
   LL.SWATCHES = ["#3a6db5", "#e07b39", "#3a9a6a", "#c9407e", "#8a6bc4", "#d9a520", "#4aa3b5", "#a9a4a6"];
 
-  // ---------- 画像として保存（html2canvas を CDN から読む） ----------
-  LL.saveImage = async (el, filename) => {
-    if (!window.html2canvas) {
-      LL.toast("画像保存の部品を読み込めませんでした（オフライン？）");
-      return;
-    }
-    LL.toast("画像を作っています…");
-    el.classList.add("capturing");
-    try {
-      const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: null, useCORS: true });
-      const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-      await LL.saveFile(filename, blob);
-    } finally {
-      el.classList.remove("capturing");
-    }
+  // ---------- 拡大の切り替え ----------
+  // 画面ごとの拡大率は state.meta.ui に置く（端末をまたいで同じ見え方になる）
+  LL.ui = () => (LL.state.meta.ui = LL.state.meta.ui || {});
+  LL.ZOOMS = [1, 1.5, 2, 3, 4];
+  LL.zoomCtl = (scope, z, label = "拡大") =>
+    `<div class="zoom-ctl" role="group" aria-label="${LL.esc(label)}">
+      <span>${LL.esc(label)}</span>
+      <button type="button" class="mini-btn" data-zoom="${scope}" data-d="-1" ${z <= LL.ZOOMS[0] ? "disabled" : ""} aria-label="縮小">−</button>
+      <b>${z === 1 ? "全体" : `${z}倍`}</b>
+      <button type="button" class="mini-btn" data-zoom="${scope}" data-d="1" ${z >= LL.ZOOMS[LL.ZOOMS.length - 1] ? "disabled" : ""} aria-label="拡大">＋</button>
+    </div>`;
+  LL.stepZoom = (z, d) => {
+    const i = LL.ZOOMS.indexOf(z);
+    return LL.ZOOMS[Math.min(LL.ZOOMS.length - 1, Math.max(0, (i < 0 ? 0 : i) + d))];
+  };
+
+  // 帯の中の文字がはみ出すときは、時刻 → 長い名前 → 文字そのもの の順に省く
+  LL.fitLabels = (els) => {
+    els.forEach((el) => {
+      el.classList.remove("t1", "t2");
+      const b = el.querySelector("b");
+      if (b && b.dataset.full) b.textContent = b.dataset.full;
+      const fits = () => [...el.children].every((c) => c.offsetParent === null || c.scrollWidth <= el.clientWidth - 8);
+      if (fits()) return;
+      el.classList.add("t1");
+      if (fits()) return;
+      if (b && b.dataset.short) {
+        b.dataset.full = b.dataset.full || b.textContent;
+        b.textContent = b.dataset.short;
+        if (fits()) return;
+      }
+      el.classList.add("t2");
+    });
+  };
+
+  // 横に並んだラベル同士が重なるときは、重なった方を別の段へずらす
+  LL.unstack = (els, gap = 6) => {
+    let lastRight = [-Infinity, -Infinity];
+    els.forEach((el) => {
+      el.classList.remove("alt");
+      const r = el.getBoundingClientRect();
+      if (r.left < lastRight[0] + gap) {
+        el.classList.add("alt");
+        lastRight[1] = r.right;
+      } else lastRight[0] = r.right;
+    });
   };
 
   // ファイルを保存する。アーティファクトの中では downloads 機能で確認を出し、

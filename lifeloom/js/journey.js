@@ -59,7 +59,7 @@
       const m = d.getMonth() + 1;
       const left = i * zoom;
       grid += `<i class="g ${m === 1 ? "year" : (m - 4) % interval === 0 ? "major" : ""}" style="left:${left}px"></i>`;
-      if (((m - 4) % interval + interval) % interval === 0) axis += `<span style="left:${left}px">${d.getFullYear()}年${m}月</span>`;
+      if (((m - 4) % interval + interval) % interval === 0 && left > 30 && left < W - 30) axis += `<span style="left:${left}px">${d.getFullYear()}年${m}月</span>`;
       if (m === 1 || i === 0) years += `<span style="left:${left}px">${d.getFullYear()}</span>`;
     }
 
@@ -100,7 +100,7 @@
       .join("");
 
     const plans = LL.state.plans
-      .map((p) => `<button class="jr-plan" data-plan="${p.id}" style="left:${x(p.start)}px;width:${Math.max(x(LL.addDays(p.end, 1)) - x(p.start), 6)}px" title="${LL.esc(p.name)}"><span>${LL.esc(p.name)}</span></button>`)
+      .map((p) => `<button class="jr-plan" data-plan="${p.id}" style="left:${x(p.start)}px;width:${Math.max(x(LL.addDays(p.end, 1)) - x(p.start), 6)}px" title="${LL.esc(p.name)}"></button><button class="jr-plan-note" data-plan="${p.id}" style="left:${Math.max(x(LL.addDays(p.end, 1)), x(p.start) + 6) + 6}px">${LL.esc(p.name)}</button>`)
       .join("");
 
     const tx = x(today);
@@ -117,14 +117,13 @@
         <div class="intro-actions">
           <button class="btn ghost" data-act="add-lane">＋ 所属を追加</button>
           <button class="btn ghost" data-act="add-mile">＋ 出来事</button>
-          <button class="btn ghost" data-act="image">↓ 画像で保存</button>
         </div>
       </section>
 
       <div class="jr-stats">${stats}</div>
 
       <div class="jr-toolbar card">
-        <label class="zoom"><span>表示の細かさ</span><input type="range" min="14" max="110" value="${zoom}" data-act="zoom"><span class="muted">${zoom >= 70 ? "1か月ごと" : zoom >= 40 ? "3か月ごと" : "半年ごと"}</span></label>
+        <label class="zoom"><span>表示の細かさ</span><input type="range" min="14" max="160" value="${zoom}" data-act="zoom"><span class="muted">${zoom >= 70 ? "1か月ごと" : zoom >= 40 ? "3か月ごと" : "半年ごと"}</span></label>
         <button class="chip-btn" data-act="fit">全体を表示</button>
         <button class="chip-btn" data-act="now">今へ移動</button>
         <div class="jr-filters">${j.categories
@@ -164,7 +163,21 @@
       LL._journeyScrolled = true;
     } else if (sc && LL._journeyScrollLeft != null) sc.scrollLeft = LL._journeyScrollLeft;
     sc.addEventListener("scroll", () => (LL._journeyScrollLeft = sc.scrollLeft));
+    layoutJourney(root);
   };
+
+  // 「今」の表示と重なる年ラベルは隠し、近い出来事は段をずらす
+  function layoutJourney(root) {
+    const now = root.querySelector(".jr-now-label");
+    if (now) {
+      const r = now.getBoundingClientRect();
+      root.querySelectorAll(".jr-years .jr-track > span").forEach((s) => {
+        const q = s.getBoundingClientRect();
+        s.style.visibility = q.right > r.left - 6 && q.left < r.right + 6 ? "hidden" : "";
+      });
+    }
+    LL.unstack([...root.querySelectorAll(".jr-mile")]);
+  }
 
   function renderStats() {
     const j = J();
@@ -289,7 +302,6 @@
           },
         });
       }
-      if (act === "image") LL.saveImage(document.getElementById("journey-chart"), "journey.png");
     };
     root.oninput = (e) => {
       if (e.target.matches("[data-act=zoom]")) {

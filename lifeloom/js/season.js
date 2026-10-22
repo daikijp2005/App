@@ -17,6 +17,7 @@
   let selectMode = false;
   const selected = new Set();
   let showArchive = false;
+  const calSize = () => LL.ui().calSize || "m";
 
   // ---------- 計算 ----------
   const P = () => LL.activePlan();
@@ -159,7 +160,7 @@
             <select data-act="pick-plan" aria-label="計画を選ぶ">
               ${LL.state.plans.map((p) => `<option value="${p.id}" ${p.id === plan.id ? "selected" : ""}>${LL.esc(p.name)}</option>`).join("")}
             </select>
-            <button class="icon-btn sm" data-act="edit-plan" title="計画を編集">✎</button>
+            <button class="icon-btn sm" data-act="edit-plan" title="計画を編集">編集</button>
             <button class="chip-btn" data-act="new-plan">＋ 新しい計画</button>
           </div>
           <h2>${LL.esc(plan.name)}</h2>
@@ -183,12 +184,21 @@
           .join("")}
       </nav>
 
-      ${ws.length ? `<details class="warnings" ${ws.some((w) => w.level === "warn") ? "open" : ""}><summary>⚠ 気をつけること ${ws.length}件</summary><ul>${ws.map((w) => `<li class="${w.level}">${LL.esc(w.text)}</li>`).join("")}</ul></details>` : ""}
+      ${ws.length ? `<details class="warnings" ${ws.some((w) => w.level === "warn") ? "open" : ""}><summary><i class="warn-mark">!</i>気をつけること ${ws.length}件</summary><ul>${ws.map((w) => `<li class="${w.level}">${LL.esc(w.text)}</li>`).join("")}</ul></details>` : ""}
 
       <div class="season-body">${sub === "today" ? renderToday(plan) : sub === "calendar" ? renderCalendar(plan) : renderBoard(plan)}</div>
     `;
     bind(root);
+    layoutSeason(root);
   };
+
+  // 描いたあとで、帯の名前がはみ出すものは短くし、拡大したときは今日の位置まで送る
+  function layoutSeason(root) {
+    LL.fitLabels([...root.querySelectorAll(".strip-block")]);
+    const sc = root.querySelector(".strip-scroll");
+    const now = root.querySelector(".strip-now");
+    if (sc && now && sc.scrollWidth > sc.clientWidth + 1) sc.scrollLeft = Math.max(0, now.offsetLeft - sc.clientWidth / 3);
+  }
 
   // 期間ブロックを1本の帯で（どの画面でも上に出す）
   function renderSeasonStrip(plan) {
@@ -201,7 +211,7 @@
         const s = b.start < plan.start ? plan.start : b.start;
         const e = b.end > plan.end ? plan.end : b.end;
         return `<button class="strip-block ${b.kind}" data-block="${b.id}" style="left:${pos(s)}%;width:${pos(LL.addDays(e, 1)) - pos(s)}%;--c:${b.color}" title="${LL.esc(b.name)} ${LL.fmtMD(b.start)}〜${LL.fmtMD(b.end)}">
-          <span>${LL.esc(b.name)}</span></button>`;
+          <b>${LL.esc(b.name)}</b></button>`;
       })
       .join("");
     const evs = plan.events
@@ -216,13 +226,16 @@
       m = LL.ymd(d);
     }
     const nowMark = LL.inRange(today, plan.start, plan.end) ? `<i class="strip-now" style="left:${pos(today) + 50 / total}%"><b>今日</b></i>` : "";
+    const z = LL.ui().stripZoom || 1;
     return `<div class="season-strip card">
-      <div class="strip-months">${months}</div>
-      <div class="strip-track">${blocks}${evs}${nowMark}</div>
+      <div class="strip-scroll"><div class="strip-inner" style="width:calc(max(100%, 640px) * ${z})">
+        <div class="strip-months">${months}</div>
+        <div class="strip-track">${blocks}${evs}${nowMark}</div>
+      </div></div>
       <div class="strip-legend">
         <span><i class="sw focus"></i>集中期間（ルールつき）</span><span><i class="sw phase"></i>中心にやること</span>
         ${Object.entries(EVENT_TYPES).map(([k, c]) => `<span><i class="ev-dot" style="--c:${c}"></i>${k}</span>`).join("")}
-        <button class="chip-btn" data-act="add-block">＋ 期間ブロック</button>
+        <span class="strip-tools">${LL.zoomCtl("strip", z, "帯の拡大")}<button class="chip-btn" data-act="add-block">＋ 期間ブロック</button></span>
       </div>
     </div>`;
   }
@@ -264,7 +277,7 @@
           ${period}
           ${nextFocus ? `<p class="next-focus">次の集中期間「${LL.esc(nextFocus.name)}」まで <b>${LL.diffDays(today, nextFocus.start)}</b> 日</p>` : ""}
           ${plan.rules.length ? `<blockquote class="hitokoto">${LL.esc(hitokoto(plan))}</blockquote>` : ""}
-          <button class="btn ghost" data-act="to-dawn">☀ 明日の設計図（Dawn）へ</button>
+          <button class="btn ghost" data-act="to-dawn">明日の設計図（Dawn）を開く</button>
         </section>
 
         <section class="card deadlines">
@@ -336,7 +349,7 @@
       ${
         selectMode && !t.done && t.status !== "dropped"
           ? `<label class="sel"><input type="checkbox" data-sel="${t.id}" ${selected.has(t.id) ? "checked" : ""}><span></span></label>`
-          : `<button class="tick-box" data-toggle="${t.id}" aria-label="完了">${t.done ? "✓" : ""}</button>`
+          : `<button class="tick-box" data-toggle="${t.id}" aria-label="完了"></button>`
       }
       <button class="task-text" data-edit-task="${t.id}">
         ${LL.esc(t.text)}
@@ -433,10 +446,10 @@
             ${blockStart ? `<span class="blabel" style="--c:${blockStart.color}">${LL.esc(blockStart.name)}</span>` : ""}
             ${evs.map((e) => `<span class="ev" style="--c:${EVENT_TYPES[e.type] || "#888"}">${LL.esc(e.title)}</span>`).join("")}
             ${ts
-              .slice(0, 2)
+              .slice(0, calSize() === "l" ? 99 : 2)
               .map((t) => `<span class="tdue ${t.done ? "done" : ""} ${stopped.has(t.goalId) ? "dim" : ""}" style="--c:${goalColor(plan, t.goalId)}">${LL.esc(t.text)}</span>`)
               .join("")}
-            ${ts.length > 2 ? `<span class="more">ほか${ts.length - 2}件</span>` : ""}
+            ${ts.length > 2 && calSize() !== "l" ? `<span class="more">ほか${ts.length - 2}件</span>` : ""}
             ${paceLogged ? `<i class="pace-mark" title="ペース記録あり">●</i>` : ""}
             ${ph ? `<i class="phase-line"></i>` : ""}
           </button>`;
@@ -460,18 +473,24 @@
               .join("")}</ul>
           </header>
           ${paceBands}
-          <div class="cal-grid">
+          <div class="cal-grid-wrap"><div class="cal-grid">
             ${LL.WEEK.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("")}
             ${cells}
-          </div>
+          </div></div>
         </section>`;
       })
       .join("");
     return `<div class="cal-toolbar">
-        <p class="muted">日付をタップすると、その日の予定・タスクを見たり追加したりできます。</p>
-        <button class="btn ghost" data-act="cal-image">↓ 画像で保存</button>
+        <p class="muted">日付をタップすると、その日の予定・タスクを見たり追加したりできます。「大」にすると予定名とタスクを全部表示します。</p>
+        <div class="seg size-seg" role="group" aria-label="表示サイズ"><span>表示サイズ</span>${[
+          ["s", "小"],
+          ["m", "中"],
+          ["l", "大"],
+        ]
+          .map(([k, l]) => `<button class="${calSize() === k ? "on" : ""}" data-cal-size="${k}">${l}</button>`)
+          .join("")}</div>
       </div>
-      <div class="calendar" id="season-cal"><p class="cal-title">${LL.esc(plan.name)}</p>${html}</div>`;
+      <div class="calendar size-${calSize()}" id="season-cal"><p class="cal-title">${LL.esc(plan.name)}</p>${html}</div>`;
   }
 
   function openDay(plan, date) {
@@ -490,7 +509,7 @@
       <div class="panel-actions">
         <button class="btn ghost" data-act="add-event" data-date="${date}">＋ 締切・予定</button>
         <button class="btn ghost" data-act="add-task" data-due="${date}">＋ タスク</button>
-        <button class="btn primary" data-act="open-dawn" data-date="${date}">☀ この日を Dawn で開く</button>
+        <button class="btn primary" data-act="open-dawn" data-date="${date}">この日を Dawn で開く</button>
       </div>`;
     LL.openPanel(LL.fmtMD(date), html, (e) => {
       handleClick(e);
@@ -529,7 +548,7 @@
           ${seqs.map((s) => seqView(plan, s)).join("")}
           ${plan.paces.filter((p) => p.goalId === g.id).map((p) => paceRow(plan, p)).join("")}
           ${plan.counters.filter((c) => c.goalId === g.id).map((c) => counterRow(plan, c)).join("")}
-          ${cands.map((c) => `<button class="cand-link" data-cand="${c.id}">⚖ ${LL.esc(c.title)}（採用 ${c.items.filter((i) => i.status === "採用").length} ／ 候補 ${c.items.length}）</button>`).join("")}
+          ${cands.map((c) => `<button class="cand-link" data-cand="${c.id}">比較：${LL.esc(c.title)}（採用 ${c.items.filter((i) => i.status === "採用").length} ／ 候補 ${c.items.length}）</button>`).join("")}
           <footer class="goal-add">
             <button class="chip-btn" data-act="add-task" data-goal="${g.id}">＋ タスク</button>
             <button class="chip-btn" data-act="add-event" data-goal="${g.id}">＋ 締切</button>
@@ -598,7 +617,7 @@
       <ol class="seq-steps">${s.steps
         .map(
           (st) => `<li class="${st.done ? "done" : ""} ${st.start && st.start <= today && today <= st.end ? "now" : ""}">
-          <button class="seq-dot" data-step="${s.id}:${st.id}" aria-label="完了">${st.done ? "✓" : ""}</button>
+          <button class="seq-dot" data-step="${s.id}:${st.id}" aria-label="完了"></button>
           <span>${LL.esc(st.name)}</span>
           <small>${st.start ? `${LL.fmtMD(st.start).replace(/（.）/, "")}${st.end !== st.start ? `–${LL.fmtMD(st.end).replace(/（.）/, "")}` : ""}` : "未定"}</small>
         </li>`
@@ -756,7 +775,7 @@
       onSave: (v) => {
         if (!v.title || !v.date) return LL.toast("名前と日付を入れてください"), false;
         const f = focusOn(plan, v.date);
-        if (f && !NO_WARN.includes(v.type)) LL.toast(`⚠ 集中期間「${f.name}」に入っています`);
+        if (f && !NO_WARN.includes(v.type)) LL.toast(`注意：集中期間「${f.name}」に入っています`);
         if (isNew) plan.events.push({ id: LL.uid(), ...v });
         else Object.assign(ev, v);
         LL.commit();
@@ -1024,7 +1043,7 @@
         <button class="btn ghost" data-cand-edit="${cg.id}">比較の名前・基準を編集</button>
         <button class="btn primary" data-cand-add="${cg.id}">＋ 候補を追加</button>
       </div>`;
-    LL.openPanel(`⚖ ${cg.title}`, html, async (e) => {
+    LL.openPanel(`比較：${cg.title}`, html, async (e) => {
       const st = e.target.closest("[data-cand-status]");
       if (st) {
         const it = cg.items.find((i) => i.id === st.dataset.candStatus);
@@ -1129,7 +1148,7 @@
         });
         log(plan, `${ts.length}件のタスクを${LL.fmtMD(v.to)}まで延長${v.note ? `（${v.note}）` : ""}`);
         const f = focusOn(plan, v.to);
-        if (f) LL.toast(`⚠ 新しい期限が集中期間「${f.name}」に入っています`);
+        if (f) LL.toast(`注意：新しい期限が集中期間「${f.name}」に入っています`);
         selected.clear();
         selectMode = false;
         LL.commit();
@@ -1168,6 +1187,16 @@
     if ((x = el("[data-cand]"))) return openCandidates(plan, plan.candidates.find((c) => c.id === x.dataset.cand));
     if ((x = el("[data-review]"))) return editReview(plan, Number(x.dataset.review));
     if ((x = el("[data-day]"))) return openDay(plan, x.dataset.day);
+    if ((x = el("[data-zoom]"))) {
+      LL.ui().stripZoom = LL.stepZoom(LL.ui().stripZoom || 1, Number(x.dataset.d));
+      LL.save();
+      return LL.rerender();
+    }
+    if ((x = el("[data-cal-size]"))) {
+      LL.ui().calSize = x.dataset.calSize;
+      LL.save();
+      return LL.rerender();
+    }
     if ((x = el("[data-pace-log]"))) {
       const p = plan.paces.find((p) => p.id === x.dataset.paceLog);
       p.log.push(LL.today());
@@ -1247,8 +1276,6 @@
         selectMode = false;
         selected.clear();
         return LL.rerender();
-      case "cal-image":
-        return LL.saveImage(document.getElementById("season-cal"), `${plan.name}.png`);
       case "to-dawn":
         LL.closeModal();
         return LL.go("dawn");

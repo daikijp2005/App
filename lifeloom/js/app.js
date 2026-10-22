@@ -30,20 +30,30 @@
 
   window.addEventListener("hashchange", () => show(location.hash.slice(1)));
 
+  // 画面の幅が変わったら、文字のはみ出し・重なりを測り直す
+  let resizeTimer = null;
+  let lastWidth = window.innerWidth;
+  window.addEventListener("resize", () => {
+    if (window.innerWidth === lastWidth) return;
+    lastWidth = window.innerWidth;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => LL.rerender(), 200);
+  });
+
   // 今日の日付
   const t = LL.today();
   document.getElementById("today-chip").innerHTML = `<b>${LL.fmtMD(t)}</b><span>${t.slice(0, 4)}</span>`;
 
   // 表示テーマ（ダーク → ライト → 端末に合わせる の順に切り替え）
   const THEMES = [
-    ["dark", "☾", "ダーク"],
-    ["light", "☀", "ライト"],
-    ["auto", "◐", "端末の設定に合わせる"],
+    ["dark", '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="currentColor"/></svg>', "ダーク"],
+    ["light", '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>', "ライト"],
+    ["auto", '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>', "端末の設定に合わせる"],
   ];
   const themeBtn = document.getElementById("theme-btn");
   const paintTheme = () => {
     const cur = THEMES.find((t) => t[0] === document.documentElement.dataset.llTheme) || THEMES[0];
-    themeBtn.textContent = cur[1];
+    themeBtn.innerHTML = cur[1];
     themeBtn.title = `表示テーマ：${cur[2]}`;
   };
   themeBtn.addEventListener("click", () => {

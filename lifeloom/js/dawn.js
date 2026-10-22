@@ -104,8 +104,7 @@
           <p class="lead">前の夜に「出る時間・帰る時間」を入れるだけで、1日の流れが組み上がります。</p>
         </div>
         <div class="intro-actions">
-          <button class="btn ghost" data-act="settings">⚙ 時間のルール</button>
-          <button class="btn ghost" data-act="image">↓ 画像で保存</button>
+          <button class="btn ghost" data-act="settings">時間のルール</button>
         </div>
       </section>
 
@@ -127,7 +126,7 @@
           <label class="fi em"><span>帰宅予定</span><input type="time" name="home" value="${LL.toInputTime(e.home ?? s.defaultHome)}"></label>
           <label class="fi sm"><span>起床 <i>この日だけ</i></span><input type="time" name="wake" value="${e.wake != null ? LL.toInputTime(e.wake) : ""}" placeholder="${LL.fmtTime(s.wake)}"></label>
           <label class="fi sm"><span>就寝 <i>この日だけ</i></span><input type="time" name="sleep" value="${e.sleep != null ? LL.toInputTime(e.sleep) : ""}"></label>
-          <button type="submit" class="btn primary">${isDefault(selected) ? "この日を保存" : dirty ? "変更を保存" : "保存済み ✓"}</button>
+          <button type="submit" class="btn primary">${isDefault(selected) ? "この日を保存" : dirty ? "変更を保存" : "保存済み"}</button>
         </div>
         ${isDefault(selected) && !dirty ? `<p class="form-note">まだ入力がない日です。既定値（外出 ${LL.fmtTime(s.defaultOut)} ／ 帰宅 ${LL.fmtTime(s.defaultHome)}）で表示しています。</p>` : ""}
       </form>
@@ -143,7 +142,22 @@
       </section>
     `;
     bind(root);
+    layoutPoster(root);
   };
+
+  // 描いたあとで実際の幅を見て、文字のはみ出しと重なりを直す
+  function layoutPoster(root) {
+    LL.fitLabels([...root.querySelectorAll(".tl-block")]);
+    LL.unstack([...root.querySelectorAll(".pin-label")]);
+    const inner = root.querySelector(".tl-inner");
+    const ticks = root.querySelectorAll(".tick:not(.half)");
+    if (inner && ticks.length > 1) {
+      const per = inner.clientWidth / ticks.length;
+      const box = root.querySelector(".ticks");
+      box.classList.toggle("sparse", per < 30);
+      box.classList.toggle("show-half", per >= 90);
+    }
+  }
 
   function renderReminderBanner(tomorrow) {
     const s = LL.state.settings;
@@ -158,6 +172,7 @@
   function renderPoster(d) {
     const pct = (m) => ((m - d.wake) / d.awake) * 100;
     const year = selected.slice(0, 4);
+    const zoom = LL.ui().dawnZoom || 1;
     const wakeStr = LL.fmtTime(d.wake);
     const sleepStr = LL.fmtTime(d.sleep);
 
@@ -166,7 +181,7 @@
         const w = pct(b.end) - pct(b.start);
         const len = b.end - b.start;
         return `<div class="tl-block t-${b.type}" style="left:${pct(b.start)}%;width:${w}%;--c:${COLORS[b.type]}" title="${LL.esc(b.label)} ${LL.fmtTime(b.start)}–${LL.fmtTime(b.end)}（${LL.fmtDur(len)}）">
-          ${w > 7 ? `<b>${LL.esc(b.label.replace(/（.*）/, ""))}</b><small>${LL.fmtTime(b.start)}–${LL.fmtTime(b.end)}</small>` : w > 3.2 ? `<small>${SHORT[b.type]}</small>` : ""}
+          <b data-short="${SHORT[b.type]}">${LL.esc(b.label.replace(/（.*）/, ""))}</b><small>${LL.fmtTime(b.start)}–${LL.fmtTime(b.end)}</small>
         </div>`;
       })
       .join("");
@@ -177,12 +192,14 @@
       { m: d.home, label: "帰宅" },
       { m: d.sleep, label: "就寝" },
     ]
-      .map((p, i) => `<div class="pin ${i === 0 ? "first" : i === 3 ? "last" : ""}" style="left:${pct(p.m)}%"><span>${p.label}</span><b>${LL.fmtTime(p.m)}</b></div>`)
+      .map((p, i) => `<div class="pin ${i === 0 ? "first" : i === 3 ? "last" : ""}" style="left:${pct(p.m)}%"><div class="pin-label"><span>${p.label}</span><b>${LL.fmtTime(p.m)}</b></div></div>`)
       .join("");
 
     let ticks = "";
     for (let h = Math.ceil(d.wake / 60); h * 60 <= d.sleep; h++) {
       ticks += `<div class="tick" style="left:${pct(h * 60)}%"><span>${h > 24 ? h - 24 : h}</span></div>`;
+      // 拡大したときは30分ごとの目盛りも出す
+      if (zoom >= 2 && h * 60 + 30 < d.sleep) ticks += `<div class="tick half" style="left:${pct(h * 60 + 30)}%"><span>${h > 24 ? h - 24 : h}:30</span></div>`;
     }
 
     const ranges = (type) =>
@@ -216,9 +233,14 @@
         </header>
 
         <div class="timeline">
-          <div class="pins">${pins}</div>
-          <div class="tl-track">${blocks}</div>
-          <div class="ticks">${ticks}</div>
+          <div class="tl-bar">${LL.zoomCtl("dawn", zoom, "タイムラインの拡大")}</div>
+          <div class="tl-scroll">
+            <div class="tl-inner" style="width:calc(max(100%, ${Math.round((d.awake / 60) * 40)}px) * ${zoom})">
+              <div class="pins">${pins}</div>
+              <div class="tl-track">${blocks}</div>
+              <div class="ticks">${ticks}</div>
+            </div>
+          </div>
         </div>
 
         <div class="poster-cards">
@@ -275,7 +297,7 @@
           <td><span class="dot" style="--c:${COLORS.free}"></span>${LL.fmtDur(d.free)}</td>
           <td><span class="dot" style="--c:${COLORS.night}"></span>${LL.fmtDur(d.night)}</td>
           <td><span class="dot" style="--c:${COLORS.out}"></span>${LL.fmtDur(d.outTotal)}</td>
-          <td><button class="icon-btn sm" data-del="${date}" aria-label="削除">✕</button></td>
+          <td><button class="icon-btn sm" data-del="${date}" aria-label="削除">×</button></td>
         </tr>`;
       })
       .join("");
@@ -316,6 +338,7 @@
       draft = readForm(form);
       const day = LL.buildDay(selected, draft, LL.state.settings);
       root.querySelector(".poster-scroll").innerHTML = renderPoster(day);
+      layoutPoster(root);
       const btn = form.querySelector("button[type=submit]");
       btn.textContent = "変更を保存";
       const note = form.querySelector(".form-note");
@@ -336,7 +359,12 @@
       if (act === "prev") go(LL.addDays(selected, -1));
       if (act === "next") go(LL.addDays(selected, 1));
       if (act === "tomorrow") go(LL.addDays(LL.today(), 1));
-      if (act === "image") LL.saveImage(document.getElementById("dawn-poster"), `day-${selected}.png`);
+      const zb = ev.target.closest("[data-zoom]");
+      if (zb) {
+        LL.ui().dawnZoom = LL.stepZoom(LL.ui().dawnZoom || 1, Number(zb.dataset.d));
+        LL.save();
+        LL.rerender();
+      }
       if (act === "settings") openSettings();
       const del = ev.target.closest("[data-del]");
       if (del) {
