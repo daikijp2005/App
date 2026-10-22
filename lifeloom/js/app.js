@@ -34,6 +34,32 @@
   const t = LL.today();
   document.getElementById("today-chip").innerHTML = `<b>${LL.fmtMD(t)}</b><span>${t.slice(0, 4)}</span>`;
 
+  // 表示テーマ（ダーク → ライト → 端末に合わせる の順に切り替え）
+  const THEMES = [
+    ["dark", "☾", "ダーク"],
+    ["light", "☀", "ライト"],
+    ["auto", "◐", "端末の設定に合わせる"],
+  ];
+  const themeBtn = document.getElementById("theme-btn");
+  const paintTheme = () => {
+    const cur = THEMES.find((t) => t[0] === document.documentElement.dataset.llTheme) || THEMES[0];
+    themeBtn.textContent = cur[1];
+    themeBtn.title = `表示テーマ：${cur[2]}`;
+  };
+  themeBtn.addEventListener("click", () => {
+    const i = THEMES.findIndex((t) => t[0] === document.documentElement.dataset.llTheme);
+    const next = THEMES[(i + 1) % THEMES.length];
+    document.documentElement.dataset.llTheme = next[0];
+    try {
+      localStorage.setItem("lifeloom:theme", next[0]);
+    } catch (_) {
+      /* 保存できなくても今回の表示は切り替わる */
+    }
+    paintTheme();
+    LL.toast(`表示テーマ：${next[2]}`);
+  });
+  paintTheme();
+
   // データの書き出し・読み込み・初期化
   document.getElementById("data-btn").addEventListener("click", () => {
     const perm = "Notification" in window ? Notification.permission : "unsupported";

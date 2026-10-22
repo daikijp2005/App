@@ -4,6 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script>try{document.documentElement.dataset.llTheme=localStorage.getItem("lifeloom:theme")||"dark"}catch(e){document.documentElement.dataset.llTheme="dark"}</script>
 <link rel="stylesheet" href="css/style.css">
 <script>document.body.dataset.view = "dawn";</script>
 <header class="app-header">
@@ -35,6 +36,7 @@
 
     <div class="header-right">
       <div class="today-chip" id="today-chip"></div>
+      <button class="icon-btn theme-btn" id="theme-btn" aria-label="表示テーマ" title="表示テーマ">◐</button>
       <button class="icon-btn" id="data-btn" aria-label="データと通知" title="データと通知">⋯</button>
     </div>
   </header>
